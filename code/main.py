@@ -54,7 +54,7 @@ print(f"Model outputs: {hank.outputs}")
 
 # Steady State
 targets_ss  = {'asset_mkt': 0,
-               'goods_mkt': 0,
+               #'goods_mkt': 0,
                'nkpc': 0}   # let labor market untargeted, to robustly check the result
 
 start = time.time()
@@ -67,11 +67,10 @@ print("Elapsed = %s seconds" % (time.time() - start))    # 3.7 seconds on my lap
 #---------------------------------------------------------------------------
 ## Display results
 print("Steady-state:")
-for k in ['Y', 'beta', 'w', 'r', 'pi',
+for k in ['Y', 'C', 'beta_high', 'w', 'r', 'pi',
           'L', 'U', 'Tr', 'mu']:
     print(f"  {k:15s} = {ss[k]:.4f}")
 
-### Y = 0.58, beta = 0.89, w = 0.90, U = 0.20, Tr = 0.09
 
 
 # Sanity checks

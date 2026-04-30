@@ -36,11 +36,10 @@ def pricing(pi, w, Z, Y, r, kappa, mu):
 # Government Block
 # Budget constraint:   b_t * U_t + (1+r_{t-1})*B_{t-1} + T_t = tau*w_t*L_t + B_t
 @simple
-def fiscal(r, w, L, U, tau, b, Tr):
-    # Sets a path for b_t keeping tau_t fixed
+def fiscal(r, w, L, tau, Tr, B):
     LaborTax = tau * w * L
-    B = b * U + (1 + r(-1)) * B(-1) + Tr - LaborTax
-    return B
+    b        = (LaborTax + B - (1 + r(-1)) * B(-1) - Tr) / 0.2
+    return b, LaborTax
 
 
 # Monetary Policy

@@ -20,26 +20,42 @@ def firm(Y, Z):
     return L
 
 
-# Phillips Curve:
+# Phillips Curves:
 # log(1+pi) = kappa * (w/Z - 1/mu) + Y(+1)/Y * log(1+pi(+1)) / (1+r(+1))
-# pi is a GE unknown, solved by the NKPC block
 @simple
-def pricing(pi, w, Z, Y, r, kappa, mu):
+def price_nkpc(pi, w, Z, Y, r, kappa, mu):
     nkpc = (kappa * (w / Z - 1 / mu)
             + Y(+1) / Y * (1 + pi(+1)).apply(np.log) / (1 + r(+1))
             - (1 + pi).apply(np.log))
     return nkpc
 
 
+# log(1+pi^w) = kappa_w * (w/Z - 1/mu_w) + log(1+pi+w(+1)) / (1+r(+1))
+@simple
+def wage_nkpc(pi, w, Z, r, kappa_w, mu_w):
+    pi_w  = (1 + pi) * w / w(-1) - 1
+    nkwpc = (kappa_w * (w / Z - 1 / mu_w)
+             + (1 + pi_w(+1)).apply(np.log) / (1 + r(+1))
+             - (1 + pi_w).apply(np.log))
+    return nkwpc, pi_w
+
+
+@simple
+def dividends(Y, w, L):
+    div = Y - w * L
+    return div
+
+
 
 #---------------------------------------------------------------------------
 # Government Block
-# Budget constraint:   b_t * U_t + (1+r_{t-1})*B_{t-1} + T_t = tau*w_t*L_t + B_t
+# Budget constraint:   b_t * U_t + T_t * V_t + (1+r_{t-1})*B_{t-1} = tau*w_t*L_t + B_t
 @simple
-def fiscal(r, w, L, tau, Tr, B):
+def fiscal(r, w, L, U, V, tau, b, Tr, B):
     LaborTax = tau * w * L
-    b        = (LaborTax + B - (1 + r(-1)) * B(-1) - Tr) / 0.2
-    return b, LaborTax
+    BenefCost = b * U + Tr * V
+    deficit   = (1 + r(-1)) * B(-1) + BenefCost - LaborTax - B
+    return LaborTax, BenefCost, deficit
 
 
 # Monetary Policy
@@ -54,9 +70,9 @@ def monetary(pi, rstar, phi):
 #---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, C, L, Y, B, U):
+def mkt_clearing(A, B, C, Y, L, U, V):
     asset_mkt = A - B
-    labor_mkt = (1 - U) - L
+    labor_mkt = (1 - U - V) - L
     goods_mkt = Y - C
     return asset_mkt, labor_mkt, goods_mkt
 

@@ -96,7 +96,7 @@ print(f"  Goods mkt residual   : {ss['goods_mkt']:.2e}")
 ## SCF Lorenz Curve
 lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
 
-percentiles = np.arange(501) / 100
+percentiles = np.arange(501) / 500
 lorenz_scf = np.array([np.interp(pctl, lorenz_scf_raw[:, 0], lorenz_scf_raw[:, 1]) for pctl in percentiles])
 
 

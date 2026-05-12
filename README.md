@@ -15,9 +15,11 @@ All code is written with reproducibility and defensive programming in mind.
 │   ├── main.py                          # Master script - runs everything
 │   ├── household_block.py               # Household's heterogenous block
 │   ├── other_blocks.py                  # Firm, Fiscal, Monetary, and Mkt Clearing
-│   └── parameters.R                     # Calibration and Estimation Parameters
+│   ├── parameters.py                    # Calibration and Estimation Parameters
+│   └── results.py                       # Graphics and Tables
 ├── data/
-│   └── thesis_data.csv
+│   ├── lorenz_nw_scf_2019.raw           # SCF Data for US Lorenz Curve
+│   └── data.csv                         # Not yet
 ├── output/
 ├── EsthevaoMarttioly_Thesis.pdf         # Final submitted report
 ├── requirements.txt                     # pip install -r requirements.txt

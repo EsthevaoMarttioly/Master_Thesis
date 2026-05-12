@@ -1,9 +1,11 @@
 #=
-#---------------------------------------------------------------------------
+#----------------------------------------------------------------------------
 # DESCRIPTION
-# Define the household block of the model, which includes the EGM problem,
-# the grid and transition matrices for income, and the labor income function.
-#---------------------------------------------------------------------------
+# Define the firms, government and monetary policy blocks of the model,
+# as well as the market clearing conditions.
+#
+# SS-DAG   (for calibration)   +   Dynamics DAG (for IRFs and Jacobians)
+#----------------------------------------------------------------------------
 #=
 
 # Import Packages
@@ -11,17 +13,29 @@ import numpy as np
 from sequence_jacobian import simple
 
 
-#---------------------------------------------------------------------------
+#----------------------------------------------------------------------------
 # Firm Block:
-# Production: Y = Z * L  =>  L = Y / Z
+# 1. Production
 @simple
-def firm(Y, Z):
-    L = Y / Z
-    return L
+def firm(Y, w, Z):
+    L   = Y / Z       # Y = Z * L  =>  L = Y / Z
+    Div = Y - w * L
+    return L, Div
 
 
-# Phillips Curves:
-# log(1+pi) = kappa * (w/Z - 1/mu) + Y(+1)/Y * log(1+pi(+1)) / (1+r(+1))
+# 2. SS Phillips Curve
+@simple
+def nkpc_ss(Z, mu):
+    w = Z / mu        # P = mu * W / Z  =>  w = Z / mu
+    return w
+
+
+# 3. Dynamic Phillips Curves
+# log(1+pi)   = kappa   * (w/Z - 1/mu) + Y(+1)/Y * log(1+pi(+1)) / (1+r(+1))
+# log(1+pi_w) = kappa_w * (w/Z - 1/mu) + log(1+pi_w(+1)) / (1+r(+1))
+# 1+pi_w = (1+pi)*w/w(-1)
+###    If mu_p != mu_w, both PCs cannot hold simultaneously at the same w_ss
+
 @simple
 def price_nkpc(pi, w, Z, Y, r, kappa, mu):
     nkpc = (kappa * (w / Z - 1 / mu)
@@ -30,29 +44,26 @@ def price_nkpc(pi, w, Z, Y, r, kappa, mu):
     return nkpc
 
 
-# log(1+pi^w) = kappa_w * (w/Z - 1/mu_w) + log(1+pi+w(+1)) / (1+r(+1))
 @simple
-def wage_nkpc(pi, w, Z, r, kappa_w, mu_w):
+def wage_nkpc(pi, w, Z, r, kappa_w, mu):
     pi_w  = (1 + pi) * w / w(-1) - 1
-    nkwpc = (kappa_w * (w / Z - 1 / mu_w)
+    nkwpc = (kappa_w * (w / Z - 1 / mu)
              + (1 + pi_w(+1)).apply(np.log) / (1 + r(+1))
              - (1 + pi_w).apply(np.log))
     return nkwpc, pi_w
 
 
-@simple
-def dividends(Y, w, L):
-    div = Y - w * L
-    return div
 
-
-
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Government Block
-# Budget constraint:   b_t * U_t + T_t * V_t + (1+r_{t-1})*B_{t-1} = tau*w_t*L_t + B_t
+# Fiscal regimes (choose in main.py):
+#   DEBT-FINANCED:  b, Tr exogenous; B adjusts
+#   TAX-FINANCED:   B fixed; tau adjusts
+# b * U + T * V + (1+r(-1)) * B(-1) = tau * w * L + B
+
 @simple
-def fiscal(r, w, L, U, V, tau, b, Tr, B):
-    LaborTax = tau * w * L
+def fiscal(r, w, L, tau, b, Tr, B, U, V):
+    LaborTax  = tau * w * L
     BenefCost = b * U + Tr * V
     deficit   = (1 + r(-1)) * B(-1) + BenefCost - LaborTax - B
     return LaborTax, BenefCost, deficit
@@ -67,7 +78,7 @@ def monetary(pi, rstar, phi):
 
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Market Clearing
 @simple
 def mkt_clearing(A, B, C, Y, L, U, V):

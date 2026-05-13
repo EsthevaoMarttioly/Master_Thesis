@@ -17,13 +17,15 @@ from sequence_jacobian import simple
 # Firm Block:
 # 1. Production
 @simple
-def firm(Y, w, Z):
+def firm(Y, Z, w, tau):
     L   = Y / Z       # Y = Z * L  =>  L = Y / Z
-    Div = Y - w * L
+    Div = (1-tau) * (Y - w*L)
     return L, Div
 
 
 # 2. SS Phillips Curve
+#    wedge = vscale * L^(1/frisch) - (1-tau) * w * C^(-1/eis)
+#    pi = kappa * [wedge] + beta_avg * pi(+1)
 @simple
 def nkpc_ss(Z, mu):
     w = Z / mu        # P = mu * W / Z  =>  w = Z / mu
@@ -31,26 +33,14 @@ def nkpc_ss(Z, mu):
 
 
 # 3. Dynamic Phillips Curves
-# log(1+pi)   = kappa   * (w/Z - 1/mu) + Y(+1)/Y * log(1+pi(+1)) / (1+r(+1))
-# log(1+pi_w) = kappa_w * (w/Z - 1/mu) + log(1+pi_w(+1)) / (1+r(+1))
-# 1+pi_w = (1+pi)*w/w(-1)
-###    If mu_p != mu_w, both PCs cannot hold simultaneously at the same w_ss
-
 @simple
-def price_nkpc(pi, w, Z, Y, r, kappa, mu):
-    nkpc = (kappa * (w / Z - 1 / mu)
-            + Y(+1) / Y * (1 + pi(+1)).apply(np.log) / (1 + r(+1))
-            - (1 + pi).apply(np.log))
+def phillips_curve(pi, w, L, C, kappa, frisch, eis, vscale, tau, beta_high, omega_I, dbeta):
+    """Single wage-price Phillips curve
+    Returns nkpc residual = 0 in equilibrium"""
+    beta_avg = beta_high - omega_I * dbeta
+    wedge = vscale * L**(1/frisch) - (1 - tau) * w * C**(-1/eis)
+    nkpc  = kappa * wedge + beta_avg * pi(+1) - pi
     return nkpc
-
-
-@simple
-def wage_nkpc(pi, w, Z, r, kappa_w, mu):
-    pi_w  = (1 + pi) * w / w(-1) - 1
-    nkwpc = (kappa_w * (w / Z - 1 / mu)
-             + (1 + pi_w(+1)).apply(np.log) / (1 + r(+1))
-             - (1 + pi_w).apply(np.log))
-    return nkwpc, pi_w
 
 
 
@@ -62,11 +52,11 @@ def wage_nkpc(pi, w, Z, r, kappa_w, mu):
 # b * U + T * V + (1+r(-1)) * B(-1) = tau * w * L + B
 
 @simple
-def fiscal(r, w, L, tau, b, Tr, B, U, V):
-    LaborTax  = tau * w * L
-    BenefCost = b * U + Tr * V
-    deficit   = (1 + r(-1)) * B(-1) + BenefCost - LaborTax - B
-    return LaborTax, BenefCost, deficit
+def fiscal(r, Y, tau, b, Tr, B, U, V):
+    TotalTax   = tau * Y
+    Transfers  = b * U + Tr * V
+    gov_budget = (1 + r(-1)) * B(-1) + Transfers - TotalTax - B
+    return TotalTax, Transfers, gov_budget
 
 
 # Monetary Policy

@@ -50,7 +50,7 @@ def _save_or_show(fig, savepath):
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
-def print_ss_summary(ss, calibration):
+def print_ss_summary(ss, calibration, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']):
     """Print key steady-state moments and sanity checks."""
     f_, s_, Tb_ = calibration['f'], calibration['s'], calibration['Tb']
     U_theory = (f_ * Tb_ / (f_ * Tb_ + 1)) * s_ / (s_ + f_)
@@ -60,18 +60,13 @@ def print_ss_summary(ss, calibration):
     print("\n" + "="*55)
     print("  STEADY STATE")
     print("="*55)
-    for k in ['Y', 'C', 'beta_high', 'A', 'B', 'w',
-              'U', 'V', 'L', 'Div', 'asset_mkt', 'goods_mkt', 'Z']:
+    for k in var_ss:
         print(f"  {k:12s} = {ss[k]:.4f}")
+    print(f"  {'beta_low':12s} = {ss['beta_high'] - ss['dbeta']:.4f}")
 
     print(f"\n  U*  theory = {100*U_theory:.2f}%,  model = {100*ss['U']:.2f}%")
     print(f"  V*  theory = {100*V_theory:.2f}%,  model = {100*ss['V']:.2f}%")
-    print(f"  w*  = Z/mu = {w_theory:.4f},  model = {ss['w']:.4f}")
-
-    print(f"\n  Govt budget residual:  {ss['deficit']:.2e}")
-    print(f"  Labor mkt residual:    {(1-ss['U']-ss['V'])-ss['L']:.2e}")
-    print(f"  NKPC residual:         {ss['nkpc']:.2e}")
-    print(f"  NKWPC residual:        {ss['nkwpc']:.2e}")
+    print(f"  w*  = Z/mu = {w_theory:.3f},  model = {ss['w']:.3f}")
     print("="*55)
 
 

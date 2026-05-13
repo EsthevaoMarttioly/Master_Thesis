@@ -56,7 +56,7 @@ def household(Va_p, a_grid, y, r, beta, eis):
 
 # 2.1. Transition States Grid
 def make_grid(rho_e, sd_e, nE, amin, amax, nA,
-              beta_high, dbeta, lambda_I, q, f, s, Tb):
+              beta_high, dbeta, omega_I, q, f, s, Tb):
     """Build all grids and the joint Markov transition matrix Pi.
 
     e_grid  : (nE,)            productivity grid
@@ -84,7 +84,7 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
     # Discount Factor Transition  (impatient=0, patient=1)
     beta_low = beta_high - dbeta
     b_grid   = np.array([beta_low, beta_high])
-    pi_b     = np.array([lambda_I, 1 - lambda_I])    # stationary shares
+    pi_b     = np.array([omega_I, 1-omega_I])    # stationary shares
     Pi_b     = (1 - q) * np.eye(2) + q * np.outer(np.ones(2), pi_b)
 
 
@@ -100,11 +100,11 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
 
 
 # 2.2. Dividend Income Function
-def dividend_income(e_grid, pi_e_e, Div):
+def dividend_income(e_grid, pi_e_e, Div, tau):
     """Distribute firm profits proportional to productivity e"""
-    E_e     = np.sum(pi_e_e * e_grid)    # E[e] under Rouwenhorst stationary dist.
-    div_e   = Div * e_grid / E_e         # (nE,): per-e share, sums to ~Div
-    div_inc = np.tile(div_e, 6)          # tile across 3 s-blocks * 2 beta-types
+    E_e     = np.sum(pi_e_e * e_grid)          # E[e] under Rouwenhorst stationary dist.
+    div_e   = Div * e_grid / E_e               # (nE,): per-e share, sums to ~Div
+    div_inc = np.tile(div_e, 6)                # tile across 3 s-blocks * 2 beta-types
     return div_inc
 
 
@@ -113,9 +113,9 @@ def labor_income(e_grid, w, b, tau, Tr, div_inc):
     # Set grid length
     nE_ones = np.ones(len(e_grid))
 
-    y_emp   = (1 - tau) * w * e_grid + Tr * nE_ones  # [employed]
-    y_unemp = b * nE_ones                            # [unemployed]
-    y_needy = Tr * nE_ones                           # [needy]
+    y_emp   = (1 - tau) * w * e_grid    # [employed]
+    y_unemp = b * nE_ones               # [unemployed]
+    y_needy = Tr * nE_ones              # [needy]
 
     y = np.r_[np.tile(y_emp, 2),     # s=0, E
               np.tile(y_unemp, 2),   # s=1, U (with benefits)

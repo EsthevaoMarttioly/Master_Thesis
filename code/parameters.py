@@ -10,8 +10,6 @@
 calibration = dict(
     # --- Household Preferences ---
     eis       = 0.5,   # EIS = gamma = 0.5 (CRRA sigma = 2)
-    frisch    = 0.5,   # Labor supply elasticity = 0.5
-    vscale    = 1.0,   # scale of labor disutility
 
     # --- Discount Factor ---
     dbeta     = 0.06,  # difference between patient and impatient

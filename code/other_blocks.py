@@ -24,8 +24,6 @@ def firm(Y, Z, w, tau):
 
 
 # 2. SS Phillips Curve
-#    wedge = vscale * L^(1/frisch) - (1-tau) * w * C^(-1/eis)
-#    pi = kappa * [wedge] + beta_avg * pi(+1)
 @simple
 def nkpc_ss(Z, mu):
     w = Z / mu        # P = mu * W / Z  =>  w = Z / mu
@@ -33,13 +31,14 @@ def nkpc_ss(Z, mu):
 
 
 # 3. Dynamic Phillips Curves
+# log(1+pi)   = kappa   * (w/Z - 1/mu) + Y(+1)/Y * log(1+pi(+1)) / (1+r(+1))
+# log(1+pi_w) = kappa_w * (w/Z - 1/mu) + log(1+pi_w(+1)) / (1+r(+1))
+# 1+pi_w = (1+pi)*w/w(-1)
 @simple
-def phillips_curve(pi, w, L, C, kappa, frisch, eis, vscale, tau, beta_high, omega_I, dbeta):
-    """Single wage-price Phillips curve
-    Returns nkpc residual = 0 in equilibrium"""
-    beta_avg = beta_high - omega_I * dbeta
-    wedge = vscale * L**(1/frisch) - (1 - tau) * w * C**(-1/eis)
-    nkpc  = kappa * wedge + beta_avg * pi(+1) - pi
+def phillips_curve(pi, w, Z, Y, r, kappa, mu):
+    nkpc = (kappa * (w / Z - 1 / mu)
+            + Y(+1) / Y * (1 + pi(+1)).apply(np.log) / (1 + r(+1))
+            - (1 + pi).apply(np.log))
     return nkpc
 
 

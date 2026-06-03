@@ -42,14 +42,14 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
               p_fi, p_if, p_iu, p_uf, p_ui):
     """Build all grids and the joint Markov transition matrix Pi.
 
-    e_grid  : (nE,)            productivity grid
-    pi_e_e  : (nE,)            stationary distribution of e (Rouwenhorst).
+    e_grid  : (nE,)            productivity grid, normalized E[e] = 1
     Pi      : (nS*nBeta*nE)^2  full Kronecker transition matrix
     a_grid  : (nA,)            log-spaced asset grid
     beta    : (nS*nBeta*nE,)   per-state discount factor"""
 
     e_grid, pi_e_e, Pi_e = grids.markov_rouwenhorst(rho=rho_e, sigma=sd_e, N=nE)
-    a_grid               = grids.asset_grid(amin=amin, amax=amax, n=nA)   # Log-spaced grid for assets
+    e_grid = e_grid / np.sum(pi_e_e * e_grid)
+    a_grid = grids.asset_grid(amin=amin, amax=amax, n=nA)
 
     # ------------------------------------------------------------------
     # Employment Transition: 0=formal, 1=informal, 2=unemployed
@@ -79,15 +79,14 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
     # beta vector: repeat [beta_low]*nE, [beta_high]*nE for each of s-blocks
     beta = np.tile(np.repeat(b_grid, nE), nS)   # (s, beta, e)
 
-    return e_grid, pi_e_e, Pi, a_grid, beta, nS
+    return e_grid, a_grid, beta, Pi, nS
 
 
 # 2.2. Dividend Income Function
-def dividend_income(e_grid, pi_e_e, Div, nS):
-    """Distribute firm profits proportional to productivity e"""
-    E_e     = np.sum(pi_e_e * e_grid)          # E[e] under Rouwenhorst stationary dist.
-    div_e   = Div * e_grid / E_e               # (nE,): per-e share, sums to ~Div
-    div_inc = np.tile(div_e, nS * 2)           # tile across s-blocks * 2 beta-types
+def dividend_income(Div, e_grid, nS):
+    # Distribute firm profits proportional to productivity e
+    div_e   = Div * e_grid / e_grid.sum()    # sums to ~Div
+    div_inc = np.tile(div_e, nS*2)           # tile across s*beta blocks
     return div_inc
 
 
@@ -119,31 +118,36 @@ def labor_income(e_grid, w, w_I, h_I, y_bar, tau_l, Tr, div_inc, varphi):
 
 # Employment Status: 0=formal, 1=informal, 2=unemployed
 def formal(c):
-    nS = c.shape[0] // 3    # nBeta * nE per s-block
-    n_f  = np.zeros_like(c)
-    n_f[:nS, :] = 1.0         # s=0 block
-    return n_f
+    nS = c.shape[0] // 3      # nBeta * nE per s-block
+    f  = np.zeros_like(c)
+    f[:nS, :] = 1.0         # s=0 block
+    return f
 
 
-def informal(c, e_grid, h_I, Tr_inform):
+def informal(c, e_grid, h_I):
     nS = c.shape[0] // 3
     i  = np.zeros_like(c)
-    i[nS : 2*nS, :] = 1.0   # s=1 block
+    i[nS : 2*nS, :] = 1.0     # s=1 block
 
     # Informal Labor Supply: h_I * e for s=I
     n_i = np.zeros_like(c)
     n_i[nS : 2*nS, :] = np.tile(e_grid * h_I, 2)[:, np.newaxis]
-    
-    bf_i = np.zeros_like(c)
-    bf_i[nS : 2*nS, :] = np.tile(Tr_inform, 2)[:, np.newaxis]
-    return i, n_i, bf_i
+    return i, n_i
 
 
 def unemp(c):
     nS = c.shape[0] // 3
     u  = np.zeros_like(c)
-    u[2*nS:, :] = 1.0       # s=2 block
+    u[2*nS:, :] = 1.0         # s=2 block
     return u
+
+
+def bolsa_familia(c, Tr_inform):
+    nS = c.shape[0] // 3
+    bf = np.zeros_like(c)
+    bf[nS : 2*nS, :] = np.tile(Tr_inform, 2)[:, np.newaxis]
+    bf[2*nS:, :] = 1.0
+    return bf
 
 
 
@@ -151,13 +155,13 @@ def unemp(c):
 # 4. Household Block
 
 hh = household.add_hetinputs([make_grid, dividend_income, informal_hours, labor_income])
-hh = hh.add_hetoutputs([formal, informal, unemp])
+hh = hh.add_hetoutputs([formal, informal, unemp, bolsa_familia])
 
 
 print(f'Inputs: {hh.inputs}')
 print(f'Macro outputs: {hh.outputs}')
 
 
-# from code.parameters import calibration, unknowns_ss
+# from code.parameters import calibration
 
 # hh.steady_state(calibration)

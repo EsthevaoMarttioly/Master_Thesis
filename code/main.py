@@ -77,7 +77,7 @@ targets_ss = {
 start = time.time()
 ss0 = hank_ss.solve_steady_state(calibration, unknowns = unknowns_ss,
                                  targets = targets_ss, solver = 'hybr')
-print(f"Steady State solved in {time.time()-start:.1f}s")    # 6.4 seconds on my laptop
+print(f"Steady State solved in {time.time()-start:.1f}s")    # 26.2 seconds on my laptop
 
 
 
@@ -103,7 +103,7 @@ print("Steady State reached in dynamics DAG.")
 # ---------------------------------------------------------------------------
 # Steady State Diagnostics
 var_ss_summary = ['Y', 'C', 'beta_high', 'A', 'B',
-                  'w', 'w_I', 'Z', 'N_F', 'N_I', 'U', 'BF_I', 'Div',
+                  'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div', 'p_fi', 'p_if',
                   'G', 'asset_mkt', 'goods_mkt', 'formal_labor_mkt', 'informal_labor_mkt']
 
 print_ss_summary(ss, calibration, var_ss_summary)
@@ -146,7 +146,7 @@ dTr_mit  = dTr0 * rho_sh ** np.arange(T)                # MIT Shock
 dTr_ant  = np.concatenate([np.zeros(k), dTr_mit[:-k]])  # Antecipated Shock: Perfect Foresight
 dTr_perm = dTr0 * np.ones(T)                            # Permanent Shock
 
-variables = ['Y', 'C', 'N_I', 'U', 'pi', 'w']
+variables = ['Y', 'C', 'I', 'U', 'pi', 'w']
 irf_mit  = {v: G[v]['Tr'] @ dTr_mit  for v in variables}
 irf_ant  = {v: G[v]['Tr'] @ dTr_ant  for v in variables}
 irf_perm = {v: G[v]['Tr'] @ dTr_perm for v in variables}
@@ -158,7 +158,7 @@ plot_irfs(irf_mit, T_plot=30,
 
 plot_irf_comparison({'MIT shock (surprise)'      : irf_mit,
                      f'Anticipated ({k}q ahead)' : irf_ant},
-                     variables=['Y', 'C', 'N_I', 'pi'],
+                     variables=['Y', 'C', 'I', 'pi'],
                      T_plot=30, savepath='output/irf_comparison.png')
 
 
@@ -167,7 +167,7 @@ plot_irf_comparison({'MIT shock (surprise)'      : irf_mit,
 # Tables
 # ---------------------------------------------------------------------------
 # Fiscal multipliers summary table
-mults = compute_multipliers(G, {'Tr': dTr0})
+mults = compute_multipliers(G, {'Tr': dTr_mit})
 print_multipliers(mults)
 
 

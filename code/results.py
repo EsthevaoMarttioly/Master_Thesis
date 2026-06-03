@@ -18,8 +18,8 @@ COLORS = {
     'Tr'  : 'steelblue',     # Conditional Transfer (BF) shock
     'Z'   : 'forestgreen',   # TFP shock
     'r'   : 'darkorange',    # interest rate
-    'N_F' : 'steelblue',     # formal employment
-    'N_I' : 'tomato',        # informal employment
+    'F'   : 'steelblue',     # formal employment
+    'I'   : 'tomato',          # informal employment
     'U'   : 'mediumpurple',  # unemployed
     'Y'   : 'steelblue',
     'C'   : 'darkorange',
@@ -32,10 +32,10 @@ LS = {0: '-', 1: '--', 2: ':', 3: '-.'}
 VAR_LABELS = {
     'Y'    : 'Output $Y$',
     'C'    : 'Consumption $C$',
-    'N_F'  : 'Formal share $N_F$',
-    'N_I'  : 'Informal share $N_I$',
+    'F'    : 'Formal share $\\alpha_F$',
+    'I'    : 'Informal share $\\alpha_I$',
     'U'    : 'Unemployed $U$',
-    'BF_I' : 'BF recipients $BF_I$',
+    'BF'   : 'BF recipients $BF$',
     'w'    : 'Real wage $w$',
     'w_I'  : 'Informal wage $w_I$',
     'pi'   : 'Inflation $\\pi$',
@@ -100,16 +100,16 @@ def plot_consumption_policy(ss, calibration, T_plot_a=20, savepath=None):
     for bi, beta_name in enumerate(['Impatient', 'Patient']):
         ax = axes[bi]
         ax.plot(a_grid, c_3d[0, bi, e_med, :],
-                color=COLORS['N_F'], label='Formal')
+                color=COLORS['F'], label='Formal')
         ax.plot(a_grid, c_3d[1, bi, e_med, :],
-                color=COLORS['N_I'], linestyle='--', label='Informal')
+                color=COLORS['I'], linestyle='--', label='Informal')
         ax.plot(a_grid, c_3d[2, bi, e_med, :],
                 color=COLORS['U'],   linestyle=':',  label='Unemployed')
         ax.set_xlabel('Assets $a$')
         ax.set_ylabel('Consumption $c(s, \\bar{e}, a)$')
         ax.set_title(f'Policy Functions - {beta_name}')
         ax.set_xlim(0, T_plot_a)
-        ax.set_ylim(0, 4)
+        ax.set_ylim(0, 5)
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)

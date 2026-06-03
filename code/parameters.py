@@ -24,14 +24,14 @@ calibration = dict(
     lambda_s = 1.0,  # speed of sector switching
     p_fi = 0.10,     # formal-informal transition (calibrated)
     p_if = 0.10,     # informal-formal transition (calibrated)
-    p_iu = 0.02,     # informal-unemployed transition (calibrated)
-    p_ui = 0.10,     # unemployed-informal transition (calibrated)
-    p_uf = 0.10,     # unemployed-formal transition (calibrated)
+    p_iu = 0.02,     # informal-unemployed transition
+    p_ui = 0.10,     # unemployed-informal transition
+    p_uf = 0.10,     # unemployed-formal transition
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,
-    sd_e  = 0.5,
-    nE    = 7,
+    sd_e  = 0.85,
+    nE    = 15,
     amin  = 0.0,
     amax  = 200.0,
     nA    = 200,

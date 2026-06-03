@@ -85,12 +85,12 @@ def sector_flows(w, w_I, tau_l, Tr, lambda_s, eta_s, p_fi, p_if):
 # Fiscal regimes (choose in main.py):
 #   DEBT-FINANCED:  b, Tr exogenous; B adjusts
 #   TAX-FINANCED:   B fixed; tau adjusts
-# b * U + T * V + (1+r(-1)) * B(-1) = tau * w * L + B
+# G + Tr * BF + (1+r(-1)) * B(-1) = tau * w * F + B
 
 @simple
-def fiscal(r, w, tau_l, Tr, BF_I, N_F, U, B, G):
-    tax_revenue = tau_l * w * N_F
-    BF_Total    = Tr * (BF_I + U)
+def fiscal(r, w, tau_l, Tr, BF, F, B, G):
+    tax_revenue = tau_l * w * F
+    BF_Total    = Tr * BF
     gov_budget  = (1 + r(-1)) * B(-1) - B + G + BF_Total - tax_revenue
     return tax_revenue, gov_budget
 
@@ -107,10 +107,10 @@ def monetary(pi, rstar, phi):
 # ---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, B, C, Y, Y_I, G, L, N_F, N_I, L_I):
+def mkt_clearing(A, B, C, Y, Y_I, G, L, F, N_I, L_I, varphi):
     asset_mkt = A - B
-    formal_labor_mkt = N_F - L
+    formal_labor_mkt = F - L
     informal_labor_mkt = N_I - L_I
-    goods_mkt = Y + Y_I - C - G
+    goods_mkt = Y + 1/(1+varphi) * Y_I - C - G
     return asset_mkt, formal_labor_mkt, informal_labor_mkt, goods_mkt
 

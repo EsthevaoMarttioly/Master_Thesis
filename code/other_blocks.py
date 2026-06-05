@@ -20,7 +20,7 @@ from sequence_jacobian import simple
 def firm_formal(Y, Z, w, tau_l):
     # Formal sector: monopolistic competition with constant markup.
     L   = Y / Z       # Y = Z * L  =>  L = Y / Z
-    Div = (1 - tau_l) * (Y - w*L)
+    Div = Y - w*L
     return L, Div
 
 

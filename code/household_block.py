@@ -85,8 +85,8 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
 # 2.2. Dividend Income Function
 def dividend_income(Div, e_grid, nS):
     # Distribute firm profits proportional to productivity e
-    div_e   = Div * e_grid / e_grid.sum()    # sums to ~Div
-    div_inc = np.tile(div_e, nS*2)           # tile across s*beta blocks
+    div_e   = Div * e_grid              # sums to ~Div
+    div_inc = np.tile(div_e, nS*2)      # tile across s*beta blocks
     return div_inc
 
 

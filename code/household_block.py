@@ -2,7 +2,7 @@
 #----------------------------------------------------------------------------
 # DESCRIPTION
 # Define the household block of the model, which includes the EGM problem,
-# the grid and transition matrices for income, and the labor income function.
+# the grid, and transition matrices for income, labor productivity, and sectoral status.
 # ---------------------------------------------------------------------------
 #=
 
@@ -25,9 +25,9 @@ def household(Va_p, a_grid, y, r, beta, eis):
     c_nextgrid = (beta[:, np.newaxis] * Va_p) ** (-eis)
     coh        = (1 + r) * a_grid + y[..., np.newaxis]
 
-    a  = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
-    a  = np.maximum(a, a_grid[0])     # borrowing constraint
-    c  = coh - a
+    a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
+    a = np.maximum(a, a_grid[0])     # borrowing constraint
+    c = coh - a
     Va = (1 + r) * c ** (-1/eis)
 
     return Va, a, c
@@ -92,8 +92,7 @@ def dividend_income(Div, e_grid, nS):
 
 # 2.3. Optimal Informal Hours
 def informal_hours(e_grid, w_I, psi, varphi):
-    """Optimal hours for informal under u(c, h) = u(c - psi*h^(1+1/varphi)/(1+1/varphi))
-    Intratemporal FOC:  psi * h^(1/varphi) = w_I * e      (no wealth effect on h)"""
+    # Intratemporal FOC:  psi * h^(1/varphi) = w_I * e   (no wealth effect on h)
     h_I = (w_I * e_grid / psi) ** (varphi)
     return h_I
 

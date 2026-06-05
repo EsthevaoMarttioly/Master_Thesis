@@ -50,7 +50,9 @@ def phillips_curve(pi, w, Z, Y, r, kappa, mu):
 
 
 @simple
-def wage_phillips_curve(pi, w, Z, r, kappa_w, mu, phi_out, outside_opt):
+def wage_phillips_curve(pi, w, w_I, r, tau_l, Z, Tr, kappa_w, mu, phi_out):
+    outside_opt = (w_I + Tr) / ((1 - tau_l) * w) - 1
+
     # Wage Phillips Curve
     pi_w = (1 + pi) * w / w(-1) - 1
     wage_nkpc = (kappa_w * (w / Z - 1 / mu + phi_out * outside_opt)

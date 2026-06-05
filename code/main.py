@@ -1,10 +1,10 @@
-#### Thesis - Targeted vs Universal Fiscal Policy ####
+#### Thesis - Conditional Cash Transfers: A HANK Approach ####
 ## Author:  Esthevao Marttioly  |  EESP-FGV  |  2026
 ## Advisor: Bernardo Guimarães
 #=
 # ---------------------------------------------------------------------------
 # DESCRIPTION
-# This program solves an one-asset HANK model with 3-state unemployment.
+# This program solves an one-asset HANK model with 3-state formality-status.
 #
 # Solution method: Sequence-Space Jacobian (Auclert et al. 2021).
 # https://github.com/shade-econ/sequence-jacobian
@@ -32,16 +32,8 @@ from code.parameters import calibration
 
 # Import blocks
 from code.household_block import hh
-from code.other_blocks import (firm_formal, firm_informal, nkpc_ss,
-                               phillips_curve, wage_phillips_curve,
-                               sector_flows, monetary, fiscal, mkt_clearing)
-
-
-# Import results
-from code.results import (print_ss_summary, plot_consumption_policy,
-                          plot_wealth_distribution, plot_impc_profiles,
-                          plot_irfs, plot_irf_comparison,
-                          compute_multipliers, print_multipliers)
+from code.other_blocks import *
+from code.results import *
 
 
 # ---------------------------------------------------------------------------
@@ -63,9 +55,9 @@ unknowns_ss = {k: calibration[k] for k in
 
 # 2. Target asset market + goods market clearing
 targets_ss = {
-    'asset_mkt'          : 0,    # adjust beta_high to have A = B
-    'formal_labor_mkt'   : 0,    # adjust Z to have L = Y/Z = N_F
-    'informal_labor_mkt' : 0,    # adjust xi to have L_I = N_I
+    'asset_mkt'          : 0,    # adjust beta_high to A = B
+    'formal_labor_mkt'   : 0,    # adjust Z to L = Y/Z = N_F
+    'informal_labor_mkt' : 0,    # adjust xi to L_I = N_I
     'gov_budget'         : 0,    # adjust G to balance govt budget
     # 'goods_mkt'          : 0,    # untargeted - Walras' Law
     'sector_fi'          : 0,
@@ -77,7 +69,7 @@ targets_ss = {
 start = time.time()
 ss0 = hank_ss.solve_steady_state(calibration, unknowns = unknowns_ss,
                                  targets = targets_ss, solver = 'hybr')
-print(f"Steady State solved in {time.time()-start:.1f}s")    # 26.2 seconds on my laptop
+print(f"Steady State solved in {time.time()-start:.1f}s")    # 18.5 seconds on my laptop
 
 
 

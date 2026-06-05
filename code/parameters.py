@@ -20,13 +20,13 @@ calibration = dict(
     q         = 0.1,   # prob of redrawing beta type (generation = 25y)
 
     # --- Labor market ---
-    eta_s    = 5.0,  # sensitivity of sector switching
-    lambda_s = 1.0,  # speed of sector switching
-    p_fi = 0.10,     # formal-informal transition (calibrated)
-    p_if = 0.10,     # informal-formal transition (calibrated)
-    p_iu = 0.02,     # informal-unemployed transition
-    p_ui = 0.10,     # unemployed-informal transition
-    p_uf = 0.10,     # unemployed-formal transition
+    eta_s    = 3.0,   # sensitivity of sector switching
+    lambda_s = 0.25,  # speed of sector switching
+    p_fi = 0.10,      # formal-informal transition (calibrated)
+    p_if = 0.10,      # informal-formal transition (calibrated)
+    p_iu = 0.05,      # informal-unemployed transition
+    p_ui = 0.10,      # unemployed-informal transition
+    p_uf = 0.05,      # unemployed-formal transition
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,

@@ -76,6 +76,7 @@ def print_ss_summary(ss, calibration, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']
         print(f"  {k:12s} = {ss[k]:.4f}")
     print(f"  {'beta_low':12s} = {ss['beta_high'] - ss['dbeta']:.4f}")
     print(f"  w*  = Z/mu = {w_theory:.3f},  model = {ss['w']:.3f}")
+    print(f"  F + I + U  = 1.000,  model = {ss['F'] + ss['I'] + ss['U']:.3f}")
     print("="*55)
 
 

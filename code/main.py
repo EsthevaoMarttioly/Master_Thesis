@@ -76,9 +76,9 @@ print(f"Steady State solved in {time.time()-start:.1f}s")    # 18.5 seconds on m
 # ---------------------------------------------------------------------------
 # Dynamics
 
-blocks = [hh, firm_formal, firm_informal, phillips_curve,
-          wage_phillips_curve, monetary, fiscal, mkt_clearing]
-hank   = create_model(blocks, name="HANK - Dynamics")
+blocks = [hh, firm_formal, firm_informal,
+          phillips_curve, monetary, fiscal, mkt_clearing]
+hank = create_model(blocks, name="HANK - Dynamics")
 
 print(f"\nModel inputs (Dynamics):  {hank.inputs}")
 print(f"Model outputs (Dynamics): {hank.outputs}")

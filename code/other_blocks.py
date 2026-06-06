@@ -41,24 +41,22 @@ def nkpc_ss(Z, mu):
 
 # 3. Dynamic Phillips Curves
 @simple
-def phillips_curve(pi, w, Z, Y, r, kappa, mu):
+def phillips_curve(pi, w, w_I, r, Z, Y, mu, kappa, kappa_w,
+                   tau_l, Tr, phi_out, beta_high, dbeta, omega_I):
+    outside_opt = (w_I + Tr) / ((1 - tau_l) * w) - 1
+    beta_avg    = beta_high - dbeta * omega_I
+
     # Price Phillips Curve
     nkpc = (kappa * (w / Z - 1 / mu)
             + Y(+1) / Y * (1 + pi(+1)).apply(np.log) / (1 + r(+1))
             - (1 + pi).apply(np.log))
-    return nkpc
-
-
-@simple
-def wage_phillips_curve(pi, w, w_I, r, tau_l, Z, Tr, kappa_w, mu, phi_out):
-    outside_opt = (w_I + Tr) / ((1 - tau_l) * w) - 1
-
+    
     # Wage Phillips Curve
     pi_w = (1 + pi) * w / w(-1) - 1
     wage_nkpc = (kappa_w * (w / Z - 1 / mu + phi_out * outside_opt)
-                 + (1 + pi_w(+1)).apply(np.log) / (1 + r(+1))
+                 + beta_avg * (1 + pi_w(+1)).apply(np.log)
                  - (1 + pi_w).apply(np.log))
-    return wage_nkpc, pi_w
+    return nkpc, wage_nkpc, outside_opt
 
 
 

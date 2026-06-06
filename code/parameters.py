@@ -55,10 +55,10 @@ calibration = dict(
 
     # --- Firms ---
     mu       = 1.11,   # price markup
-    kappa    = 0.10,   # PC Slope
+    kappa    = 0.10,   # Price PC Slope
     kappa_w  = 0.10,   # Wage PC Slope
     xi       = 0.60,   # informal wage gap
-    phi_out  = 0.5,    # weight of outside option in NKWPC
+    phi_out  = 1.0,    # weight of outside option in NKWPC
 )
 
 

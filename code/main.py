@@ -95,7 +95,7 @@ print("Steady State reached in dynamics DAG.")
 # ---------------------------------------------------------------------------
 # Steady State Diagnostics
 var_ss_summary = ['Y', 'C', 'beta_high', 'A', 'B',
-                  'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div', 'p_fi', 'p_if',
+                  'w', 'w_I', 'xi', 'Z', 'F', 'I', 'U', 'BF', 'Div', 'p_fi', 'p_if',
                   'G', 'asset_mkt', 'goods_mkt', 'formal_labor_mkt', 'informal_labor_mkt']
 
 print_ss_summary(ss, calibration, var_ss_summary)

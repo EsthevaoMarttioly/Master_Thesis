@@ -14,19 +14,17 @@ calibration = dict(
     varphi = 0.5,   # Frisch Elasticity
 
     # --- Discount Factor ---
-    beta_high = 0.98,  # Calibrated: Patient's discount factor
-    dbeta     = 0.06,  # Difference between patient and impatient
-    omega_I   = 0.25,  # Share of impatient agents
-    q         = 0.1,   # Prob of redrawing beta type (generation = 25y)
+    beta_high = 0.98,    # Calibrated: Patient's Discount Factor
+    dbeta     = 0.09,    # Difference: beta_high - beta_low
+    omega_I   = 0.25,    # Share of Impatient Agents
+    q         = 0.1,     # Prob of Redrawing beta Type (Generation = 25y)
 
     # --- Labor market ---
-    eta_s    = 3.0,   # Sensitivity of sector switching
-    lambda_s = 0.25,  # Speed of sector switching
-    p_fi = 0.10,      # Calibrated: formal-informal transition
-    p_if = 0.10,      # Calibrated: informal-formal transition
-    p_iu = 0.05,      # informal-unemployed transition
-    p_ui = 0.10,      # unemployed-informal transition
-    p_uf = 0.05,      # unemployed-formal transition
+    p_fi = 0.11,     # Formal     -> Informal      =>    F = 50.3%
+    p_if = 0.12,     # Informal   -> Formal        =>    I = 44.7%
+    p_iu = 0.02,     # Informal   -> Unemployed    =>    U =  5.0%
+    p_ui = 0.11,     # Unemployed -> Informal
+    p_uf = 0.05,     # Unemployed -> Formal
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,
@@ -37,31 +35,37 @@ calibration = dict(
     nA    = 200,
 
     # --- Aggregate / Prices (steady-state) ---
-    Y     = 1.0,     # Output (normalized)
-    Y_I   = 1.0,     # Informal Output (normalized)
-    Z     = 1.0,     # Calibrated: Productivity
+    Y = 1.0,     # Output (normalized)
+    Z = 1.0,     # Calibrated: Productivity
 
     # --- Government ---
     tau_l = 0.27,    # Labor Tax = 27% of Wage Bill
     y_bar = 0.60,    # Eligibility Threshold for BF
     Tr    = 0.17,    # BF Transfer
-    B     = 1.2,     # Debt/GDP = 120% (annual)
+    B     = 3.20,    # Debt/GDP = 80% (annual)
     G     = 0.2,     # Calibrated: Government Spending
 
     # --- Monetary ---
     phi   = 1.5,     # Taylor rule coefficient on inflation
     rstar = 0.03,    # Real Interest Rate (12% annual)
-    pi    = 0.0,     # Inflation = 0
+    pi    = 0.0,     # Steady State Inflation = 0
 
     # --- Firms ---
     mu       = 1.11,   # Price Markup
     kappa    = 0.10,   # Price PC Slope
     kappa_w  = 0.10,   # Wage PC Slope
-    xi       = 0.60,   # Informal Wage Gap
-    phi_out  = 1.0,    # Weight of Outside Option in NKWPC
+    xi       = 0.65,   # Informal Wage Gap
 )
 
 
 calibration['r'] = calibration['rstar']
 
 
+# Implicit variables in steady state
+gamma = calibration['p_iu'] / (calibration['p_uf'] + calibration['p_ui'])
+alpha = (calibration['p_if'] * (calibration['p_uf'] + calibration['p_ui']) +
+          calibration['p_iu'] * calibration['p_uf']) / calibration['p_fi'] / (calibration['p_uf'] + calibration['p_ui'])
+
+implicit_F, implicit_I, implicit_U = alpha / (1 + gamma + alpha), 1 / (1 + gamma + alpha), gamma / (1 + gamma + alpha)
+
+round(implicit_F, 4), round(implicit_I, 4), round(implicit_U, 4)

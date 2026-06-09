@@ -16,12 +16,14 @@ All code is written with reproducibility and defensive programming in mind.
 │   ├── household_block.py               # Household's heterogenous block
 │   ├── other_blocks.py                  # Firm, Fiscal, Monetary, and Mkt Clearing
 │   ├── parameters.py                    # Calibration and Estimation Parameters
-│   └── results.py                       # Graphics and Tables
+│   ├── results.py                       # Graphics and Tables
+│   └── get_data.R                       # Calibration Data
 ├── data/
 │   ├── lorenz_nw_scf_2019.raw           # SCF Data for US Lorenz Curve
 │   └── data.csv                         # Not yet
 ├── output/
 ├── EsthevaoMarttioly_Thesis.pdf         # Final submitted report
+├── EsthevaoMarttioly_Thesis.RProj       # R Project for downloading data
 ├── requirements.txt                     # pip install -r requirements.txt
 └── README.md
 ```
@@ -36,13 +38,13 @@ If you do not have either VS Code or Python, install it.
 * To install VSCode _https://code.visualstudio.com_.
 * Important to install python inside VSCode as well.
 
-The analysis was conducted using Python version 3.14 (2026-04-21) on a Windows 11 system.
+The analysis was conducted using Python version 3.14 and R version 4.6.0 (2026-07-09) on a Windows 11 system.
 
 ## Running the project
 
 To reproduce the analysis:
 
-* Open the file: code/main.py (with VS Code)
+* Open the file: code/main.py (with VS Code).
 * Open the project's folder in VS Code.
-* In the Terminal, type "pip install -r requirements.txt" on bash (Ctrl+Shift+' to open)
+* In the Terminal, type "pip install -r requirements.txt" on bash (Ctrl+Shift+' to open).
 * Run the script: code/main.py.

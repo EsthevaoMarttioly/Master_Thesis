@@ -20,31 +20,30 @@ from sequence_jacobian import simple
 def firm_formal(Y, Z, w, tau_l):
     # Formal sector: monopolistic competition with constant markup.
     L   = Y / Z       # Y = Z * L  =>  L = Y / Z
-    Div = Y - w*L
+    Div = (1 - tau_l) * (Y - w*L)
     return L, Div
 
 
 @simple
-def firm_informal(xi, w, Y_I):
+def firm_informal(w_I, N_I):
     # Informal sector: perfectly competitive.
-    w_I = xi * w
-    L_I = Y_I / w_I
-    return w_I, L_I
+    Y_I = w_I * N_I
+    return Y_I
 
 
 # 2. SS Phillips Curve
 @simple
-def nkpc_ss(Z, mu):
-    w = Z / mu
-    return w
+def nkpc_ss(Z, mu, xi):
+    w   = Z / mu
+    w_I = xi * w
+    return w, w_I
 
 
 # 3. Dynamic Phillips Curves
 @simple
-def phillips_curve(pi, w, w_I, r, Z, Y, mu, kappa, kappa_w,
-                   tau_l, Tr, phi_out, beta_high, dbeta, omega_I):
-    outside_opt = (w_I + Tr) / ((1 - tau_l) * w) - 1
-    beta_avg    = beta_high - dbeta * omega_I
+def phillips_curve(w, r, pi, Z, Y, xi, mu, kappa, kappa_w, beta_high, dbeta, omega_I):
+    w_I      = xi * w
+    beta_avg = beta_high - dbeta * omega_I
 
     # Price Phillips Curve
     nkpc = (kappa * (w / Z - 1 / mu)
@@ -53,30 +52,10 @@ def phillips_curve(pi, w, w_I, r, Z, Y, mu, kappa, kappa_w,
     
     # Wage Phillips Curve
     pi_w = (1 + pi) * w / w(-1) - 1
-    wage_nkpc = (kappa_w * (w / Z - 1 / mu + phi_out * outside_opt)
+    wage_nkpc = (kappa_w * (w / Z - 1 / mu)
                  + beta_avg * (1 + pi_w(+1)).apply(np.log)
                  - (1 + pi_w).apply(np.log))
-    return nkpc, wage_nkpc, outside_opt
-
-
-
-#----------------------------------------------------------------------------
-# Sector Transition
-@simple
-def sector_flows(w, w_I, tau_l, Tr, lambda_s, eta_s, p_fi, p_if):
-    """Endogenous sector transition rates.
-    Switching rates (logistic):
-        sigma   = logistic(eta_s * outside_opt)  \in  (0,1)
-        p_fi    = lambda_s * sigma
-        p_if    = lambda_s * (1 - sigma)"""
-
-    outside_opt = (w_I + Tr) / ((1 - tau_l) * w) - 1
-
-    sigma = 1 / (1 + np.exp(-eta_s * outside_opt))
-    sector_fi = p_fi - lambda_s * sigma
-    sector_if = p_if - lambda_s * (1 - sigma)
-
-    return sector_fi, sector_if, outside_opt
+    return w_I, nkpc, wage_nkpc
 
 
 
@@ -88,8 +67,8 @@ def sector_flows(w, w_I, tau_l, Tr, lambda_s, eta_s, p_fi, p_if):
 # G + Tr * BF + (1+r(-1)) * B(-1) = tau * w * F + B
 
 @simple
-def fiscal(r, w, tau_l, Tr, BF, F, B, G):
-    tax_revenue = tau_l * w * F
+def fiscal(r, tau_l, Tr, BF, Y, B, G):
+    tax_revenue = tau_l * Y
     BF_Total    = Tr * BF
     gov_budget  = (1 + r(-1)) * B(-1) - B + G + BF_Total - tax_revenue
     return tax_revenue, gov_budget
@@ -107,10 +86,9 @@ def monetary(pi, rstar, phi):
 # ---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, B, C, Y, Y_I, G, L, F, N_I, L_I, varphi):
+def mkt_clearing(A, B, C, Y, Y_I, G, L, F, varphi):
     asset_mkt = A - B
-    formal_labor_mkt = F - L
-    informal_labor_mkt = N_I - L_I
+    labor_mkt = F - L
     goods_mkt = Y + 1/(1+varphi) * Y_I - C - G
-    return asset_mkt, formal_labor_mkt, informal_labor_mkt, goods_mkt
+    return asset_mkt, labor_mkt, goods_mkt
 

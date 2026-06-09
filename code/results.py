@@ -121,6 +121,16 @@ def plot_consumption_policy(ss, calibration, T_plot_a=20, savepath=None):
 # 3. Wealth Distribution
 # ---------------------------------------------------------------------------
 
+def gini_coefficient(array):
+    # Values must be sorted in ascending order
+    array = np.sort(array)
+    index = np.arange(1, array.shape[0] + 1)
+    n = array.shape[0]
+    
+    # Calculate Gini
+    return (np.sum((2 * index - n - 1) * array)) / (n * np.sum(array))
+
+
 def plot_wealth_distribution(ss, lorenz_data=None, n_bins=60, savepath=None):
     """Two-panel figure: wealth PDF near constraint + Lorenz curve."""
     D      = ss.internals['household']['D']
@@ -145,14 +155,15 @@ def plot_wealth_distribution(ss, lorenz_data=None, n_bins=60, savepath=None):
     axes[0].legend(frameon=False)
  
     # Right: Lorenz curve
-    axes[1].plot(cum_pop, cum_wlth, color='steelblue', label='Model')
+    axes[1].plot(cum_pop, cum_wlth, color='steelblue',
+                 label='Model, Gini = {:.2f}'.format(gini_coefficient(a_dist * a_grid)))
     axes[1].plot([0, 1], [0, 1], color='gray', linestyle=':', label='Perfect equality')
     if lorenz_data is not None:
         pctls = np.arange(501) / 500
         lorenz_emp = np.array([np.interp(p, lorenz_data[:, 0], lorenz_data[:, 1])
                                for p in pctls])
-        axes[1].plot(pctls, lorenz_emp, color='forestgreen',
-                     linestyle='--', label='SCF 2019')
+        axes[1].plot(pctls, lorenz_emp, color='forestgreen', linestyle='--',
+                     label='SCF 2019, Gini = {:.2f}'.format(gini_coefficient(lorenz_emp)))
     axes[1].set_xlabel('Cumulative population share')
     axes[1].set_ylabel('Cumulative wealth share')
     axes[1].set_title('Lorenz Curve')

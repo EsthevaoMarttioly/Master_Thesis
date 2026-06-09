@@ -10,7 +10,7 @@
 # https://github.com/shade-econ/sequence-jacobian
 # ---------------------------------------------------------------------------
 #=
-# Write this in the terminal this to install packages
+# Write this in the terminal to install packages
 # pip install -r requirements.txt
 
 
@@ -39,7 +39,7 @@ from code.results import *
 # ---------------------------------------------------------------------------
 # Assemble Model
 
-blocks_ss = [hh, sector_flows, firm_formal, firm_informal, nkpc_ss, monetary, fiscal, mkt_clearing]
+blocks_ss = [hh, firm_formal, firm_informal, nkpc_ss, monetary, fiscal, mkt_clearing]
 hank_ss   = create_model(blocks_ss, name="HANK - Steady State")
 
 print(f"\nModel inputs (SS):  {hank_ss.inputs}")
@@ -50,26 +50,22 @@ print(f"Model outputs (SS): {hank_ss.outputs}")
 # Steady State
 # 1. Unknown values to be estimated
 unknowns_ss = {k: calibration[k] for k in
-               ['beta_high', 'Z', 'xi', 'G', 'p_fi', 'p_if']}
+               ['beta_high', 'Z', 'G']}
 
 
 # 2. Target asset market + goods market clearing
 targets_ss = {
-    'asset_mkt'          : 0,    # adjust beta_high to A = B
-    'formal_labor_mkt'   : 0,    # adjust Z to L = Y/Z = N_F
-    'informal_labor_mkt' : 0,    # adjust xi to L_I = N_I
-    'gov_budget'         : 0,    # adjust G to balance govt budget
-    # 'goods_mkt'          : 0,    # untargeted - Walras' Law
-    'sector_fi'          : 0,
-    'sector_if'          : 0     # adjust p_fi, p_if to match outside_opt = 0
+    'asset_mkt'  : 0,    # adjust beta_high to A = B
+    'labor_mkt'  : 0,    # adjust Z to L = Y/Z = N_F
+    'gov_budget' : 0,    # adjust G to balance govt budget
+    # 'goods_mkt'  : 0,    # untargeted - Walras' Law
 }
-
 
 # 3. Steady State
 start = time.time()
 ss0 = hank_ss.solve_steady_state(calibration, unknowns = unknowns_ss,
                                  targets = targets_ss, solver = 'hybr')
-print(f"Steady State solved in {time.time()-start:.1f}s")    # 18.5 seconds on my laptop
+print(f"Steady State solved in {time.time()-start:.1f}s")    # 27.0 seconds on my laptop
 
 
 
@@ -86,7 +82,7 @@ print(f"Model outputs (Dynamics): {hank.outputs}")
 
 # Verify ss0 is also a valid Steady State
 ss = hank.steady_state(ss0)
-for k in ss0.keys() - {'eta_s', 'lambda_s', 'sector_fi', 'sector_if'}:
+for k in ss0.keys():
     assert np.all(np.isclose(ss[k], ss0[k])), f"SS mismatch at key {k}"
 print("Steady State reached in dynamics DAG.")
 
@@ -94,9 +90,9 @@ print("Steady State reached in dynamics DAG.")
 
 # ---------------------------------------------------------------------------
 # Steady State Diagnostics
-var_ss_summary = ['Y', 'C', 'beta_high', 'A', 'B',
-                  'w', 'w_I', 'xi', 'Z', 'F', 'I', 'U', 'BF', 'Div', 'p_fi', 'p_if',
-                  'G', 'asset_mkt', 'goods_mkt', 'formal_labor_mkt', 'informal_labor_mkt']
+var_ss_summary = ['Y', 'Y_I', 'C', 'beta_high', 'A', 'B',
+                  'w', 'w_I', 'xi', 'Z', 'F', 'I', 'U', 'BF', 'Div',
+                  'G', 'asset_mkt', 'goods_mkt', 'labor_mkt']
 
 print_ss_summary(ss, calibration, var_ss_summary)
 

@@ -90,8 +90,8 @@ print("Steady State reached in dynamics DAG.")
 
 # ---------------------------------------------------------------------------
 # Steady State Diagnostics
-var_ss_summary = ['Y', 'Y_I', 'C', 'beta_high', 'A', 'B',
-                  'w', 'w_I', 'xi', 'Z', 'F', 'I', 'U', 'BF', 'Div',
+var_ss_summary = ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
+                  'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div',
                   'G', 'asset_mkt', 'goods_mkt', 'labor_mkt']
 
 print_ss_summary(ss, calibration, var_ss_summary)
@@ -158,32 +158,4 @@ plot_irf_comparison({'MIT shock (surprise)'      : irf_mit,
 mults = compute_multipliers(G, {'Tr': dTr_mit})
 print_multipliers(mults)
 
-
-
-# ==========================================================================
-# Estimate dbeta with a third target (HtM share)
-# ==========================================================================
-# Use scipy.optimize.root to compuet arbitrary distribution moments.
-
-# def evaluate_calibration(x, calibration, htm_target = 0.20):
-#     beta_high, dbeta = x[0], x[1]
-#     ss_ = hh.steady_state(calibration | dict(beta_high=beta_high, dbeta=dbeta))
-
-#     # --- Target 1: asset market (A = B)
-#     res_A = ss_['A'] - calibration['B']
-
-#     # --- Target 2: HtM share (match data)
-#     D_     = ss_.internals['household']['D']
-#     a_dist = D_.sum(axis=0)
-#     htm    = a_dist[0]
-#     res_HtM = htm - htm_target
-
-#     return [res_A, res_HtM]
-
-# # Fix Z from labor market first (or jointly)
-
-# res = optimize.root(lambda x: evaluate_calibration(x, calibration), [unknowns_ss['beta_high'], 0.06])
-# assert res.success, f"dbeta estimation failed: {res.message}"
-
-# print(f"  Estimated beta_high = {res.x[0]:.4f}, dbeta = {res.x[1]:.4f}")
 

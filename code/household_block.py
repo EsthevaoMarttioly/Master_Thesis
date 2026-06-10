@@ -27,10 +27,10 @@ def household(Va_p, a_grid, y, r, beta, eis):
 
     a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
     a = np.maximum(a, a_grid[0])     # borrowing constraint
-    c = coh - a
-    Va = (1 + r) * c ** (-1/eis)
+    c_ghh = coh - a
+    Va = (1 + r) * c_ghh ** (-1/eis)
 
-    return Va, a, c
+    return Va, a, c_ghh
 
 
 # ---------------------------------------------------------------------------
@@ -116,34 +116,34 @@ def labor_income(e_grid, w, w_I, h_I, y_bar, tau_l, Tr, div_inc, varphi):
 # 3. Hetoutputs
 
 # Employment Status: 0=formal, 1=informal, 2=unemployed
-def formal(c):
-    nS = c.shape[0] // 3      # nBeta * nE per s-block
-    f  = np.zeros_like(c)
-    f[:nS, :] = 1.0         # s=0 block
+def formal(c_ghh):
+    nS = c_ghh.shape[0] // 3    # nBeta * nE per s-block
+    f  = np.zeros_like(c_ghh)
+    f[:nS, :] = 1.0             # s=0 block
     return f
 
 
-def informal(c, e_grid, h_I):
-    nS = c.shape[0] // 3
-    i  = np.zeros_like(c)
-    i[nS : 2*nS, :] = 1.0     # s=1 block
+def informal(c_ghh, e_grid, h_I):
+    nS = c_ghh.shape[0] // 3
+    i  = np.zeros_like(c_ghh)
+    i[nS : 2*nS, :] = 1.0       # s=1 block
 
     # Informal Labor Supply: h_I * e for s=I
-    n_i = np.zeros_like(c)
+    n_i = np.zeros_like(c_ghh)
     n_i[nS : 2*nS, :] = np.tile(e_grid * h_I, 2)[:, np.newaxis]
     return i, n_i
 
 
-def unemp(c):
-    nS = c.shape[0] // 3
-    u  = np.zeros_like(c)
-    u[2*nS:, :] = 1.0         # s=2 block
+def unemp(c_ghh):
+    nS = c_ghh.shape[0] // 3
+    u  = np.zeros_like(c_ghh)
+    u[2*nS:, :] = 1.0           # s=2 block
     return u
 
 
-def bolsa_familia(c, Tr_inform):
-    nS = c.shape[0] // 3
-    bf = np.zeros_like(c)
+def bolsa_familia(c_ghh, Tr_inform):
+    nS = c_ghh.shape[0] // 3
+    bf = np.zeros_like(c_ghh)
     bf[nS : 2*nS, :] = np.tile(Tr_inform, 2)[:, np.newaxis]
     bf[2*nS:, :] = 1.0
     return bf

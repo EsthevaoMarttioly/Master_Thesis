@@ -16,7 +16,7 @@ calibration = dict(
     # --- Discount Factor ---
     beta_high = 0.98,    # Calibrated: Patient's Discount Factor
     dbeta     = 0.09,    # Difference: beta_high - beta_low
-    omega_I   = 0.25,    # Share of Impatient Agents
+    omega_I   = 0.50,    # Share of Impatient Agents
     q         = 0.1,     # Prob of Redrawing beta Type (Generation = 25y)
 
     # --- Labor market ---
@@ -41,14 +41,14 @@ calibration = dict(
     # --- Government ---
     tau_l = 0.27,    # Labor Tax = 27% of Wage Bill
     y_bar = 0.60,    # Eligibility Threshold for BF
-    Tr    = 0.17,    # BF Transfer
-    B     = 3.20,    # Debt/GDP = 80% (annual)
+    Tr    = 0.17,    # BF Transfer Size
+    B     = 3.2,     # Debt/GDP = 80% (annual)
     G     = 0.2,     # Calibrated: Government Spending
 
     # --- Monetary ---
     phi   = 1.5,     # Taylor rule coefficient on inflation
-    rstar = 0.03,    # Real Interest Rate (12% annual)
-    pi    = 0.0,     # Steady State Inflation = 0
+    rstar = 0.01,    # Real Interest Rate (4% annual)
+    pi    = 0.0,     # Inflation Deviation in SS = 0% annual
 
     # --- Firms ---
     mu       = 1.11,   # Price Markup

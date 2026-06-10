@@ -86,9 +86,10 @@ def monetary(pi, rstar, phi):
 # ---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, B, C, Y, Y_I, G, L, F, varphi):
+def mkt_clearing(A, B, C_GHH, Y, Y_I, G, L, F, varphi):
+    C = C_GHH + varphi/(1+varphi) * Y_I
     asset_mkt = A - B
     labor_mkt = F - L
-    goods_mkt = Y + 1/(1+varphi) * Y_I - C - G
-    return asset_mkt, labor_mkt, goods_mkt
+    goods_mkt = Y + Y_I - C - G
+    return C, asset_mkt, labor_mkt, goods_mkt
 

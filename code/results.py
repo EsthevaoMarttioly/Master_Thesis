@@ -22,7 +22,7 @@ COLORS = {
     'I'   : 'tomato',          # informal employment
     'U'   : 'mediumpurple',  # unemployed
     'Y'   : 'steelblue',
-    'C'   : 'darkorange',
+    'C_GHH'   : 'darkorange',
 }
 
 
@@ -31,7 +31,7 @@ LS = {0: '-', 1: '--', 2: ':', 3: '-.'}
 
 VAR_LABELS = {
     'Y'    : 'Output $Y$',
-    'C'    : 'Consumption $C$',
+    'C_GHH': 'Consumption $C_{GHH}$',
     'F'    : 'Formal share $\\alpha_F$',
     'I'    : 'Informal share $\\alpha_I$',
     'U'    : 'Unemployed $U$',
@@ -87,7 +87,7 @@ def print_ss_summary(ss, calibration, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']
 def plot_consumption_policy(ss, calibration, T_plot_a=20, savepath=None):
     """Plot c(s, e_median, a) for all three employment states."""
     a_grid = ss.internals['household']['a_grid']
-    c_pol  = ss.internals['household']['c']
+    c_pol  = ss.internals['household']['c_ghh']
 
     nE = calibration['nE']
     nA = calibration['nA']
@@ -121,14 +121,23 @@ def plot_consumption_policy(ss, calibration, T_plot_a=20, savepath=None):
 # 3. Wealth Distribution
 # ---------------------------------------------------------------------------
 
-def gini_coefficient(array):
+def gini_coefficient(values, weights=None):
     # Values must be sorted in ascending order
-    array = np.sort(array)
-    index = np.arange(1, array.shape[0] + 1)
-    n = array.shape[0]
-    
-    # Calculate Gini
-    return (np.sum((2 * index - n - 1) * array)) / (n * np.sum(array))
+    idx = np.argsort(values)
+    values = values[idx]
+    n = values.shape[0]
+
+    if weights is not None:
+        weights = weights[idx]
+        weights_acum = np.cumsum(weights) / np.sum(weights)
+    else:
+        weights = np.ones_like(values)
+        weights_acum = np.arange(1, n+1) / n
+        
+    values_weighted = np.cumsum(weights * values) / np.sum(weights * values)
+
+    # Calculate weighted Gini coefficient
+    return 1.0 - np.sum((weights_acum[1:] - weights_acum[:-1]) * (values_weighted[1:] + values_weighted[:-1]))
 
 
 def plot_wealth_distribution(ss, lorenz_data=None, n_bins=60, savepath=None):
@@ -156,7 +165,7 @@ def plot_wealth_distribution(ss, lorenz_data=None, n_bins=60, savepath=None):
  
     # Right: Lorenz curve
     axes[1].plot(cum_pop, cum_wlth, color='steelblue',
-                 label='Model, Gini = {:.2f}'.format(gini_coefficient(a_dist * a_grid)))
+                 label='Model, Gini = {:.2f}'.format(gini_coefficient(a_dist, a_grid)))
     axes[1].plot([0, 1], [0, 1], color='gray', linestyle=':', label='Perfect equality')
     if lorenz_data is not None:
         pctls = np.arange(501) / 500
@@ -180,10 +189,10 @@ def plot_wealth_distribution(ss, lorenz_data=None, n_bins=60, savepath=None):
 def plot_impc_profiles(G_hh, T_plot=30, savepath=None):
     """Plot PE iMPC for Tr shock (BF conditional transfer).
  
-    G_hh['C']['Tr'][:T, 0]: response of C_t to a unit Tr shock at t=0,
+    G_hh['C_GHH']['Tr'][:T, 0]: response of C_t to a unit Tr shock at t=0,
     holding all prices (r, w, Div) fixed.
     """
-    iMPC_Tr = G_hh['C']['Tr']
+    iMPC_Tr = G_hh['C_GHH']['Tr']
  
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(iMPC_Tr[:T_plot, 0] * 100, marker='o', ms=4,
@@ -283,7 +292,7 @@ def compute_multipliers(G, shocks, horizons=(0, 3, 7, 19)):
     mults = {}
     for shock, dz in shocks.items():
         dY = G['Y'][shock] @ dz
-        dC = G['C'][shock] @ dz
+        dC = G['C_GHH'][shock] @ dz
         sz = dz[0]    # impact size
         mults[shock] = {h: (dY[h] / sz, dC[h] / sz) for h in horizons}
     return mults

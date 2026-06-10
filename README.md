@@ -1,7 +1,7 @@
 # Master's Thesis
 
 Author: **Esthevao Marttioly Lopes Martins**
-Program: MSc Economics — FGV EESP
+Program: MSc Economics - FGV EESP
 
 This repository contains the code and results for the **Master's Thesis** by Esthevão Marttioly from FGV EESP.
 
@@ -38,7 +38,7 @@ If you do not have either VS Code or Python, install it.
 * To install VSCode _https://code.visualstudio.com_.
 * Important to install python inside VSCode as well.
 
-The analysis was conducted using Python version 3.14 and R version 4.6.0 (2026-07-09) on a Windows 11 system.
+The analysis was conducted using Python version 3.14 and R version 4.6.0 (2026-06-09) on a Windows 11 system.
 
 ## Running the project
 

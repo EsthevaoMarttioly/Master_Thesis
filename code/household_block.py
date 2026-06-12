@@ -99,16 +99,18 @@ def informal_hours(e_grid, w_I, psi, varphi):
 
 # 2.4. Labor Income Function
 def labor_income(e_grid, w, w_I, h_I, y_bar, tau_l, Tr, div_inc, varphi):
+    # BF Elegibility
     Tr_inform = (w_I * e_grid * h_I < y_bar).astype(float)
 
-    y_form   = (1 - tau_l) * w * e_grid                             # [formal]
-    y_inform = 1/(1+varphi) * w_I * h_I * e_grid + Tr * Tr_inform   # [informal]
-    y_unemp  = Tr * np.ones_like(e_grid)                            # [unemployed]
+    # Informal: w_I * e_grid * h_I - v(h) = 1/(1+varphi) * w_I * e_grid * h_I
+    y_formal = (1 - tau_l) * w * e_grid                              # [formal]
+    y_inform = 1/(1+varphi) * w_I * h_I * e_grid + Tr * Tr_inform    # [informal]
+    y_unemp  = Tr * np.ones_like(e_grid)                             # [unemployed]
 
-    y = np.r_[np.tile(y_form, 2),      # s=0, F
-              np.tile(y_inform, 2),    # s=1, I
-              np.tile(y_unemp, 2),     # s=2, U
-              ] + div_inc              # asset income
+    y = np.r_[np.tile(y_formal, 2),     # s=0, F
+              np.tile(y_inform, 2),     # s=1, I
+              np.tile(y_unemp, 2),      # s=2, U
+              ] + div_inc               # asset income
     return y, Tr_inform
 
 
@@ -116,20 +118,20 @@ def labor_income(e_grid, w, w_I, h_I, y_bar, tau_l, Tr, div_inc, varphi):
 # 3. Hetoutputs
 
 # Employment Status: 0=formal, 1=informal, 2=unemployed
-def formal(c_ghh):
+def formal(c_ghh, e_grid, h_F):
     nS = c_ghh.shape[0] // 3    # nBeta * nE per s-block
-    f  = np.zeros_like(c_ghh)
-    f[:nS, :] = 1.0             # s=0 block
-    return f
+    # Formal: s=0;    Formal Supply = e * h_F
+    f, n_f = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
+    f[:nS, :] = 1.0
+    n_f[:nS, :] = np.tile(e_grid * h_F, 2)[:, np.newaxis]
+    return f, n_f
 
 
 def informal(c_ghh, e_grid, h_I):
     nS = c_ghh.shape[0] // 3
-    i  = np.zeros_like(c_ghh)
-    i[nS : 2*nS, :] = 1.0       # s=1 block
-
-    # Informal Labor Supply: h_I * e for s=I
-    n_i = np.zeros_like(c_ghh)
+    # Formal: s=1;    Informal Supply = e * h_I
+    i, n_i = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
+    i[nS : 2*nS, :] = 1.0
     n_i[nS : 2*nS, :] = np.tile(e_grid * h_I, 2)[:, np.newaxis]
     return i, n_i
 
@@ -137,7 +139,7 @@ def informal(c_ghh, e_grid, h_I):
 def unemp(c_ghh):
     nS = c_ghh.shape[0] // 3
     u  = np.zeros_like(c_ghh)
-    u[2*nS:, :] = 1.0           # s=2 block
+    u[2*nS:, :] = 1.0
     return u
 
 
@@ -161,6 +163,10 @@ print(f'Inputs: {hh.inputs}')
 print(f'Macro outputs: {hh.outputs}')
 
 
-# from code.parameters import calibration
+# from code.parameters import *
 
-# hh.steady_state(calibration)
+# calibration_ss = calibration_ss | dict(psi = 1.1, beta_high = 0.96)
+
+# hh.steady_state(calibration_ss).internals['household'].keys()
+
+

@@ -31,18 +31,33 @@ def firm_informal(w_I, N_I):
     return Y_I
 
 
+
 # 2. SS Phillips Curve
 @simple
-def nkpc_ss(Z, mu, xi):
-    w   = Z / mu
-    w_I = xi * w
-    return w, w_I
+def nkpc_ss(mu, Z):
+    w = Z / mu
+    return w
 
 
-# 3. Dynamic Phillips Curves
 @simple
-def phillips_curve(w, r, pi, Z, Y, xi, mu, kappa, kappa_w, beta_high, dbeta, omega_I):
-    w_I      = xi * w
+def informal_wage(w, xi):
+    w_I = xi * w
+    return w_I
+
+
+
+# 3. SS Union's Wage Setting
+@simple
+def union_ss(w, h_F, C_GHH, psi, varphi, eis):
+    wage_nkpc = w - psi * h_F ** (1/varphi) * C_GHH**(1/eis)
+    return wage_nkpc
+
+
+
+# 4. Dynamic Phillips Curves
+@simple
+def phillips_curve(w, r, pi, h_F, Z, Y, C_GHH, mu, kappa, kappa_w,
+                   eis, psi, varphi, beta_high, dbeta, omega_I):
     beta_avg = beta_high - dbeta * omega_I
 
     # Price Phillips Curve
@@ -52,10 +67,10 @@ def phillips_curve(w, r, pi, Z, Y, xi, mu, kappa, kappa_w, beta_high, dbeta, ome
     
     # Wage Phillips Curve
     pi_w = (1 + pi) * w / w(-1) - 1
-    wage_nkpc = (kappa_w * (w / Z - 1 / mu)
+    wage_nkpc = (kappa_w * (psi * h_F ** (1/varphi) * C_GHH ** (1/eis) - w)
                  + beta_avg * (1 + pi_w(+1)).apply(np.log)
                  - (1 + pi_w).apply(np.log))
-    return w_I, nkpc, wage_nkpc
+    return nkpc, wage_nkpc
 
 
 
@@ -64,21 +79,21 @@ def phillips_curve(w, r, pi, Z, Y, xi, mu, kappa, kappa_w, beta_high, dbeta, ome
 # Fiscal regimes (choose in main.py):
 #   DEBT-FINANCED:  b, Tr exogenous; B adjusts
 #   TAX-FINANCED:   B fixed; tau adjusts
-# G + Tr * BF + (1+r(-1)) * B(-1) = tau * w * F + B
+# G + Tr * BF + (1+r) * B(-1) = tau * w * F + B
 
 @simple
 def fiscal(r, tau_l, Tr, BF, Y, B, G):
     tax_revenue = tau_l * Y
     BF_Total    = Tr * BF
-    gov_budget  = (1 + r(-1)) * B(-1) - B + G + BF_Total - tax_revenue
+    gov_budget  = (1 + r) * B(-1) - B + G + BF_Total - tax_revenue
     return tax_revenue, gov_budget
 
 
 # Monetary Policy
-# Taylor rule:   i = rstar(-1) + phi * pi(-1)  +  Fisher Equation
+# Taylor rule:   i = rstar + phi * pi  +  Fisher Equation
 @simple
 def monetary(pi, rstar, phi):
-    r = (1 + rstar(-1) + phi * pi(-1)) / (1 + pi) - 1
+    r = (1 + rstar + phi * pi(-1)) / (1 + pi) - 1
     return r
 
 
@@ -86,10 +101,10 @@ def monetary(pi, rstar, phi):
 # ---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, B, C_GHH, Y, Y_I, G, L, F, varphi):
+def mkt_clearing(A, B, C_GHH, Y, Y_I, G, L, N_F, varphi):
     C = C_GHH + varphi/(1+varphi) * Y_I
     asset_mkt = A - B
-    labor_mkt = F - L
+    labor_mkt = N_F - L
     goods_mkt = Y + Y_I - C - G
     return C, asset_mkt, labor_mkt, goods_mkt
 

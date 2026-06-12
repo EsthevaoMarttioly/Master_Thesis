@@ -65,17 +65,18 @@ def _save_or_show(fig, savepath):
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
-def print_ss_summary(ss, calibration, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']):
+def print_ss_summary(ss, calibration_ss, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']):
     """Print key steady-state moments and sanity checks."""
-    w_theory = ss['Z'] / calibration['mu']
-
     print("\n" + "="*55)
-    print("  STEADY STATE")
+    print("  STEADY STATE   (Model)        (Theory)")
     print("="*55)
     for k in var_ss:
-        print(f"  {k:12s} = {ss[k]:.4f}")
+        if k in calibration_ss:
+            print(f"  {k:12s} = {ss[k]:.4f}{' '*6} = {calibration_ss[k]:.4f}")
+        else:
+            print(f"  {k:12s} = {ss[k]:.4f}")
+
     print(f"  {'beta_low':12s} = {ss['beta_high'] - ss['dbeta']:.4f}")
-    print(f"  w*  = Z/mu = {w_theory:.3f},  model = {ss['w']:.3f}")
     print(f"  F + I + U  = 1.000,  model = {ss['F'] + ss['I'] + ss['U']:.3f}")
     print("="*55)
 
@@ -110,7 +111,7 @@ def plot_consumption_policy(ss, calibration, T_plot_a=20, savepath=None):
         ax.set_ylabel('Consumption $c(s, \\bar{e}, a)$')
         ax.set_title(f'Policy Functions - {beta_name}')
         ax.set_xlim(0, T_plot_a)
-        ax.set_ylim(0, 5)
+        ax.set_ylim(0, 4)
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)

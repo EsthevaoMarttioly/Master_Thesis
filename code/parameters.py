@@ -10,8 +10,9 @@
 calibration = dict(
     # --- Household Preferences ---
     eis    = 0.5,   # EIS = gamma = 0.5 (CRRA sigma = 2)
-    psi    = 1.0,   # Disutility of Labor
-    varphi = 0.5,   # Frisch Elasticity
+    psi    = 0.6,   # Disutility of Labor
+    varphi = 0.1,  # Frisch Elasticity
+    h_F    = 1.0,   # Normalized: Formal Worked Hours
 
     # --- Discount Factor ---
     beta_high = 0.98,    # Calibrated: Patient's Discount Factor
@@ -20,8 +21,8 @@ calibration = dict(
     q         = 0.1,     # Prob of Redrawing beta Type (Generation = 25y)
 
     # --- Labor market ---
-    p_fi = 0.11,     # Formal     -> Informal      =>    F = 50.3%
-    p_if = 0.12,     # Informal   -> Formal        =>    I = 44.7%
+    p_fi = 0.11,     # Formal     -> Informal      =>    F = 50.5%
+    p_if = 0.12,     # Informal   -> Formal        =>    I = 44.0%
     p_iu = 0.02,     # Informal   -> Unemployed    =>    U =  5.0%
     p_ui = 0.11,     # Unemployed -> Informal
     p_uf = 0.05,     # Unemployed -> Formal
@@ -34,16 +35,12 @@ calibration = dict(
     amax  = 200.0,
     nA    = 200,
 
-    # --- Aggregate / Prices (steady-state) ---
-    Y = 1.0,     # Output (normalized)
-    Z = 1.0,     # Calibrated: Productivity
-
     # --- Government ---
-    tau_l = 0.27,    # Labor Tax = 27% of Wage Bill
-    y_bar = 0.60,    # Eligibility Threshold for BF
-    Tr    = 0.17,    # BF Transfer Size
-    B     = 3.2,     # Debt/GDP = 80% (annual)
-    G     = 0.2,     # Calibrated: Government Spending
+    tau_l = 0.27,          # Labor Tax = 27% of Wage Bill
+    Tr    = 0.14,    # Tr/w = R$ 600 / R$ 4294
+    y_bar = 0.60,          # Eligibility Threshold for BF
+    B     = 3.2,           # Debt/GDP = 80% (annual)
+    G     = 0.2,           # Calibrated: Government Spending
 
     # --- Monetary ---
     phi   = 1.5,     # Taylor rule coefficient on inflation
@@ -51,21 +48,55 @@ calibration = dict(
     pi    = 0.0,     # Inflation Deviation in SS = 0% annual
 
     # --- Firms ---
+    Y        = 1.0,    # Normalized: Output
+    Z        = 1.0,    # Calibrated: Productivity
+    xi       = 0.66,   # Informal Wage Gap
     mu       = 1.11,   # Price Markup
-    kappa    = 0.10,   # Price PC Slope
-    kappa_w  = 0.10,   # Wage PC Slope
-    xi       = 0.65,   # Informal Wage Gap
+    kappa    = 0.025,  # Price PC Slope
+    kappa_w  = 0.025,  # Wage PC Slope
 )
 
 
-calibration['r'] = calibration['rstar']
 
-
-# Implicit variables in steady state
+# ---------------------------------------------------------------------------
+# Analitical Steady State Solution
 gamma = calibration['p_iu'] / (calibration['p_uf'] + calibration['p_ui'])
 alpha = (calibration['p_if'] * (calibration['p_uf'] + calibration['p_ui']) +
-          calibration['p_iu'] * calibration['p_uf']) / calibration['p_fi'] / (calibration['p_uf'] + calibration['p_ui'])
+          calibration['p_iu'] * calibration['p_uf']) /\
+              (calibration['p_fi'] * (calibration['p_uf'] + calibration['p_ui']))
 
-implicit_F, implicit_I, implicit_U = alpha / (1 + gamma + alpha), 1 / (1 + gamma + alpha), gamma / (1 + gamma + alpha)
 
-round(implicit_F, 4), round(implicit_I, 4), round(implicit_U, 4)
+calibration_ss = calibration | dict(
+    F  = alpha / (1 + gamma + alpha),
+    I  = 1 / (1 + gamma + alpha),
+    U  = gamma / (1 + gamma + alpha),
+    r  = calibration['rstar'],
+    A   = calibration['B'],
+    Div = (1 - calibration['tau_l']) * (1 - 1/calibration['mu']),
+)
+
+
+calibration_ss = calibration_ss | dict(
+    w   = calibration['Y'] / (calibration['mu'] * calibration_ss['F']),
+    w_I = calibration['Y'] / (calibration['mu'] * calibration_ss['F']) * calibration['xi']
+)
+
+calibration_ss['Y_I'] = calibration_ss['w_I'] * calibration_ss['I']
+
+
+calibration_ss.pop('G', None)
+calibration_ss.pop('psi', None)
+calibration_ss.pop('beta_high', None)
+
+
+
+# import numpy as np
+# from scipy.stats import norm
+
+## Calibration BF = U* + I* . F(e < e*)
+# e_star = (calibration['psi'] ** calibration['varphi'] *\
+#           calibration['y_bar']) ** (1/(1+calibration['varphi'])) / calibration_ss['w_I']
+
+# BF_ = calibration_ss['U'] + calibration_ss['I'] *\
+#       norm.cdf(np.log(e_star) / calibration['sd_e'] * np.sqrt(1 - calibration['rho_e']**2))
+

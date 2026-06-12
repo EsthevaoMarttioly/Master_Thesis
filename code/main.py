@@ -27,7 +27,7 @@ random.seed(20260415)
 
 
 # Import parameters
-from code.parameters import calibration
+from code.parameters import *
 
 
 # Import blocks
@@ -39,7 +39,8 @@ from code.results import *
 # ---------------------------------------------------------------------------
 # Assemble Model
 
-blocks_ss = [hh, firm_formal, firm_informal, nkpc_ss, monetary, fiscal, mkt_clearing]
+blocks_ss = [hh, firm_formal, firm_informal, informal_wage,
+             nkpc_ss, union_ss, monetary, fiscal, mkt_clearing]
 hank_ss   = create_model(blocks_ss, name="HANK - Steady State")
 
 print(f"\nModel inputs (SS):  {hank_ss.inputs}")
@@ -50,7 +51,7 @@ print(f"Model outputs (SS): {hank_ss.outputs}")
 # Steady State
 # 1. Unknown values to be estimated
 unknowns_ss = {k: calibration[k] for k in
-               ['beta_high', 'Z', 'G']}
+               ['beta_high', 'Z', 'G', 'psi']}
 
 
 # 2. Target asset market + goods market clearing
@@ -59,20 +60,21 @@ targets_ss = {
     'labor_mkt'  : 0,    # adjust Z to L = Y/Z = N_F
     'gov_budget' : 0,    # adjust G to balance govt budget
     # 'goods_mkt'  : 0,    # untargeted - Walras' Law
+    'wage_nkpc'   : 0,   # adjust phi to set h_F = 1
 }
 
 # 3. Steady State
 start = time.time()
 ss0 = hank_ss.solve_steady_state(calibration, unknowns = unknowns_ss,
                                  targets = targets_ss, solver = 'hybr')
-print(f"Steady State solved in {time.time()-start:.1f}s")    # 27.0 seconds on my laptop
+print(f"Steady State solved in {time.time()-start:.1f}s")    # 11.6 seconds on my laptop
 
 
 
 # ---------------------------------------------------------------------------
 # Dynamics
 
-blocks = [hh, firm_formal, firm_informal,
+blocks = [hh, firm_formal, firm_informal, informal_wage,
           phillips_curve, monetary, fiscal, mkt_clearing]
 hank = create_model(blocks, name="HANK - Dynamics")
 
@@ -82,7 +84,7 @@ print(f"Model outputs (Dynamics): {hank.outputs}")
 
 # Verify ss0 is also a valid Steady State
 ss = hank.steady_state(ss0)
-for k in ss0.keys():
+for k in ss0.keys() - {'union_ss'}:
     assert np.all(np.isclose(ss[k], ss0[k])), f"SS mismatch at key {k}"
 print("Steady State reached in dynamics DAG.")
 
@@ -91,10 +93,11 @@ print("Steady State reached in dynamics DAG.")
 # ---------------------------------------------------------------------------
 # Steady State Diagnostics
 var_ss_summary = ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
-                  'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div',
-                  'G', 'asset_mkt', 'goods_mkt', 'labor_mkt']
+                  'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div',
+                  'G', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc']
 
-print_ss_summary(ss, calibration, var_ss_summary)
+print_ss_summary(ss, calibration_ss, var_ss_summary)
+
 
 
 # ---------------------------------------------------------------------------

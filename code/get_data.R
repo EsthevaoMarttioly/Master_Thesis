@@ -31,47 +31,58 @@ df = pnadc_design(read_pnadc(microdata = paste0("data/PNADC_0", i, j, ".txt"),
                              input_txt = "data/input_PNADC_trimestral.txt"))
 
 
-# Survey's Tables
+
+# ---------------------------------------------------------------------------
+# 1. Occupied Population
+formal_idx = c("01", "03", "05", "07", "08")
+inform_idx = c("02", "04", "06", "09", "10")
 
 occupied_pop = svytotal(~VD4002, df, na.rm = T) %>% as.matrix() %>% as.numeric()
 formal_ocup  = svytotal(~VD4009, df, na.rm = T) %>% as.matrix() %>% as.numeric()
 
-formal_hours = svyby(~VD4031, by = ~VD4009, df, svymean, na.rm = T)[2] %>% as.matrix()
-formal_income = svyby(~VD4019, by = ~VD4009, df, svymean, na.rm = T)[2] %>% as.matrix()
+
+formal = sum(formal_ocup[as.numeric(formal_idx)]) / sum(occupied_pop)
+inform = sum(formal_ocup[as.numeric(inform_idx)]) / sum(occupied_pop)
+
+unemployment = occupied_pop[2] / sum(occupied_pop)
+
+### Results:  F = 50.28%;  I = 44.65%;  U = 5.07%
 
 
 
-# Descriptive Statistics
+# ---------------------------------------------------------------------------
+# 2. Worked Hours and Income by Formality
+formal_hours = svymean(~VD4031, subset(df, VD4009 %in% formal_idx), na.rm = T)[1]
+inform_hours = svymean(~VD4031, subset(df, VD4009 %in% inform_idx), na.rm = T)[1]
 
-## Average Function
-avg_by_ocup = function(df_ocup, df_avg, col_idx) {
-  # Calculate the average of df_avg, weighted by the occupancy level.
-  tot_ocup  = sum(df_ocup[col_idx])
-  
-  total_avg = sum(df_ocup[col_idx] * df_avg[col_idx] / tot_ocup)
-  
-  return(total_avg)
-}
+formal_income = svymean(~VD4019, subset(df, VD4009 %in% formal_idx), na.rm = T)[1]
+inform_income = svymean(~VD4019, subset(df, VD4009 %in% inform_idx), na.rm = T)[1]
 
+xi = inform_income / formal_income    # xi = 0.66
 
-## Formal, Informal, and Unemployed Shares
-formal_idx   = c(1,3,5,7,8)
-informal_idx = c(2,4,6,9,10)
-
-formal   = sum(formal_ocup[formal_idx]) / sum(occupied_pop)    # F = 50.28%
-informal = sum(formal_ocup[informal_idx]) / sum(occupied_pop)  # I = 44.65%
-
-unemployment = occupied_pop[2] / sum(occupied_pop)             # U = 5.07%
+### Results:  h_F = 42.5 hrs;  h_I = 36.8 hrs;  w_F = R$ 4,294;  w_I = R$ 2,826
 
 
-## Formal and Informal Worked Hours
-formal_h = avg_by_ocup(formal_ocup, formal_hours, formal_idx)         # 42.5 hrs
-informal_h = avg_by_ocup(formal_ocup, formal_hours, informal_idx)     # 36.8 hrs
 
-formal_inc = avg_by_ocup(formal_ocup, formal_income, formal_idx)      # R$ 4,294
-informal_inc = avg_by_ocup(formal_ocup, formal_income, informal_idx)  # R$ 2,793
+# ---------------------------------------------------------------------------
+# 3. Informal Hours Variance
+hours_std  = sqrt(svyvar(~VD4031, subset(df, VD4009 %in% inform_idx), na.rm = T)) / formal_hours
 
-xi = informal_inc / formal_inc    # xi = 0.65
+hours_dist = svyquantile(~VD4031, subset(df, VD4009 %in% inform_idx),
+                         quantiles = seq(0, 100, 100/16)/100, ci = F, na.rm = T)[1][1]
+
+### Results: hours_std = 0.33
+
+
+
+# ---------------------------------------------------------------------------
+# 4. Bolsa Familia
+
+svymean(~V2001, df, na.rm = T) %>% as.matrix() %>% as.numeric()
+
+18.9e6 * 3.3227 / 213.5e6
+
+600 / 4294
 
 
 

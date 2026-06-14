@@ -1,6 +1,6 @@
-#### Thesis - Conditional Cash Transfers: A HANK Approach ####
-## Author:  Esthevao Marttioly  |  EESP-FGV  |  2026
-## Advisor: Bernardo Guimarães
+#### Applied - Conditional Cash Transfers: A HANK Approach ####
+## Authors:  Esthevao Marttioly and Lourenço Martins  |  EESP-FGV  |  2026
+## Prof:     Luciene Pereira
 #=
 # ---------------------------------------------------------------------------
 # DESCRIPTION

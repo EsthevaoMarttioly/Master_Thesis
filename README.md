@@ -1,9 +1,9 @@
-# Master's Thesis
+# Applied Macroeconomics
 
-Author: **Esthevao Marttioly Lopes Martins**
-Program: MSc Economics - FGV EESP
+Authors: **Esthevao Marttioly and Lourenço Martins**
+Program: Applied Macroeconomics
 
-This repository contains the code and results for the **Master's Thesis** by Esthevão Marttioly from FGV EESP.
+This repository contains the code and results for the **Research Project for Applied Macro** by Esthevão Marttioly and Lourenço Martins from FGV EESP.
 
 All code is written with reproducibility and defensive programming in mind.
 
@@ -22,8 +22,8 @@ All code is written with reproducibility and defensive programming in mind.
 │   ├── lorenz_nw_scf_2019.raw           # SCF Data for US Lorenz Curve
 │   └── data.csv                         # Not yet
 ├── output/
-├── EsthevaoMarttioly_Thesis.pdf         # Final submitted report
-├── EsthevaoMarttioly_Thesis.RProj       # R Project for downloading data
+├── Esthevao_Lourenco_Applied.pdf        # Final submitted report
+├── Esthevao_Lourenco_Applied.RProj      # R Project for downloading data
 ├── requirements.txt                     # pip install -r requirements.txt
 └── README.md
 ```

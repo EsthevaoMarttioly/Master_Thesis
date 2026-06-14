@@ -11,19 +11,19 @@ calibration = dict(
     # --- Household Preferences ---
     eis    = 0.5,   # EIS = gamma = 0.5 (CRRA sigma = 2)
     psi    = 0.6,   # Disutility of Labor
-    varphi = 0.1,  # Frisch Elasticity
+    varphi = 0.15,  # Frisch Elasticity
     h_F    = 1.0,   # Normalized: Formal Worked Hours
 
     # --- Discount Factor ---
     beta_high = 0.98,    # Calibrated: Patient's Discount Factor
-    dbeta     = 0.09,    # Difference: beta_high - beta_low
+    dbeta     = 0.12,    # Difference: beta_high - beta_low
     omega_I   = 0.50,    # Share of Impatient Agents
     q         = 0.1,     # Prob of Redrawing beta Type (Generation = 25y)
 
     # --- Labor market ---
-    p_fi = 0.11,     # Formal     -> Informal      =>    F = 50.5%
-    p_if = 0.12,     # Informal   -> Formal        =>    I = 44.0%
-    p_iu = 0.02,     # Informal   -> Unemployed    =>    U =  5.0%
+    p_fi = 0.11,     # Formal     -> Informal      =>    F = 50.5%  (data = 50.0%)
+    p_if = 0.12,     # Informal   -> Formal        =>    I = 44.0%  (data = 44.2%)
+    p_iu = 0.02,     # Informal   -> Unemployed    =>    U =  5.5%  (data =  5.8%)
     p_ui = 0.11,     # Unemployed -> Informal
     p_uf = 0.05,     # Unemployed -> Formal
 
@@ -37,8 +37,8 @@ calibration = dict(
 
     # --- Government ---
     tau_l = 0.27,          # Labor Tax = 27% of Wage Bill
-    Tr    = 0.14,    # Tr/w = R$ 600 / R$ 4294
-    y_bar = 0.60,          # Eligibility Threshold for BF
+    Tr    = 0.14 * 1.8,    # Tr/w = R$ 600 / R$ 4294 = 0.14
+    y_bar = 1.0,           # Eligibility Threshold for BF
     B     = 3.2,           # Debt/GDP = 80% (annual)
     G     = 0.2,           # Calibrated: Government Spending
 
@@ -50,8 +50,9 @@ calibration = dict(
     # --- Firms ---
     Y        = 1.0,    # Normalized: Output
     Z        = 1.0,    # Calibrated: Productivity
-    xi       = 0.66,   # Informal Wage Gap
+    xi       = 0.64,   # Informal Wage Gap
     mu       = 1.11,   # Price Markup
+    mu_w     = 1.11,   # Wage Markup
     kappa    = 0.025,  # Price PC Slope
     kappa_w  = 0.025,  # Wage PC Slope
 )
@@ -78,10 +79,9 @@ calibration_ss = calibration | dict(
 
 calibration_ss = calibration_ss | dict(
     w   = calibration['Y'] / (calibration['mu'] * calibration_ss['F']),
-    w_I = calibration['Y'] / (calibration['mu'] * calibration_ss['F']) * calibration['xi']
+    w_I = calibration['Y'] / (calibration['mu'] * calibration_ss['F']) * calibration['xi'],
+    Z   = calibration['Y'] / calibration_ss['F'],
 )
-
-calibration_ss['Y_I'] = calibration_ss['w_I'] * calibration_ss['I']
 
 
 calibration_ss.pop('G', None)
@@ -99,4 +99,3 @@ calibration_ss.pop('beta_high', None)
 
 # BF_ = calibration_ss['U'] + calibration_ss['I'] *\
 #       norm.cdf(np.log(e_star) / calibration['sd_e'] * np.sqrt(1 - calibration['rho_e']**2))
-

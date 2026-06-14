@@ -67,7 +67,7 @@ targets_ss = {
 start = time.time()
 ss0 = hank_ss.solve_steady_state(calibration, unknowns = unknowns_ss,
                                  targets = targets_ss, solver = 'hybr')
-print(f"Steady State solved in {time.time()-start:.1f}s")    # 11.6 seconds on my laptop
+print(f"Steady State solved in {time.time()-start:.1f}s")    # 11.2 seconds on my laptop
 
 
 
@@ -101,13 +101,21 @@ print_ss_summary(ss, calibration_ss, var_ss_summary)
 
 
 # ---------------------------------------------------------------------------
+# Informal Worked Hours Statistics
+
+print(f"\nAverage informal hours = {ss.internals['household']['h_I'][:7].mean()}")
+print(f"Std of informal hours = {ss.internals['household']['h_I'].std()}")
+
+
+
+# ---------------------------------------------------------------------------
 # Figures
 # ---------------------------------------------------------------------------
 # 1. Steady State Distribution and Policy Functions
 lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
 
 plot_consumption_policy(ss, calibration, savepath='output/consumption_policy.png')
-plot_wealth_distribution(ss, lorenz_scf_raw, savepath='output/wealth_distribution.png')
+plot_wealth_distribution(ss, lorenz_scf_raw, n_bins=30, savepath='output/wealth_distribution.png')
 
 
 
@@ -121,7 +129,7 @@ G = hank.solve_jacobian(ss, unknowns_dyn, targets_dyn, inputs_dyn, T=T)
 
 
 # 3. Partial Equilibrium Jacobians
-G_hh = hh.jacobian(ss, inputs=['Tr', 'r'], T=T)     # hold r, w, Div fixed
+G_hh = hh.jacobian(ss, inputs=['Tr', 'r'], T=T)
 
 plot_impc_profiles(G_hh, T_plot=30, savepath='output/impc_profiles.png')
 
@@ -137,7 +145,7 @@ dTr_mit  = dTr0 * rho_sh ** np.arange(T)                # MIT Shock
 dTr_ant  = np.concatenate([np.zeros(k), dTr_mit[:-k]])  # Antecipated Shock: Perfect Foresight
 dTr_perm = dTr0 * np.ones(T)                            # Permanent Shock
 
-variables = ['Y', 'C', 'I', 'U', 'pi', 'w']
+variables = ['Y', 'C', 'L', 'BF', 'pi', 'w']
 irf_mit  = {v: G[v]['Tr'] @ dTr_mit  for v in variables}
 irf_ant  = {v: G[v]['Tr'] @ dTr_ant  for v in variables}
 irf_perm = {v: G[v]['Tr'] @ dTr_perm for v in variables}
@@ -149,7 +157,7 @@ plot_irfs(irf_mit, T_plot=30,
 
 plot_irf_comparison({'MIT shock (surprise)'      : irf_mit,
                      f'Anticipated ({k}q ahead)' : irf_ant},
-                     variables=['Y', 'C', 'I', 'pi'],
+                     variables=['Y', 'C', 'pi', 'w'],
                      T_plot=30, savepath='output/irf_comparison.png')
 
 

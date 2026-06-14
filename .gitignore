@@ -215,6 +215,7 @@ __marimo__/
 .Rhistory
 .Rapp.history
 .Rprofile
+.RDataTmp
 renv/
 renv
 .renv

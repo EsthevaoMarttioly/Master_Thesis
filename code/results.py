@@ -126,19 +126,15 @@ def gini_coefficient(values, weights=None):
     # Values must be sorted in ascending order
     idx = np.argsort(values)
     values = values[idx]
-    n = values.shape[0]
 
-    if weights is not None:
-        weights = weights[idx]
-        weights_acum = np.cumsum(weights) / np.sum(weights)
-    else:
+    if weights is None:
         weights = np.ones_like(values)
-        weights_acum = np.arange(1, n+1) / n
-        
-    values_weighted = np.cumsum(weights * values) / np.sum(weights * values)
+
+    pop  = np.concatenate([[0], np.cumsum(weights) / np.sum(weights)])
+    wlth = np.concatenate([[0], np.cumsum(weights * values) / np.sum(weights * values)])
 
     # Calculate weighted Gini coefficient
-    return 1.0 - np.sum((weights_acum[1:] - weights_acum[:-1]) * (values_weighted[1:] + values_weighted[:-1]))
+    return 1.0 - np.sum((pop[1:] - pop[:-1]) * (wlth[1:] + wlth[:-1]))
 
 
 def plot_wealth_distribution(ss, lorenz_data=None, n_bins=60, savepath=None):

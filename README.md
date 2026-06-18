@@ -1,9 +1,10 @@
-# Applied Macroeconomics
+# Master's Thesis
 
-Authors: **Esthevao Marttioly and Lourenço Martins**
-Program: Applied Macroeconomics
+Author: **Esthevao Marttioly Lopes Martins**
 
-This repository contains the code and results for the **Research Project for Applied Macro** by Esthevão Marttioly and Lourenço Martins from FGV EESP.
+Program: MSc Economics - FGV EESP
+
+This repository contains the code and results for the **Master's Thesis** by Esthevão Marttioly from FGV EESP.
 
 All code is written with reproducibility and defensive programming in mind.
 
@@ -17,13 +18,14 @@ All code is written with reproducibility and defensive programming in mind.
 │   ├── other_blocks.py                  # Firm, Fiscal, Monetary, and Mkt Clearing
 │   ├── parameters.py                    # Calibration and Estimation Parameters
 │   ├── results.py                       # Graphics and Tables
-│   └── get_data.R                       # Calibration Data
+│   ├── get_pnad.py                      # PNAD: Panel Matching
+│   └── get_pnad.R                       # PNAD: Calibration Data
 ├── data/
 │   ├── lorenz_nw_scf_2019.raw           # SCF Data for US Lorenz Curve
 │   └── data.csv                         # Not yet
 ├── output/
-├── Esthevao_Lourenco_Applied.pdf        # Final submitted report
-├── Esthevao_Lourenco_Applied.RProj      # R Project for downloading data
+├── EsthevaoMarttioly_Thesis.pdf         # Final submitted report
+├── EsthevaoMarttioly_Thesis.RProj       # R Project for downloading data
 ├── requirements.txt                     # pip install -r requirements.txt
 └── README.md
 ```

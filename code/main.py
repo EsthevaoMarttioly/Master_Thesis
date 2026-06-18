@@ -1,13 +1,10 @@
-#### Applied - Conditional Cash Transfers: A HANK Approach ####
-## Authors:  Esthevao Marttioly and Lourenço Martins  |  EESP-FGV  |  2026
-## Prof:     Luciene Pereira
+#### Thesis - Conditional Cash Transfers: A HANK Approach ####
+## Author:  Esthevao Marttioly  |  EESP-FGV  |  2026
+## Advisor: Bernardo Guimarães
 #=
 # ---------------------------------------------------------------------------
 # DESCRIPTION
 # This program solves an one-asset HANK model with 3-state formality-status.
-#
-# Solution method: Sequence-Space Jacobian (Auclert et al. 2021).
-# https://github.com/shade-econ/sequence-jacobian
 # ---------------------------------------------------------------------------
 #=
 # Write this in the terminal to install packages

@@ -33,12 +33,12 @@ for (i in 1:4) {   # quarter
   
   
   # Install for the first time
-  # df = get_pnadc(year=j, quarter=i, savedir='data/', deflator=F, reload=F)
+  # df = get_pnadc(year=j, quarter=i, savedir='data/pnad/', deflator=F, reload=F)
 
 
   # Read the copied file
-  df = pnadc_design(read_pnadc(microdata = paste0('data/PNADC_0', i, j, '.txt'),
-                               input_txt = 'data/input_PNADC_trimestral.txt'))
+  df = pnadc_design(read_pnadc(microdata = paste0('data/pnad/PNADC_0', i, j, '.txt'),
+                               input_txt = 'data/pnad/input_PNADC_trimestral.txt'))
   
   
   

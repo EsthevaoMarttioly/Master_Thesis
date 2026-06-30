@@ -4,6 +4,8 @@ Author: **Esthevao Marttioly Lopes Martins**
 
 Program: MSc Economics - FGV EESP
 
+Advisor: Bernardo Guimarães
+
 This repository contains the code and results for the **Master's Thesis** by Esthevão Marttioly from FGV EESP.
 
 All code is written with reproducibility and defensive programming in mind.
@@ -33,20 +35,13 @@ All code is written with reproducibility and defensive programming in mind.
 
 ## Computational Environment
 
-Open the 'Visual Studio Code' to run Python.
-
-If you do not have either VS Code or Python, install it.
-* To install python language _https://www.python.org_.
-* To install VSCode _https://code.visualstudio.com_.
-* Important to install python inside VSCode as well.
-
 The analysis was conducted using Python version 3.14 and R version 4.6.0 (2026-06-09) on a Windows 11 system.
 
 ## Running the project
 
 To reproduce the analysis:
 
-* Open the file: code/main.py (with VS Code).
-* Open the project's folder in VS Code.
+* Open the project's folder as a project.
+* Open the file: code/main.py.
 * In the Terminal, type "pip install -r requirements.txt" on bash (Ctrl+Shift+' to open).
 * Run the script: code/main.py.

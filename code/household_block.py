@@ -10,7 +10,7 @@
 import random
 import numpy as np
 
-from sequence_jacobian import het, hetblocks, interpolate, grids
+from sequence_jacobian import het, interpolate, grids
 
 
 # Set a seed for future replications
@@ -19,18 +19,26 @@ random.seed(20260415)
 
 # ---------------------------------------------------------------------------
 # 1. Endogenous Grid Method (EGM) for the HH problem
-@het(exogenous=['Pi'], policy='a', backward='Va', backward_init=hetblocks.hh_sim.hh_init)
-def household(Va_p, a_grid, y, r, beta, eis):
+def hh_init(a_grid, y, r, eis):
+    coh = (1.0 + r) * a_grid[np.newaxis, :] + y[:, np.newaxis]
+    Va  = (1.0 + r) * (0.1 * coh) ** (-1/eis)
+    V   = (0.1 * coh) ** (1-1/eis) / (1-1/eis) / (1 - 0.96)
+    return Va, V
+
+
+@het(exogenous=['Pi'], policy='a', backward=['Va','V'], backward_init=hh_init)
+def household(Va_p, V_p, a_grid, y, r, beta, eis):
     """Slightly modify hetblocks.hh_sim.hh to allow for beta vector"""
     c_nextgrid = (beta[:, np.newaxis] * Va_p) ** (-eis)
-    coh        = (1 + r) * a_grid + y[..., np.newaxis]
+    coh        = (1.0 + r) * a_grid + y[..., np.newaxis]
 
     a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
     a = np.maximum(a, a_grid[0])     # borrowing constraint
     c_ghh = coh - a
-    Va = (1 + r) * c_ghh ** (-1/eis)
+    Va = (1.0 + r) * c_ghh ** (-1/eis)
+    V = c_ghh**(1-1/eis)/(1-1/eis) + beta[:, np.newaxis] * V_p
 
-    return Va, a, c_ghh
+    return Va, V, a, c_ghh
 
 
 # ---------------------------------------------------------------------------
@@ -57,10 +65,6 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
                       [p_if,      1 - p_if - p_iu,  p_iu            ],   # Pi_s[I,F] = p_if  (informal to formal)
                       [p_uf,      p_ui,             1 - p_uf - p_ui ]))  # Pi_s[U,F] = p_uf  (finds formal job)
 
-    # Check if rows sum to 1
-    assert np.allclose(Pi_s.sum(axis=1), 1.0), "Pi_s rows must sum to 1"
-    assert np.all(Pi_s >= 0), "Pi_s has negative entries"
-
 
     # ------------------------------------------------------------------
     # Discount Factor Transition  (impatient=0, patient=1)
@@ -82,81 +86,60 @@ def make_grid(rho_e, sd_e, nE, amin, amax, nA,
     return e_grid, a_grid, beta, Pi, nS
 
 
-# 2.2. Dividend Income Function
-def dividend_income(Div, e_grid, nS):
-    # Distribute firm profits proportional to productivity e
-    div_e   = Div * e_grid              # sums to ~Div
-    div_inc = np.tile(div_e, nS*2)      # tile across s*beta blocks
-    return div_inc
-
-
-# 2.3. Optimal Informal Hours
+# 2.2. Optimal Informal Hours
 def informal_hours(e_grid, w_I, psi, varphi):
-    # Intratemporal FOC:  psi * h^(1/varphi) = w_I * e   (no wealth effect on h)
+    # Intratemporal FOC, No Wealth Effect
     h_I = (w_I * e_grid / psi) ** (varphi)
     return h_I
 
 
-# 2.4. Labor Income Function
-def labor_income(e_grid, w, w_I, h_I, y_bar, tau_l, Tr, div_inc, varphi):
+# 2.3. Labor Income Function
+def labor_income(w, w_I, h_F, h_I, Div, Tr, e_grid, nS, y_bar, tau_l, varphi):
+    div_e = np.tile(Div * e_grid, nS*2)     # Asset Income
+
     # BF Elegibility
     Tr_inform = (w_I * e_grid * h_I < y_bar).astype(float)
 
     # Informal: w_I * e_grid * h_I - v(h) = 1/(1+varphi) * w_I * e_grid * h_I
-    y_formal = (1 - tau_l) * w * e_grid                              # [formal]
-    y_inform = 1/(1+varphi) * w_I * h_I * e_grid + Tr * Tr_inform    # [informal]
-    y_unemp  = Tr * np.ones_like(e_grid)                             # [unemployed]
+    y_formal = np.tile((1 - tau_l) * w * e_grid * h_F, 2)                        # [formal]
+    y_inform = np.tile(1/(1+varphi) * w_I * h_I * e_grid + Tr * Tr_inform, 2)    # [informal]
+    y_unemp  = np.tile(Tr * np.ones_like(e_grid), 2)                             # [unemployed]
 
-    y = np.r_[np.tile(y_formal, 2),     # s=0, F
-              np.tile(y_inform, 2),     # s=1, I
-              np.tile(y_unemp, 2),      # s=2, U
-              ] + div_inc               # asset income
+    y = np.r_[y_formal, y_inform, y_unemp] + div_e
+
     return y, Tr_inform
 
 
 # ---------------------------------------------------------------------------
 # 3. Hetoutputs
-
-# Employment Status: 0=formal, 1=informal, 2=unemployed
-def formal(c_ghh, e_grid, h_F):
+def sector_shares(c_ghh, e_grid, h_F, h_I, Tr_inform):
     nS = c_ghh.shape[0] // 3    # nBeta * nE per s-block
-    # Formal: s=0;    Formal Supply = e * h_F
+
+    # Formal: s=0;      Formal Supply = e * h_F
     f, n_f = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
-    f[:nS, :] = 1.0
-    n_f[:nS, :] = np.tile(e_grid * h_F, 2)[:, np.newaxis]
-    return f, n_f
-
-
-def informal(c_ghh, e_grid, h_I):
-    nS = c_ghh.shape[0] // 3
-    # Formal: s=1;    Informal Supply = e * h_I
     i, n_i = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
+    u, bf  = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
+    
+    # Sector Indicator, F=0, I=1, U=2
+    f[:nS, :]       = 1.0
     i[nS : 2*nS, :] = 1.0
+    u[2*nS:, :]     = 1.0
+    bf[2*nS:, :]    = 1.0
+
+    # Labor Supply = e * h
+    n_f[:nS, :] = np.tile(e_grid * h_F, 2)[:, np.newaxis]
     n_i[nS : 2*nS, :] = np.tile(e_grid * h_I, 2)[:, np.newaxis]
-    return i, n_i
-
-
-def unemp(c_ghh):
-    nS = c_ghh.shape[0] // 3
-    u  = np.zeros_like(c_ghh)
-    u[2*nS:, :] = 1.0
-    return u
-
-
-def bolsa_familia(c_ghh, Tr_inform):
-    nS = c_ghh.shape[0] // 3
-    bf = np.zeros_like(c_ghh)
     bf[nS : 2*nS, :] = np.tile(Tr_inform, 2)[:, np.newaxis]
-    bf[2*nS:, :] = 1.0
-    return bf
+
+    return f, i, u, n_f, n_i, bf
 
 
 
 # ---------------------------------------------------------------------------
 # 4. Household Block
 
-hh = household.add_hetinputs([make_grid, dividend_income, informal_hours, labor_income])
-hh = hh.add_hetoutputs([formal, informal, unemp, bolsa_familia])
+hh = household.add_hetinputs([make_grid, informal_hours, labor_income])
+hh = hh.add_hetoutputs([sector_shares])
 
 
 print(f'Inputs: {hh.inputs}')

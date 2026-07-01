@@ -6,139 +6,199 @@
 # ---------------------------------------------------------------------------
 #=
 
-# Import Packages
+# ---- Packages --------------------------------------------------------------
 import random
 import numpy as np
-
 from sequence_jacobian import het, interpolate, grids
 
-
-# Set a seed for future replications
 random.seed(20260415)
 
 
 # ---------------------------------------------------------------------------
-# 1. Endogenous Grid Method (EGM) for the HH problem
+# 1. Utility, Grid, and Income
+
+# 1.1. Utility Functions
+def u(c, eis):
+    c = np.maximum(c, 1e-12)
+    return np.log(c) if eis == 1 else c ** (1-1/eis) / (1-1/eis)
+
+def v(h, psi, varphi):
+    return psi * h ** (1+1/varphi) / (1+1/varphi)
+
+def discretize_normal(mu, sigma, n):
+    # theta_s ~ N(mu_s, sigma_s^2) as Gauss-Hermite quadrature with n nodes.
+    z, w = np.polynomial.hermite.hermgauss(n)
+    theta = mu + np.sqrt(2) * sigma * z
+    prob  = w / np.sqrt(np.pi)
+    return theta, prob
+
+
+# 1.2. Exogenous Transition States Grid
+def make_egrid(rho_e, sd_e, nE, amin, amax, nA,
+               mu_F, sigma_F, mu_I, sigma_I, nT):
+    # Productivity Grids.
+    e_grid, pi_e_e, Pi_e = grids.markov_rouwenhorst(rho=rho_e, sigma=sd_e, N=nE)
+    e_grid = e_grid / np.sum(pi_e_e * e_grid)
+    thetaF, probF = discretize_normal(mu_F, sigma_F, nT)
+    thetaI, probI = discretize_normal(mu_I, sigma_I, nT)
+
+    # Asset Grid
+    a_grid = grids.asset_grid(amin=amin, amax=amax, n=nA)
+    return e_grid, Pi_e, a_grid, thetaF, probF, thetaI, probI
+
+
+def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
+    # Build the beta grid for discount factors.
+    nS = 3
+    beta_low = beta_high - dbeta
+    b_grid   = np.array([beta_low, beta_high])
+    pi_b = np.array([omega_I, 1-omega_I])
+    Pi_b = (1 - q) * np.eye(2) + q * np.outer(np.ones(2), pi_b)
+    beta = np.tile(np.repeat(b_grid, nE), nS * nT)
+    return beta, Pi_b, nS
+
+
+# 1.3. Labor Income Function
+def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nS, nT,
+                 thetaF, thetaI, y_bar, tau_l, psi, varphi):
+    # Dividend Income and Informal Hours
+    div_i = np.tile(Div * e_grid, 2*nS*nT) / (Div * e_grid).sum()
+
+    e_F = np.exp(thetaF[:, None]) * e_grid[None, :]
+    e_I = np.exp(thetaI[:, None]) * e_grid[None, :]
+
+    h_I = (w_I * e_I / psi) ** (varphi)
+    elig = (w_I * e_I * h_I < y_bar).astype(float)     # Elegibility
+
+    y_F = (1 - tau_l) * w * e_F * h_F
+    y_I = 1/(1+varphi) * w_I * e_I * h_I + Tr * elig
+    y_U = np.full((nT, nE), Tr)
+
+    # Expand the income into beta grid.
+    expand = lambda x: np.repeat(x[:, None, :], 2, axis=1).reshape(-1)
+    y = np.r_[expand(y_F), expand(y_I), expand(y_U)] + div_i
+    return y, h_I, e_F, e_I, elig
+
+
+# ---------------------------------------------------------------------------
+# 2. Endogenous Grid Method (EGM)
 def hh_init(a_grid, y, r, eis):
-    coh = (1.0 + r) * a_grid[np.newaxis, :] + y[:, np.newaxis]
-    Va  = (1.0 + r) * (0.1 * coh) ** (-1/eis)
-    V   = (0.1 * coh) ** (1-1/eis) / (1-1/eis) / (1 - 0.96)
+    coh = (1 + r) * a_grid + y[:, None]
+    Va  = (1 + r) * (0.1 * coh) ** (-1 / eis)
+    V   = u(0.1 * coh, eis) / (1 - 0.96)
     return Va, V
 
 
-@het(exogenous=['Pi'], policy='a', backward=['Va','V'], backward_init=hh_init)
+@het(exogenous=['Pi'], policy='a', backward=['Va', 'V'], backward_init=hh_init)
 def household(Va_p, V_p, a_grid, y, r, beta, eis):
-    """Slightly modify hetblocks.hh_sim.hh to allow for beta vector"""
-    c_nextgrid = (beta[:, np.newaxis] * Va_p) ** (-eis)
-    coh        = (1.0 + r) * a_grid + y[..., np.newaxis]
-
+    c_nextgrid = (beta[:, None] * Va_p) ** (-eis)
+    coh = (1 + r) * a_grid + y[:, None]
     a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
-    a = np.maximum(a, a_grid[0])     # borrowing constraint
+    a = np.maximum(a, a_grid[0])
     c_ghh = coh - a
-    Va = (1.0 + r) * c_ghh ** (-1/eis)
-    V = c_ghh**(1-1/eis)/(1-1/eis) + beta[:, np.newaxis] * V_p
-
+    Va = (1 + r) * c_ghh ** (-1 / eis)
+    V = u(c_ghh, eis) + beta[:, None] * V_p
     return Va, V, a, c_ghh
 
 
 # ---------------------------------------------------------------------------
-# 2. Hetinputs
-
-# 2.1. Transition States Grid
-def make_grid(rho_e, sd_e, nE, amin, amax, nA,
-              beta_high, dbeta, omega_I, q,
-              p_fi, p_if, p_iu, p_uf, p_ui):
-    """Build all grids and the joint Markov transition matrix Pi.
-
-    e_grid  : (nE,)            productivity grid, normalized E[e] = 1
-    Pi      : (nS*nBeta*nE)^2  full Kronecker transition matrix
-    a_grid  : (nA,)            log-spaced asset grid
-    beta    : (nS*nBeta*nE,)   per-state discount factor"""
-
-    e_grid, pi_e_e, Pi_e = grids.markov_rouwenhorst(rho=rho_e, sigma=sd_e, N=nE)
-    e_grid = e_grid / np.sum(pi_e_e * e_grid)
-    a_grid = grids.asset_grid(amin=amin, amax=amax, n=nA)
-
-    # ------------------------------------------------------------------
-    # Employment Transition: 0=formal, 1=informal, 2=unemployed
-    Pi_s = np.vstack(([1 - p_fi,  p_fi,             0               ],   # Pi_s[F,I] = p_fi  (formal to informal)
-                      [p_if,      1 - p_if - p_iu,  p_iu            ],   # Pi_s[I,F] = p_if  (informal to formal)
-                      [p_uf,      p_ui,             1 - p_uf - p_ui ]))  # Pi_s[U,F] = p_uf  (finds formal job)
-
-
-    # ------------------------------------------------------------------
-    # Discount Factor Transition  (impatient=0, patient=1)
-    beta_low = beta_high - dbeta
-    b_grid   = np.array([beta_low, beta_high])
-    pi_b     = np.array([omega_I, 1-omega_I])    # stationary shares
-    Pi_b     = (1 - q) * np.eye(2) + q * np.outer(np.ones(2), pi_b)
-
-
-    # ------------------------------------------------------------------
-    # Kronecker:  s (3)  \otimes  beta (2)  \otimes  e (nE)
-    nS    = len(Pi_s)
-    Pi_be = np.kron(Pi_b, Pi_e)      # (beta, e)
-    Pi    = np.kron(Pi_s, Pi_be)     # (s, beta, e)
-
-    # beta vector: repeat [beta_low]*nE, [beta_high]*nE for each of s-blocks
-    beta = np.tile(np.repeat(b_grid, nE), nS)   # (s, beta, e)
-
-    return e_grid, a_grid, beta, Pi, nS
-
-
-# 2.2. Optimal Informal Hours
-def informal_hours(e_grid, w_I, psi, varphi):
-    # Intratemporal FOC, No Wealth Effect
-    h_I = (w_I * e_grid / psi) ** (varphi)
-    return h_I
-
-
-# 2.3. Labor Income Function
-def labor_income(w, w_I, h_F, h_I, Div, Tr, e_grid, nS, y_bar, tau_l, varphi):
-    div_e = np.tile(Div * e_grid, nS*2)     # Asset Income
-
-    # BF Elegibility
-    Tr_inform = (w_I * e_grid * h_I < y_bar).astype(float)
-
-    # Informal: w_I * e_grid * h_I - v(h) = 1/(1+varphi) * w_I * e_grid * h_I
-    y_formal = np.tile((1 - tau_l) * w * e_grid * h_F, 2)                        # [formal]
-    y_inform = np.tile(1/(1+varphi) * w_I * h_I * e_grid + Tr * Tr_inform, 2)    # [informal]
-    y_unemp  = np.tile(Tr * np.ones_like(e_grid), 2)                             # [unemployed]
-
-    y = np.r_[y_formal, y_inform, y_unemp] + div_e
-
-    return y, Tr_inform
-
-
-# ---------------------------------------------------------------------------
 # 3. Hetoutputs
-def sector_shares(c_ghh, e_grid, h_F, h_I, Tr_inform):
-    nS = c_ghh.shape[0] // 3    # nBeta * nE per s-block
-
-    # Formal: s=0;      Formal Supply = e * h_F
+def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig):
+    block = c_ghh.shape[0] // 3     # nT * nBeta * nE
     f, n_f = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
     i, n_i = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
     u, bf  = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
     
     # Sector Indicator, F=0, I=1, U=2
-    f[:nS, :]       = 1.0
-    i[nS : 2*nS, :] = 1.0
-    u[2*nS:, :]     = 1.0
-    bf[2*nS:, :]    = 1.0
+    f[:block]        = 1.0
+    i[block:2*block] = 1.0
+    u[2*block:]      = 1.0
+    bf[2*block:]     = 1.0
 
-    # Labor Supply = e * h
-    n_f[:nS, :] = np.tile(e_grid * h_F, 2)[:, np.newaxis]
-    n_i[nS : 2*nS, :] = np.tile(e_grid * h_I, 2)[:, np.newaxis]
-    bf[nS : 2*nS, :] = np.tile(Tr_inform, 2)[:, np.newaxis]
+    # Labor Supply = theta * e * h
+    expand = lambda x: np.repeat(x[:, None, :], 2, 1).reshape(-1)
+    n_f[:block]        = expand(e_F * h_F)[:, None]
+    n_i[block:2*block] = expand(e_I * h_I)[:, None]
+    bf[block:2*block]  = expand(elig)[:, None]
 
     return f, i, u, n_f, n_i, bf
 
 
+# ---------------------------------------------------------------------------
+# 4. Endogenous Sector Transition
+F, I, U = 0, 1, 2
+
+def _softmax(Vals, sig):
+    # Turn "pick the best option" into smooth probabilities (sig -> 0 = hard max).
+    V = np.stack(Vals, 0)
+    if sig == 0:
+        return (V == V.max(0)).astype(float)
+    Probs = np.exp((V - V.max(0)) / sig)
+    return Probs / Probs.sum(0)
+
+
+def _status_probs(Vst, p, probF, probI):
+    # Transition Matrix Pi_{s,theta} 3*nT x 3*nT for each (beta, e, a).
+    nS, nT, nA = Vst.shape
+    piF, piI, sig  = p['pi_F'], p['pi_I'], p['sig']
+    delta = np.repeat([p['delta_F'], p['delta_I'], 0.0], nT)
+    keep = 1 - delta
+
+    EV_F = probF @ Vst[F]     # Expected Value of Formal Sector
+    EV_I = probI @ Vst[I]     # Expected Value of Informal Sector
+
+    Vstay = Vst.reshape(nS*nT, nA)
+    EVF = np.broadcast_to(EV_F, (nS*nT, nA))
+    EVI = np.broadcast_to(EV_I, (nS*nT, nA))
+
+    cF = _softmax([Vstay, EVF], sig)              # Only a Formal Offer
+    cI = _softmax([Vstay, EVI], sig)              # Only an Informal Offer
+    cB = _softmax([Vstay, EVF, EVI], sig)         # Both Offers
+
+    a_stay = (1-piF) * (1-piI) + piF * (1-piI) * cF[0] +\
+          (1-piF) * piI * cI[0] + piF * piI * cB[0]
+    a_F    = piF * (1-piI) * cF[1] + piF * piI * cB[1]
+    a_I    = (1-piF) * piI * cI[1] + piF * piI * cB[2]
+
+    ar = np.arange(nS*nT)
+    P = np.zeros((nS*nT, nS*nT, nA))
+
+    P[ar, ar, :]             += keep[:, None] * a_stay
+    P[:, F*nT:(F+1)*nT, :]   += keep[:, None,None] * a_F[:,None,:] * probF[None,:,None]
+    P[:, I*nT:(I+1)*nT, :]   += keep[:, None,None] * a_I[:,None,:] * probI[None,:,None]
+    P[ar, U*nT + ar % nT, :] += delta[:, None]
+
+    return P
+
+
+def build_Pi(V, D, p, Pi_b, Pi_e, probF, probI):
+    # Assemble the full transition matrix:  s (x) theta (x) beta (x) e.
+    # `V` is (nS, nT, nBeta, nE, nA):  the value of each sector at (beta,e,a).
+    nS, nT, nBeta, nE, nA = 3, p['nT'], Pi_b.shape[0], Pi_e.shape[0], V.shape[1]
+    Vr = V.reshape(nS*nT, nBeta, nE, nA)
+    Dr = D.reshape(nS*nT, nBeta, nE, nA)
+
+    Pstat = np.empty((nBeta, nE, nS*nT, nS*nT))    # Pstat[beta, e, from, to]
+
+    for _beta in range(nBeta):
+        for _e in range(nE):
+            P = _status_probs(Vr[:, _beta, _e, :].reshape(nS, nT, nA), p, probF, probI)
+            w = Dr[:, _beta, _e, :]
+            tot = w.sum(1, keepdims=True)
+            w = np.where(tot > 1e-14, w / np.where(tot > 1e-14, tot, 1.0), 1.0 / nA)
+            Pstat[_beta, _e] = np.einsum('mna,ma->mn', P, w)    # Average over assets
+    
+    # Order:   s (x) theta (x) beta (x) e
+    # Pi[(s,t,b,e),(s',t',b',e')] = Pstat[b,e,s,s'] * Pi_b[b,b'] * Pi_e[e,e']
+    Pi = np.einsum('beMN,bB,eE->MbeNBE', Pstat, Pi_b, Pi_e)
+    Pi = Pi.reshape(nS * nT * nBeta * nE, nS * nT * nBeta * nE)
+    return Pi
+
 
 # ---------------------------------------------------------------------------
-# 4. Household Block
+# 5. Household Block
 
-hh = household.add_hetinputs([make_grid, informal_hours, labor_income])
+hh = household.add_hetinputs([make_egrid, make_bgrid, labor_income])
 hh = hh.add_hetoutputs([sector_shares])
 
 
@@ -146,10 +206,55 @@ print(f'Inputs: {hh.inputs}')
 print(f'Macro outputs: {hh.outputs}')
 
 
-# from code.parameters import *
+# ---------------------------------------------------------------------------
+# Solve the Transition in Steady State
+def solve_household_ss(hh_block, calib, tol=1e-7, maxit=200, verbose=False):
+    # Import Grids
+    nE, nA, nT = calib['nE'], calib['nA'], calib['nT']
 
-# calibration_ss = calibration_ss | dict(psi = 1.1, beta_high = 0.96)
+    e_grid, Pi_e, a_grid, _, probF, _, probI =\
+          make_egrid(calib['rho_e'], calib['sd_e'], nE, calib['amin'],
+                    calib['amax'], nA, calib['mu_F'], calib['sigma_F'],
+                    calib['mu_I'], calib['sigma_I'], nT)
 
-# hh.steady_state(calibration_ss).internals['household'].keys()
+    _, Pi_b, nS = make_bgrid(calib['beta_high'], calib['dbeta'],
+                             calib['omega_I'], calib['q'], nE, nT)
+    
+    nStates = nS * nT * 2 * nE
+
+    # Initial guess for Pi.
+    Pi = build_Pi(np.zeros((nStates, nA)), np.ones((nStates, nA)),
+                  calib, Pi_b, Pi_e, probF, probI)
+    c = dict(calib)
+
+    for it in range(maxit):
+        # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
+        c['Pi'] = Pi
+        ss = hh_block.steady_state(c)
+        V = ss.internals['household']['V']
+        D = ss.internals['household']['D']
+        Pi_new = build_Pi(V, D, calib, Pi_b, Pi_e, probF, probI)
+        diff = np.max(np.abs(Pi_new - Pi))
+        Pi = Pi_new
+        if verbose:
+            print(f"  outer it {it:3d}  |dPi|={diff:.2e}")
+        if diff < tol:
+            if verbose:
+                print(f" Pi converged in {it+1} iterations.")
+            return ss, dict(Pi=Pi, e_grid=e_grid, a_grid=a_grid, iters=it+1)
+    raise AssertionError(f"Pi haven't converged in {maxit} iterations.")
+
+
+# ---------------------------------------------------------------------------
+# Run it
+
+from code.parameters import *
+
+calibration_ss = calibration_ss | dict(psi = 1.1, beta_high = 0.96)
+
+ss, aux = solve_household_ss(hh, calibration_ss, verbose=True)
+
+ss["A"]
+ss["F"], ss["I"], ss["U"]
 
 

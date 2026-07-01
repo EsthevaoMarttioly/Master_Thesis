@@ -21,11 +21,18 @@ calibration = dict(
     q         = 0.1,     # Prob of Redrawing beta Type (Generation = 25y)
 
     # --- Labor market ---
-    p_fi = 0.11,     # Formal     -> Informal      =>    F = 50.5%  (data = 50.0%)
-    p_if = 0.12,     # Informal   -> Formal        =>    I = 44.0%  (data = 44.2%)
-    p_iu = 0.02,     # Informal   -> Unemployed    =>    U =  5.5%  (data =  5.8%)
-    p_ui = 0.11,     # Unemployed -> Informal
-    p_uf = 0.05,     # Unemployed -> Formal
+    delta_F = 0.04,      # Job-Loss Probability to Formal
+    delta_I = 0.06,      # Job-Loss Probability to Informal
+    pi_F    = 0.10,      # Formal Offer Probability
+    pi_I    = 0.30,      # Informal Offer Probability
+    sig     = 1e-6,      # Smoothness of max (sigma -> 0)
+    
+    # --- Sector Productivities ---
+    mu_F    = 0.00,      # Formal Average Productivity
+    mu_I    = -0.10,     # Informal Average Productivity
+    sigma_F = 0.20,
+    sigma_I = 0.40,
+    nT      = 3,
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,
@@ -61,15 +68,15 @@ calibration = dict(
 
 # ---------------------------------------------------------------------------
 # Analitical Steady State Solution
-gamma = calibration['p_iu'] / (calibration['p_uf'] + calibration['p_ui'])
-alpha = (calibration['p_if'] * (calibration['p_uf'] + calibration['p_ui']) +
-          calibration['p_iu'] * calibration['p_uf']) /\
-              (calibration['p_fi'] * (calibration['p_uf'] + calibration['p_ui']))
+gamma = calibration['delta_I'] / (calibration['pi_F'] + calibration['pi_I'])
+alpha = (calibration['pi_F'] * (calibration['pi_F'] + calibration['pi_I']) +
+          calibration['delta_I'] * calibration['pi_F']) /\
+              (calibration['pi_I'] * (calibration['pi_F'] + calibration['pi_I']))
 
 
 calibration_ss = calibration | dict(
     F  = alpha / (1 + gamma + alpha),
-    I  = 1 / (1 + gamma + alpha),
+    I  = 1 / (1 + gamma + alpha),       # Wrong
     U  = gamma / (1 + gamma + alpha),
     r  = calibration['rstar'],
     A   = calibration['B'],

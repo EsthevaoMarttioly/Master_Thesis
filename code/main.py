@@ -11,23 +11,16 @@
 # pip install -r requirements.txt
 
 
-# Import Packages
-import random
-import time
+# ---- Packages --------------------------------------------------------------
 import numpy as np
-
+import time, random
 from sequence_jacobian import create_model
 
-
-# Set a seed for future replications
 random.seed(20260415)
 
 
 # Import parameters
 from code.parameters import *
-
-
-# Import blocks
 from code.household_block import hh
 from code.other_blocks import *
 from code.results import *

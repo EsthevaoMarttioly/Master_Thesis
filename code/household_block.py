@@ -7,8 +7,8 @@
 #=
 
 # ---- Packages --------------------------------------------------------------
-import random
 import numpy as np
+import time, random
 from sequence_jacobian import het, interpolate, grids
 
 random.seed(20260415)
@@ -23,7 +23,7 @@ def u(c, eis):
     return np.log(c) if eis == 1 else c ** (1-1/eis) / (1-1/eis)
 
 def v(h, psi, varphi):
-    return psi * h ** (1+1/varphi) / (1+1/varphi)
+    return psi * np.maximum(h, 1e-8) ** (1+1/varphi) / (1+1/varphi)
 
 def discretize_normal(mu, sigma, n):
     # theta_s ~ N(mu_s, sigma_s^2) as Gauss-Hermite quadrature with n nodes.
@@ -62,12 +62,12 @@ def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
 def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nS, nT,
                  thetaF, thetaI, y_bar, tau_l, psi, varphi):
     # Dividend Income and Informal Hours
-    div_i = np.tile(Div * e_grid, 2*nS*nT) / (Div * e_grid).sum()
+    div_i = np.tile(Div * e_grid, 2*nS*nT)
 
     e_F = np.exp(thetaF[:, None]) * e_grid[None, :]
     e_I = np.exp(thetaI[:, None]) * e_grid[None, :]
 
-    h_I = (w_I * e_I / psi) ** (varphi)
+    h_I = (w_I * e_I / np.maximum(psi, 1e-8)) ** (varphi)
     elig = (w_I * e_I * h_I < y_bar).astype(float)     # Elegibility
 
     y_F = (1 - tau_l) * w * e_F * h_F
@@ -208,53 +208,66 @@ print(f'Macro outputs: {hh.outputs}')
 
 # ---------------------------------------------------------------------------
 # Solve the Transition in Steady State
-def solve_household_ss(hh_block, calib, tol=1e-7, maxit=200, verbose=False):
+def solve_ss(hank_block, calib, unknowns=None, targets=None,
+             tol=1e-8, maxit=200, verbose=False):
+    start = time.time()
     # Import Grids
     nE, nA, nT = calib['nE'], calib['nA'], calib['nT']
 
-    e_grid, Pi_e, a_grid, _, probF, _, probI =\
-          make_egrid(calib['rho_e'], calib['sd_e'], nE, calib['amin'],
-                    calib['amax'], nA, calib['mu_F'], calib['sigma_F'],
-                    calib['mu_I'], calib['sigma_I'], nT)
+    _, Pi_e, _, _, probF, _, probI =\
+        make_egrid(calib['rho_e'], calib['sd_e'], nE, calib['amin'], calib['amax'],
+                   nA, calib['mu_F'], calib['sigma_F'], calib['mu_I'], calib['sigma_I'], nT)
 
     _, Pi_b, nS = make_bgrid(calib['beta_high'], calib['dbeta'],
                              calib['omega_I'], calib['q'], nE, nT)
-    
-    nStates = nS * nT * 2 * nE
 
     # Initial guess for Pi.
-    Pi = build_Pi(np.zeros((nStates, nA)), np.ones((nStates, nA)),
-                  calib, Pi_b, Pi_e, probF, probI)
+    Pi = build_Pi(np.zeros((nS * nT * 2 * nE, nA)),
+                  np.ones((nS * nT * 2 * nE, nA)), calib, Pi_b, Pi_e, probF, probI)
     c = dict(calib)
 
     for it in range(maxit):
         # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
         c['Pi'] = Pi
-        ss = hh_block.steady_state(c)
+        if unknowns == None or targets == None:     # Equivalent to steady_steate() in SSJ
+            ss = hank_block.steady_state(c)
+        else:                                       # Equivalent to solve_steady_steate()
+            ss = hank_block.solve_steady_state(c, unknowns, targets, solver='hybr')
+            for k in unknowns:
+                c[k] = float(ss[k])
         V = ss.internals['household']['V']
         D = ss.internals['household']['D']
         Pi_new = build_Pi(V, D, calib, Pi_b, Pi_e, probF, probI)
         diff = np.max(np.abs(Pi_new - Pi))
         Pi = Pi_new
-        if verbose:
-            print(f"  outer it {it:3d}  |dPi|={diff:.2e}")
+        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.2e}")
         if diff < tol:
-            if verbose:
-                print(f" Pi converged in {it+1} iterations.")
-            return ss, dict(Pi=Pi, e_grid=e_grid, a_grid=a_grid, iters=it+1)
-    raise AssertionError(f"Pi haven't converged in {maxit} iterations.")
+            if verbose:print(f"Steady State solved in {\
+                time.time()-start:.1f}s ({(time.time()-start)/60:.1f}min).")
+            return ss
+    raise AssertionError(f"Pi did not converge in {maxit} iterations.")
 
 
 # ---------------------------------------------------------------------------
 # Run it
+if __name__ == "__main__":
+    from code.parameters import *
+    from code.other_blocks import *
+    from sequence_jacobian import create_model
 
-from code.parameters import *
+    # Solve the household block in isolation
+    calibration_hh = calibration | dict(
+        w = 2.3, w_I = 0.64 * 2.3, Div = 0.9, r = calibration['rstar'])
 
-calibration_ss = calibration_ss | dict(psi = 1.1, beta_high = 0.96)
+    ss1 = solve_ss(hh, calibration_hh, verbose=True)
 
-ss, aux = solve_household_ss(hh, calibration_ss, verbose=True)
+    # Solve the full model in Steady State
+    hank_ss = create_model([hh, firm_formal, firm_informal, informal_wage,
+                            nkpc_ss, union_ss, monetary, fiscal, mkt_clearing])
 
-ss["A"]
-ss["F"], ss["I"], ss["U"]
+    ss0 = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
+
+    for k in ['A', 'C', 'beta_high', 'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF']:
+        print(f"  {k:12s} = {ss0[k]:.4f}")
 
 

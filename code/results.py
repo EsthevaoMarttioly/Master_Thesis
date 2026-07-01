@@ -12,6 +12,14 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
 
+# Reload results.py to update global namespace (for interactive use)
+def rr():
+    import importlib, code.results
+    importlib.reload(code.results)
+    globals().update({k: v for k, v in vars(code.results).items()
+                      if not k.startswith('_')})
+
+
 #----------------------------------------------------------------------------
 # Consistent style
 #----------------------------------------------------------------------------
@@ -67,16 +75,13 @@ def _save_or_show(fig, savepath):
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
-def print_ss_summary(ss, calibration_ss, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']):
+def print_ss_summary(ss, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']):
     """Print key steady-state moments and sanity checks."""
     print("\n" + "="*55)
     print("  STEADY STATE   (Model)        (Theory)")
     print("="*55)
     for k in var_ss:
-        if k in calibration_ss:
-            print(f"  {k:12s} = {ss[k]:.4f}{' '*6} = {calibration_ss[k]:.4f}")
-        else:
-            print(f"  {k:12s} = {ss[k]:.4f}")
+        print(f"  {k:12s} = {ss[k]:.4f}")
 
     print(f"  {'beta_low':12s} = {ss['beta_high'] - ss['dbeta']:.4f}")
     print(f"  F + I + U  = 1.000,  model = {ss['F'] + ss['I'] + ss['U']:.3f}")
@@ -88,29 +93,29 @@ def print_ss_summary(ss, calibration_ss, var_ss = ['Y', 'C', 'beta_high', 'A', '
 # ---------------------------------------------------------------------------
 
 def plot_consumption_policy(ss, calibration, T_plot_a=20, savepath=None):
-    """Plot c(s, e_median, a) for all three employment states."""
+    """Plot c(s, theta_median, e_median, a) for all three employment states."""
     a_grid = ss.internals['household']['a_grid']
     c_pol  = ss.internals['household']['c_ghh']
 
-    nE = calibration['nE']
-    nA = calibration['nA']
+    nT, nE, nA = calibration['nT'], calibration['nE'], calibration['nA']
     e_med = nE // 2            # median productivity index
+    t_med = nT // 2            # median productivity index
 
-    # Reshape to (nS=3, nBeta=2, nE, nA)
-    c_3d = c_pol.reshape(3, 2, nE, nA)
+    # Reshape to (nS=3, nT=nT, nBeta=2, nE, nA)
+    c_3d = c_pol.reshape(3, nT, 2, nE, nA)
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
 
     for bi, beta_name in enumerate(['Impatient', 'Patient']):
         ax = axes[bi]
-        ax.plot(a_grid, c_3d[0, bi, e_med, :],
+        ax.plot(a_grid, c_3d[0, t_med, bi, e_med, :],
                 color=COLORS['F'], label='Formal')
-        ax.plot(a_grid, c_3d[1, bi, e_med, :],
+        ax.plot(a_grid, c_3d[1, t_med, bi, e_med, :],
                 color=COLORS['I'], linestyle='--', label='Informal')
-        ax.plot(a_grid, c_3d[2, bi, e_med, :],
+        ax.plot(a_grid, c_3d[2, t_med, bi, e_med, :],
                 color=COLORS['U'],   linestyle=':',  label='Unemployed')
         ax.set_xlabel('Assets $a$')
-        ax.set_ylabel('Consumption $c(s, \\bar{e}, a)$')
+        ax.set_ylabel('Consumption $c(s, \\bar{\\theta}, \\bar{e}, a)$')
         ax.set_title(f'Policy Functions - {beta_name}')
         ax.set_xlim(0, T_plot_a)
         ax.set_ylim(0, 4)

@@ -23,13 +23,11 @@ def firm_formal(Y, Z, w, tau_l):
     Div = (1 - tau_l) * (Y - w*L)
     return L, Div
 
-
 @simple
 def firm_informal(w_I, N_I):
     # Informal sector: perfectly competitive.
     Y_I = w_I * N_I
     return Y_I
-
 
 
 # 2. SS Phillips Curve
@@ -38,12 +36,10 @@ def nkpc_ss(mu, Z):
     w = Z / mu
     return w
 
-
 @simple
 def informal_wage(w, xi):
     w_I = xi * w
     return w_I
-
 
 
 # 3. SS Union's Wage Setting
@@ -51,7 +47,6 @@ def informal_wage(w, xi):
 def union_ss(w, h_F, C_GHH, L, tau_l, mu_w, psi, varphi, eis):
     wage_nkpc = psi * h_F ** (1/varphi) * C_GHH**(1/eis) - (1 - tau_l) * w * L / mu_w
     return wage_nkpc
-
 
 
 # 4. Dynamic Phillips Curves
@@ -77,11 +72,6 @@ def phillips_curve(w, r, pi, h_F, Z, Y, L, C_GHH, tau_l, mu, mu_w,
 
 # ---------------------------------------------------------------------------
 # Government Block
-# Fiscal regimes (choose in main.py):
-#   DEBT-FINANCED:  b, Tr exogenous; B adjusts
-#   TAX-FINANCED:   B fixed; tau adjusts
-# G + Tr * BF + (1+r) * B(-1) = tau * w * F + B
-
 @simple
 def fiscal(r, tau_l, Tr, BF, Y, B, G):
     tax_revenue = tau_l * Y
@@ -89,9 +79,7 @@ def fiscal(r, tau_l, Tr, BF, Y, B, G):
     gov_budget  = (1 + r) * B(-1) - B + G + BF_Total - tax_revenue
     return tax_revenue, gov_budget
 
-
 # Monetary Policy
-# Taylor rule:   i = rstar + phi * pi  +  Fisher Equation
 @simple
 def monetary(pi, rstar, phi):
     r = (1 + rstar + phi * pi(-1)) / (1 + pi) - 1

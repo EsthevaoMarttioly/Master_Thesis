@@ -45,7 +45,7 @@ calibration = dict(
     # --- Government ---
     tau_l = 0.27,          # Labor Tax = 27% of Wage Bill
     Tr    = 0.14 * 1.8,    # Tr/w = R$ 600 / R$ 4294 = 0.14
-    y_bar = 1.0,           # Eligibility Threshold for BF
+    y_bar = 0.6,           # Eligibility Threshold for BF
     B     = 3.2,           # Debt/GDP = 80% (annual)
     G     = 0.1,           # Calibrated: Government Spending
 

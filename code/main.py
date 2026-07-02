@@ -35,7 +35,44 @@ print(f"\nModel inputs (SS):  {hank_ss.inputs}")
 print(f"Model outputs (SS): {hank_ss.outputs}")
 
 
-ss0 = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
+ss = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
+
+
+# Steady State Diagnostics
+print_ss_summary(ss, ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
+                      'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div',
+                      'G', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc'])
+
+
+
+# ---------------------------------------------------------------------------
+# Solve a Tr = 0 Counterfactual
+ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0},
+                   unknowns, targets, verbose=True)
+
+
+compare_bf_steady_states(ss, ss_nobf)
+save_ss_table(ss, ss_nobf, savepath='output/tables/ss_table.tex')
+
+consumption_by_state(ss,  savepath='output/figures/cons_by_state.png')
+
+formality_by_wealth(ss, savepath='output/figures/formality_wealth.png')
+
+welfare_by_type(ss, ss_nobf, calibration, savepath='output/figures/welfare_type.png')
+
+
+
+# ---------------------------------------------------------------------------
+# Steady State Distribution and Policy Functions
+lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
+
+plot_consumption_policy(ss, calibration, savepath='output/figures/consumption_policy.png')
+plot_wealth_distribution(ss, lorenz_scf_raw, n_bins=30, savepath='output/figures/wealth_distribution.png')
+
+
+# Re-solves for different Tr (very slow)
+# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets, verbose=False),
+#               calibration, np.linspace(0.0, 0.20, 6), savepath='output/figures/bf_sweep.png')
 
 
 
@@ -48,59 +85,35 @@ print(f"\nModel inputs (Dynamics):  {hank.inputs}")
 print(f"Model outputs (Dynamics): {hank.outputs}")
 
 
+dyn = hank.steady_state(ss)
+
+
 # Verify ss0 is also a valid Steady State
-ss = hank.steady_state(ss0)
-for k in ss0.keys() - {'union_ss','sig','delta_F','delta_I','pi_F','pi_I'}:
-    assert np.all(np.isclose(ss[k], ss0[k])), f"SS mismatch at key {k}"
+for k in dyn.keys():
+    assert np.all(np.isclose(dyn[k], ss[k])), f"SS mismatch at key {k}"
 print("Steady State reached in dynamics DAG.")
 
 
 
 # ---------------------------------------------------------------------------
-# Steady State Diagnostics
-
-print_ss_summary(ss, ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
-                      'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'Div',
-                      'G', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc'])
-
-
-
-# ---------------------------------------------------------------------------
-# Informal Worked Hours Statistics
-
-print(f"\nAverage informal hours = {ss.internals['household']['h_I'][:7].mean()}")
-print(f"Std of informal hours = {ss.internals['household']['h_I'].std()}")
-
-
-
-# ---------------------------------------------------------------------------
-# Figures
-# ---------------------------------------------------------------------------
-# 1. Steady State Distribution and Policy Functions
-lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
-
-plot_consumption_policy(ss, calibration, savepath='output/consumption_policy.png')
-plot_wealth_distribution(ss, lorenz_scf_raw, n_bins=30, savepath='output/wealth_distribution.png')
-
-
-
-# 2. General Equilibrium Jacobians
+# General Equilibrium Jacobians
 T = 100
 unknowns_dyn = ['Y', 'pi', 'w']
 targets_dyn  = ['goods_mkt', 'nkpc', 'wage_nkpc']
 inputs_dyn   = ['Tr']
 
-G = hank.solve_jacobian(ss, unknowns_dyn, targets_dyn, inputs_dyn, T=T)
+G = hank.solve_jacobian(dyn, unknowns_dyn, targets_dyn, inputs_dyn, T=T)
 
 
-# 3. Partial Equilibrium Jacobians
-G_hh = hh.jacobian(ss, inputs=['Tr', 'r'], T=T)
+# Partial Equilibrium Jacobians
+G_hh = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
 
-plot_impc_profiles(G_hh, T_plot=30, savepath='output/impc_profiles.png')
+plot_impc_profiles(G_hh, T_plot=30, savepath='output/figures/impc_profiles.png')
 
 
 
-# 4. Impulse Response Functions
+# ---------------------------------------------------------------------------
+# Impulse Response Functions
 # AR(1) shock with rho = 0.4, size = 1%
 k = 4              # 1 year antecipation horizon
 dTr0   = 0.01
@@ -118,19 +131,17 @@ irf_perm = {v: G[v]['Tr'] @ dTr_perm for v in variables}
 
 plot_irfs(irf_mit, T_plot=30,
           title='GE IRFs: Conditional Transfer Targeted (Tr shock)',
-          savepath='output/irf_Tr.png')
+          savepath='output/figures/irf_Tr.png')
 
 plot_irf_comparison({'MIT shock (surprise)'      : irf_mit,
                      f'Anticipated ({k}q ahead)' : irf_ant},
                      variables=['Y', 'C', 'pi', 'w'],
-                     T_plot=30, savepath='output/irf_comparison.png')
+                     T_plot=30, savepath='output/figures/irf_comparison.png')
 
 
 
 # ---------------------------------------------------------------------------
-# Tables
-# ---------------------------------------------------------------------------
-# Fiscal multipliers summary table
+# Fiscal Multipliers Summary Table
 mults = compute_multipliers(G, {'Tr': dTr_mit})
 print_multipliers(mults)
 

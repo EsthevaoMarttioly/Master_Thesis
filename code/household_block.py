@@ -26,7 +26,7 @@ def v(h, psi, varphi):
     return psi * np.maximum(h, 1e-8) ** (1+1/varphi) / (1+1/varphi)
 
 def discretize_normal(mu, sigma, n):
-    # theta_s ~ N(mu_s, sigma_s^2) as Gauss-Hermite quadrature with n nodes.
+    # theta_s ~ N(mu_s, sigma_s^2) as Gauss-Hermite quadrature with nT nodes.
     z, w = np.polynomial.hermite.hermgauss(n)
     theta = mu + np.sqrt(2) * sigma * z
     prob  = w / np.sqrt(np.pi)

@@ -1,0 +1,690 @@
+\documentclass[12pt]{article}
+
+% --- Pacotes essenciais
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\selectlanguage{english}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{fancyhdr}
+\setlength{\headheight}{29pt}
+\usepackage{titlesec}
+\usepackage{ragged2e}
+\usepackage{amssymb}
+\usepackage{bbm}
+\usepackage{csquotes}
+\usepackage{float}
+\usepackage[backend=biber,style=authoryear,doi=false,isbn=false,url=true]{biblatex}
+\addbibresource{biblio.bib}
+\graphicspath{{../output/figures/}}
+\makeatletter
+\def\input@path{{../output/tables/}}  % search path for \input
+\makeatother
+
+% % Usar "&" antes do último autor (em refs e citações)
+% \DeclareDelimFormat{finalnamedelim}{%
+%   \ifnumgreater{\value{liststop}}{2}{\finalandcomma\addspace\&\space}{\addspace\&\space}%
+% }
+% % (opcional) manter separador entre múltiplos autores como vírgula + espaço
+% \DeclareDelimFormat{multinamedelim}{\addcomma\space}
+
+
+\usepackage[dvipsnames]{xcolor} % nomes de cores prontos (RoyalBlue, MidnightBlue, etc.)
+\usepackage[colorlinks=true,
+            linkcolor=RoyalBlue,    % títulos/refs internas
+            urlcolor=RoyalBlue,     % URLs
+            filecolor=black,
+            citecolor=RoyalBlue % cor das citações (\textcite, \parencite)
+]{hyperref}
+
+% Custom commands
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\E}{\mathbb{E}}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\std}{std}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+% --- Margens e espaçamento
+\geometry{a4paper, margin=1in}
+\onehalfspacing
+
+% --- Metadados
+\newcommand{\Institution}{Escola de Economia de São Paulo (EESP)}
+\newcommand{\Course}{Master's Thesis}
+\newcommand{\AuthorName}{Esthevão Marttioly}
+\newcommand{\PaperYear}{2026}
+\newcommand{\PaperType}{Advisor: Bernardo Guimarães}
+\newcommand{\PaperTitle}{Conditional Cash Transfers as \\ Stabilization Tool: a HANK Approach}
+
+% --- Cabeçalho SÓ na primeira página
+\pagestyle{plain} % padrão para o resto
+\fancyhf{}
+\lhead{\begin{tabular}[t]{@{}l@{}}\textbf{\Institution}\\\textbf{\Course}\end{tabular}}
+\rhead{\begin{tabular}[t]{@{}r@{}}\textbf{\AuthorName}\\\textbf{\PaperYear}\end{tabular}}
+\renewcommand{\headrulewidth}{0pt}
+
+% --- Blocos visuais
+
+\newcommand{\TitleBlock}{%
+  % UMA ÚNICA LINHA fina antes do título
+  \noindent\rule{\textwidth}{0.4pt}\par
+  \begin{center}\small\bfseries \PaperType\end{center}
+  \begin{center}\Large\bfseries \PaperTitle\end{center}
+  \vspace{0.4cm}
+}
+
+% --- Seções
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.2em}{0.6em}
+
+\begin{document}
+
+\thispagestyle{fancy}
+
+\TitleBlock
+
+\hrule
+\vspace{1.0em}
+
+%---------------------------------------------------
+%	INTRODUCTION
+%---------------------------------------------------
+% \section{Introduction and Motivation}
+
+% Fiscal transfers have been an important public policy instrument in various governments.
+% Among the main examples, we can cite: \textit{Bolsa Família} (Brazil),
+% \textit{Asignación Universal por Hijo} (Argentina), \textit{Progresa/Oportunidades} (Mexico),
+% and \textit{Universal Credit} (United Kingdom). Although each program has its specificities,
+% they all share the same objective: income redistribution.
+
+% Whether a fiscal policy is targeted or universal makes all the difference when the issue is
+% social justice. In standard macroeconomic models, all individuals are equals, meaning that
+% transfers affect everyone in the same way \parencite{blanchard2007real}.
+
+% However, households differ dramatically in their income, wealth, employment status, and propensity to
+% consume. Microdata show that individuals have different marginal propensities to consume (MPC) depending
+% on their income and credit constraints \parencite{kaplan2014model}.
+
+% Therefore, a heterogeneous agent model is crucial to understand the impacts and differences between
+% targeted and universal fiscal policies. In Heterogeneous Agent New-Keynesian (HANK) models, these differences
+% matter a lot: the same transfer budget produces very different aggregate and distributional outcomes
+% depending on targeting \parencite{auclert2025fiscal,kaplan2014model}.
+
+% Literature has studied the effects of police targeting primarily in relation to police funding: whether
+% through debt or taxes \parencite{mckay2016role}. Some other articles have studied the presence of fiscal
+% transfers and unemployment insurance, mostly in isolation \parencite{krueger2016distribution,bartal2024consumption}.
+
+% The idea behind this project is to systematically compare the effects of different fiscal policies to
+% a universal lump-sum transfer, in the presence of a negative shock to aggregate demand that triggers
+% the transfers. To answer this, I aim to simulate different fiscal structures, such as transfers based
+% on wealth, income, employment status, or hand-to-mouth status, in a structural HANK model with unemployment.
+
+
+%---------------------------------------------------
+%	MODEL
+%---------------------------------------------------
+\section{Model}
+
+The setup is a standard New Keynesian model with incomplete markets and labor supply risk.
+Time is discrete and runs from $t=0$ to infinity. There are four types of agents in the
+economy: households, firms, labor unions, and the government.
+
+Households are heterogeneous \parencite{aiyagari1994uninsured}, workers and firms join in a
+formal-informal setup, and the rest of the economy follows the textbook New Keynesian model \parencite{gali2015monetary}.
+There is no aggregate uncertainty and the economy starts in the deterministic steady-state.
+
+\subsubsection*{Households}
+Assume there exists a continuum $i\in[0,1]$ of ex-ante identical households, but experiencing
+idiosyncratic shocks in labor productivity and discount factor.
+
+Households enjoy a CRRA-GHH utility over consumption $c_{i,t}$ and worked hours
+$h_{i,t}$ \parencite{greenwood1988investment}\footnote{The GHH specification assumes
+zero income effect, so that the hours decision is separable from the consumption-savings problem.},
+which we define $u(\tilde c_{i,t}) =  u(c_{i,t} - v(h_{i,t}))$ as
+\[
+\max_{c_{i,t},h_{i,t}} \; \E_0\left[ \sum_{t=0}^\infty \beta^t
+\frac{\tilde c_{i,t}^{1-\frac{1}{\gamma}}}{1 - \frac{1}{\gamma}}
+\right],
+\quad \text{with } v(h) = \psi \frac{h^{1+\frac{1}{\varphi}}}{1+\frac{1}{\varphi}}
+\]
+where $\gamma$ is the elasticity of intertemporal substitution (EIS) and
+$\varphi$ is the Frisch elasticity of labor supply.
+
+A household faces idiosyncratic labor productivity shocks $e_{i,t}$ with $\E[e_{i,t}] = 1$,
+and discount factor heterogeneity $\beta_i\in\{ \beta_L, \beta_H \}$, where there is $\omega_I$
+impatient households. They can work in the formal or informal sector, or be unemployed $s\in\{F,I,U\}$.
+Each sector has a specific productivity $\theta^s_{i,t}$, re-drawn on each new offer.
+
+Formal workers earn labor income $(1-\tau_{\ell}) \theta_{i,t}^F w_t e_{i,t} h_{i,t}$,
+where $w_t$ is the formal wage rate and $\tau_{\ell}$ is a fixed labor income tax rate.
+While, informal workers receive benefits $\theta_{i,t}^I w_t^I e_{i,t} h_{i,t}$,
+where $w_t^I = \xi w_t$ and $\xi\in(0,1)$ is the wage gap. Let $y_t(s,e)$ be this non-financial income,
+\[
+    y_t(s,e,\theta) = \begin{cases}
+        (1-\tau_t) \theta^F w_t h_t e, &\text{if formal;} \\
+        \theta^I w_t^I h_t e + T_t \cdot \mathbbm{1}[\text{eligible}], \quad &\text{if informal;} \\
+        T_t, &\text{if unemployed}.
+    \end{cases}
+\]
+
+We assume that formal wages are observable by the government, so that only informal workers and
+unemployed may be eligible to receive Bolsa Família (BF). We assume that informal households are
+eligible if $y_{i,t}(I,e,\theta) < \bar y$ and that the total benefit size is $\text{BF}_t$.
+
+Households save into liquid assets $a_{i,t}$ with ex-ante real return $1+r_t = (1+i_{t-1})/(1+\pi_t)$,
+where $i_t$ represents the nominal interest rate and $\pi_t$ denotes inflation.
+They also receive dividends $d_{i,t}$ from firms, which we assume to be proportional to
+productivity $d_{i,t} = d_t \cdot e_{i,t}$\footnote{Dividends are proportional to productivity
+in order to increase inequality. We aim to perform robustness tests with other specifications.}.
+Their budget constraint at time $t$ reads:
+\[
+c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + d_{i,t} + y_{i,t}(s,e).
+\]
+
+Incomplete markets impose a borrowing constraint $a_{i,t} \geq \underline{a}$.
+Frictions in the labor market imply formal households delegate their labor supply
+decisions to labor unions, and thus take worked hours as given.
+While, informal ones choose hours to maximize their utility, thus, for each $i$,
+\[
+\psi \left( h \right)^{1/\varphi} = \theta  w^I e
+\quad \Leftrightarrow \quad h^I(e)
+= \left[ \frac{\theta w^I e}{\psi} \right]^\varphi.
+\]
+
+This generates a productivity cutoff for informal workers of
+\[
+\theta w^I e \left( \frac{\theta w^I e}{\psi}
+\right)^\varphi < \bar y
+\quad \Leftrightarrow \quad
+e < e^* = \frac{\left( \psi^\varphi \bar y \right)^\frac{1}{1+\varphi}}{\theta w^I}.
+\]
+
+Such as \textcite{esteban2021labor} and \textcite{finamor2025labor}, given a sector $s$,
+we assume that each worker faces an exogenous layoff probability $\delta_s$, and receives a
+formal offer with probability $\pi_F$ and an informal one with probability $\pi_I$.
+The worker accepts the offer with higher value.
+
+The Bellman Equation for each individual $i$ in sector $s\in\{F,I\}$ is
+\begin{align*}
+    V_t^s(a,e,\beta,\theta) = &\max_{\tilde c,a'} \Bigg\{
+    \frac{\tilde c^{1-\frac{1}{\gamma}}}{1-\frac{1}{\gamma}}
+    % - \psi \frac{h^{1+\frac{1}{\varphi}}}{1+\frac{1}{\varphi}}
+    + \beta \E_t \!\bigg[ \delta_s V_{t+1}^U(.)
+    + (1-\delta_s) \bigg( \\
+    &\quad\qquad \pi_F (1-\pi_I) \max\!\left\{V_{t+1}^s(.,\theta), 
+            V_{t+1}^F(.,\theta')\right\} \\
+    &\quad\qquad + (1-\pi_F)\pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
+            V_{t+1}^I(.,\theta')\right\} \\
+    &\quad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
+            V_{t+1}^I(.,\theta'), V_{t+1}^F(.,\theta')\right\} \\
+    &\quad\qquad + (1-\pi_F)(1-\pi_I) V_{t+1}^s(.,\theta)
+    \bigg) \bigg] \Bigg\} \\
+    \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(s,e,\theta) + d_{i,t} \\
+    &a' \in [\underline a, \infty), \qquad \tilde c = c - v(h),
+\end{align*}
+and for each unemployed worker is
+\begin{align*}
+    V_t^U(a,\beta) = &\max_{c,a'} \Bigg\{
+    \frac{c^{1-\frac{1}{\gamma}}}{1-\frac{1}{\gamma}}
+    + \beta \E_t \!\bigg[ (1-\pi_F)(1-\pi_I) V_{t+1}^U(.) \\
+    &\quad\qquad + \pi_F (1-\pi_I) \max\!\left\{V_{t+1}^U(.),
+            V_{t+1}^F(.)\right\} \\
+    &\quad\qquad + (1-\pi_F)\pi_I \max\!\left\{V_{t+1}^U(.), 
+            V_{t+1}^I(.)\right\} \\
+    &\quad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^U(.), 
+            V_{t+1}^I(.), V_{t+1}^F(.)\right\}
+    \bigg] \Bigg\} \\
+    \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(U) + d_{i,t} \\
+    &a' \in [\underline a, \infty).
+\end{align*}
+
+Formal workers maximize their utility taking hours as given, so their labor disutility
+is internalized at the union level, not by individual households.
+However, informal hours are chosen and therefore included in the Euler Equation
+Given their decision, their consumption-equivalent income is
+\[
+w^I e h_t - v(h_t) = w^I e h_t - \psi \frac{h_{i,t} h_{i,t}^{1/\varphi}}{1 + \frac{1}{\varphi}} = \frac{w^I e h_t}{1+\varphi}.
+\]
+
+\subsubsection*{Firms}
+In the firm side, there is a representative final-good producer that aggregates a continuum
+of $j\in[0,1]$ intermediate inputs produced by formal firms,
+\[
+Y_t = \left(
+    \int_0^1 y_{j,t}^\frac{\varepsilon-1}{\varepsilon} \: dj 
+\right)^\frac{\varepsilon}{\varepsilon-1},
+\]
+where $\varepsilon>0$ is a constant substitution elasticity (CES).
+
+Each intermediate good $j$ is produced by a monopolistic competitive firm $y_{j,t} = Z_{t} l_{j,t} $.
+They hire labor at real wage $w_t$ and set a constant markup of $\mu = \frac{\varepsilon}{\varepsilon-1}$.
+Hence, $P_t = \mu Z_t W_t$, and the real wage equals $w_t = \frac{Z_t}{\mu}$ at every date in steady-state.
+Firms' dividends are taxed at the same rate $\tau_{\ell}$ as labor income, so
+$d_t = (1-\tau_{\ell}) (Y_t - w_t L_t)$, where $L_t = \E[l_{j,t}]$ is the aggregate formal labor.
+
+We assume sticky prices following \textcite{rotemberg1982monopolistic}, standard in Neo-Keynesian's literature.
+Such as \textcite{hagedorn2019fiscal}, the Phillips curve for price inflation is given by
+\[
+\ln(1+\pi_t) = \kappa \left[
+\frac{w_t}{Z_t} - \frac{1}{\mu}
+\right] + \frac{\ln(1+\pi_{t+1})}{1+r_{t+1}} \cdot \frac{Y_{t+1}}{Y_t},
+\]
+
+Additionally, there is a representative informal firm operating in a perfectly competitive
+market and producing under constant returns to scale, so $Y_t^I = w^I_t L_t^I$.
+The steady-state wage gap $\xi = w_t^I / w_t$ is calibrated to match PNAD Contínua data.
+
+\subsubsection*{Unions}
+Nominal wages are assumed to be sticky as in \textcite{erceg2000optimal}, where unions set
+nominal wages to maximize agent utility subject to \textcite{rotemberg1982monopolistic}'s adjustment costs.
+We assume that unions allocate all formal labor hours uniformly across agents,
+so $ h_{i,t} = h_t $ \parencite{auclert2025fiscal}.
+
+Also, as in \textcite{hagedorn2019fiscal}, union's objective is to maximize the utility of an agent
+with average consumption $\bar C_t = \int_0^1 c_{it} \: di$, discounted by the average discount
+factor $\bar \beta = \lambda_I \beta_L + (1-\lambda_I) \beta_H$ \parencite{auclert2021exchange}.
+This results in a Phillips curve for wage inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ given by
+\[
+\ln (1+\pi_t^w)
+= \kappa_w \left[ \psi \cdot h_t^{1/\varphi} \cdot \tilde C_t^{1/\gamma}
+- \frac{(1-\tau_\ell) w_t L_t}{\mu_w}  \right]
++ \bar \beta \ln (1+\pi_{t+1}^w).
+\]
+
+The Phillips Curve calculations for price and wage are found in the Appendix.
+
+\subsubsection*{Government}
+Monetary Policy follows a standard lagged Taylor Rule, without microfoundations and only with
+an inflation target, $i_t = r^*_{t-1} + \phi \pi_{t-1} $, where $r^*$ is the neutral
+real interest rate, and $\phi > 1$ \parencite{taylor1993follow}.
+
+In the governmental sphere, we have a government that purchase public goods, collects taxes,
+makes transfers, and incurs debt; therefore, the government's budget constraint is characterized by
+\[
+G_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1} = B_t + \tau_t Y_t,
+\]
+which means that, in steady-state, $G = \tau w L - r B - T \cdot \text{BF}$.
+
+For dynamic simulations, we intend to apply two regimes: one financed by debt, with $T$ fixed
+and $B_t = (1+r) B + T \cdot \text{BF} - \tau w L - G$, and another financed by taxes
+with $B$ fixed and $T$ variable. For now, we consider fixed $T_t$ and $B_t$, treated as exogenous,
+with $G_t$ adjusting to it.
+
+\subsubsection*{Market Clearing}
+Finally, the asset, labor, and goods markets reach equilibrium (Market Clearing Conditions).
+We define $\Lambda_t(s,\beta,e,a)$ as the household distribution over a given period of time.
+First, the asset market reaches equilibrium when household savings equal government bonds
+\[
+A_t = \int a_{i,t} \; d\Lambda_t(s,\beta,e,a) = B_t;
+\]
+the labor market clears when the share of employment in the workforce equals the firm's demand for labor
+\begin{align*}
+    &L_t = \int \mathbbm{1}\{s_{i,t}=F \} \cdot \theta^F_{i,t} \cdot e_{i,t} \cdot h_{i,t} \; d\Lambda_t(s,\beta,e,a); \\
+    &L_t^I = \int \mathbbm{1}\{s_{i,t}=I \} \cdot \theta^I_{i,t} \cdot \cdot e_{i,t} \cdot h_{i,t} \; d\Lambda_t(s,\beta,e,a); \\
+    &\text{and} \qquad F_t + I_t + U_t = 1;
+\end{align*}
+the BF benefit clears when it is given to the eligible households
+\[
+\text{BF}_t = U_t + \int \mathbbm{1}\{s_{i,t} = I, e_{i,t} < e^*\} \; d\Lambda(s,\beta,e,a);
+\]
+and the goods market clear when $Y + Y^I = C + G$ in the steady-state.
+However, due to the GHH utility, we have $C = \tilde C + \int v(h) \; d\Lambda_t(.)$ and
+\[
+\int \psi \frac{h_{i,t}^{1+\frac{1}{\varphi}}}{1+\frac{1}{\varphi}} \; d\Lambda_t(s,\beta,e,a)
+= \int \frac{\varphi h_{i,t} w_t^I e_{i,t}}{1+\varphi} \; d\Lambda_t(s,\beta,e,a)
+= \frac{\varphi w^I_t L_t^I}{1+\varphi}
+= \frac{\varphi}{1+\varphi} Y_t^I.
+\]
+
+Thus,
+\[
+Y_t + Y_t^I
+= \int \tilde c_{i,t} \; d\Lambda_t(s,\beta,e,a) + G_t
+= \tilde C_t + \frac{\varphi}{1+\varphi} Y_I + G_t.
+\]
+
+%---------------------------------------------------
+%	COMPUTATIONAL METHODS
+%---------------------------------------------------
+\section{Calibration}
+
+\subsection*{Data}
+
+To calibrate this model, we use Brazilian data and standard parameters in HANK Literature.
+Most of the data refers to their average values in 2025.
+
+The labor market moments were obtained in Pesquisa Nacional por Amostra de Domicílio Contínua (PNAD-C),
+an annual survey reporting formality status, wages, weekly worked hours, etc.
+This panel is interesting to match mainly the sector sizes and the worked hours, for both formal and informal households.
+However, since it is a survey, it might have under-reporting of informal firms.
+
+Some general macroeconomic measures were also used, such as the Government Debt (in the Brazilian National Treasure),
+the interest rates, and the inflation, available in the Índice Brasileiro de Geografia e Estatística (IBGE)
+The Gini coefficient of wealth was obtained from the 2025 Global Wealth Report, from UBS.
+Bolsa Família data is available in Cadastro Único (CadÚnico), a platform with several statistics about the benefit.
+
+In the future, we aim to gather information also in the Relação Anual de Informações Sociais (RAIS),
+a mandatory annual reporting of firms, but without informality information and only up to 2003,
+and Economia Informal Urbana (ECINF), a survey conducted by IBGE that focus on small business, specially informal ones.
+
+
+\section*{Method and Calibration}
+
+The main method is the Sequence-Space Jacobian (SSJ) \parencite{auclert2021using}.
+The central idea is to summarize the model by a matrix equation
+$\mathbf{F}_t(\textbf{X},\textbf{Z}) = \textbf{0}$, where $\textbf{X}$
+are the endogenous variables and $\textbf{Z}$ are the exogenous ones.
+
+The method is built to find General Equilibrium Jacobians, written as
+\[
+d\textbf{X} = \textbf{G} \, d\textbf{Z} = -\textbf{F}_\textbf{X}^{-1} \textbf{F}_\textbf{Z} \, d\textbf{Z}.
+\]
+
+We are interested in calculating $dC = \textbf{G}_{C,T} \, dT $,
+the total effect of the change in the conditional transfer on household consumption.
+
+We resolve the heterogeneity by the Endogenous Grid Method (EGM) \parencite{carroll2006method},
+which solves the value function iteration using the Euler equation,
+without solving the household maximization problem.
+The EGM was combined with the discrete choice among sectors using
+\textcite{iskhakov2017endogenous}'s methodology.
+Each model period stands for one quarter and the computational time horizon is 100 quarters (or 25 years).
+
+\input{ext_calibration.tex}
+
+\input{int_calibration.tex}
+
+The idiosyncratic productivity follows a log-normal $AR(1)$ process, $\ln e' = \rho_e \ln e + \varepsilon^e$,
+with $\varepsilon^e \sim N(0,\sigma^2_e)$. This is approximated by a finite Markov chain with $N_e$
+grid points \parencite{rouwenhorst1995asset}, which is more accurate than Taucher for highly persistent processes.
+
+We assume the sector productivity follows a log-normal $\ln \theta^s \sim N(\mu_s, \sigma_s^2)$,
+that is discretized by a Gauss-Hermite quadrature with $N_\theta$ nodes \parencite{meghir2015wages}.
+We also assume a log-spaced grid for assets, in order to generate more robustness near the credit constraint.
+
+The discount factor transition $(\beta_L, \beta_H)$ is modeled by a redrawing probability of $q = 0.10$,
+corresponding to an average type duration of 25 years, used to capture a generation \parencite{auclert2025fiscal}
+This aims to capture similar results in relation to a life-cycle
+overlapping generations with permanent ability shock model.
+
+We solve the steady-state equilibrium computationally by Brent's method, internally calibrating parameters
+in order to clear the asset market, the labor market, the government budget constraint, and the wage Phillips curve.
+The external calibration is shown in table \ref{tab:ext_calibration} and the endogenous calibration is
+in \ref{tab:int_calibration}. The goods market was left untargeted to verify the Walras' Law.
+
+% In the household preferences, elasticity of intertemporal substitution is standard in
+% literature $\gamma=0.5$\footnote{EIS $\gamma=0.5$ is consistent with micro estimates surveyed
+% by \textcite{valickova2015financial}.}. The disutility of labor $\psi = 0.30$ is internally
+% calibrated to normalize formal hours $h_F = 1.0$. At last, $\varphi = 0.15$ is chosen to approximate
+% informal worked hours to PNAD-C Data, in average (model = $0.891$, data = $0.867$)
+% and in standard error (model = $0.35$, data = $0.34$)
+% \footnote{We used the average of half the sample because, in the future,
+% high-productivity informal workers will choose for formalization.}.
+
+% The labor market transition probabilities are defined to match the sector sizes in PNAD-C,
+% $F = 50.5\%$ (data = $50.0\%$), $I = 44.0\%$ (data = $44.2\%$), and $U = 5.0\%$ (data = $5.8\%$).
+% Their values are $p_{fi} = 0.11$, $p_{if} = 0.12$, $p_{ui} = 0.11$, $p_{uf} = 0.05$, and $p_{iu} = 0.02$.
+% In the future, I am interested in estimating the sectoral transition risk in the PNAD-C, if feasible.
+
+The output is normalized $Y=1.0$ and we defined $\mu = 1.11$, which is standard in
+the HANK literature \parencite{kaplan2018monetary,auclert2025fiscal}
+\footnote{Markup $\mu=1.11$ is also consistent with the estimates of \textcite{basu1997returns}.},
+and $\kappa = \kappa_w = 0.025$, consistent with \textcite{hazell2022national} estimates.
+
+Taylor Rule is pretty standard, with $\phi=1.5$ and $r^* = 1\%$, consistent with a $4\%$ annual
+real interest rate for Brazilian economy \parencite{dos2024natural}.
+The Government debt is set to $80\%$ of yearly GDP, consistent with Brazilian National Treasure data.
+Wage tax is an average of all contributions levied on the payroll, $\tau_\ell = 0.27$.
+
+The Bolsa Família statistics were obtained from the Cadastro Único
+\footnote{Available in \href{https://aplicacoes.cidadania.gov.br/vis/data3/data-explorer.php}{VIS DATA 3}
+and \href{https://paineis.mds.gov.br/public/extensions/observatorio-do-cadastro-unico/index.html}{Cadastro Único}.},
+where we calibrated the $T/w$ ratio in steady-state to be equal to the data from the Brazilian economy,
+where $T =$ R\$ 600 and $w =$ R\$ 4,294. We also calibrated the Bolsa Família threshold $\bar y$ to
+match the actual size of the program \footnote{We used the average household size in
+PNAD-C to calculate a percentage estimate of the program.}.
+
+%---------------------------------------------------
+%	RESULTS
+%---------------------------------------------------
+\newpage
+\section{Results}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{consumption_policy.png}
+    \caption{Steady-State Consumption Policy Function}
+    \label{fig:consumption_policy}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{wealth_distribution.png}
+    \caption{Wealth Distribution}
+    \label{fig:wealth_distribution}
+\end{figure}
+
+
+\input{ss_comparison.tex}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{formality_wealth.png}
+    \caption{Formality and Unemployment by Wealth}
+    \label{fig:formality_wealth}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\linewidth]{cons_by_state.png}
+    \caption{Steady-State Average Consumption by State}
+    \label{fig:consumption_by_state}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{welfare_type.png}
+    \caption{Welfare gains by Type of Household}
+    \label{fig:welfare_type}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{impc_profiles.png}
+    \caption{Partial Equilibrium MPC Profiles}
+    \label{fig:impc_profiles}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irf_Tr.png}
+    \caption{IRFs: BF-Targeted (shock in $T$)}
+    \label{fig:irf_Tr}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irf_comparison.png}
+    \caption{IRFs: Comparison (shock in $T$, MIT vs Antecipated)}
+    \label{fig:irf_comparison}
+\end{figure}
+
+
+%---------------------------------------------------
+%	ROBUSTNESS TESTS
+%---------------------------------------------------
+\subsubsection*{Robustness Tests}
+
+Lastly, in order to verify whether this results are representatives and robust, we intent to do some robustness tests changing some calibration parameters, such as $\gamma$, $\delta_\beta$, $\omega_I$, $\xi$, $\mu$, and $\kappa_w$. This parameters might have minor implications in the results, but it is expected that the model continues to have the same results.
+
+Further, since there are several combinations of the sector transition probabilities that implies in the same sector sizes, we aim to changing each of this probability and capture the result. This change will affect the dynamics and may alter the transfer effects, due to a faster or slower transition to the informal sector. If the transition data is feasible in PNAD-C, it will not be necessary.
+
+Also, as we commented early, we intent to perform other dividend specifications instead of $d_{i,t} = d_t \cdot e_{i,t}$. We also aim to change the GHH utility to a standard separable utility in the form of $u(c) - v(h)$, which must have similar results.
+
+
+%---------------------------------------------------
+%	BIBLIOGRAPHY
+%---------------------------------------------------
+
+\newpage
+
+\singlespace
+
+\printbibliography
+
+%---------------------------------------------------
+%	APPENDIX
+%---------------------------------------------------
+
+\newpage
+
+\section*{Appendix}
+
+% which means that the marginal value of the assets $V_a$ is
+% \[
+% V_a = \frac{\partial V_{t+1}}{\partial a'} = \frac{\partial V}{\partial c} \cdot \frac{\partial c}{\partial a} = (1+r_{t+1}) c^{-\frac{1}{\gamma}},
+% \]
+
+% and the Envelope Condition tells us that
+% \[
+% u'(c_t) = c_t^{-\frac{1}{\gamma}} = \beta \E_t [V_a^{t+1}] = \beta \E_t \left[ (1+r_{t+1}) c_{t+1}^{-\frac{1}{\gamma}} \right].
+% \]
+
+% Thus, we can create an inverse backwards iteration function of $V_a^{t}$ with respect to $V_a^{t+1}$, which is the central idea of the EGM.
+
+
+\subsubsection*{Price Phillips Curve}
+
+Let $Y_t$ be the aggregate output of the economy, a CES of the intermediary inputs,
+\[
+Y_t = \left(
+    \int_0^1 y_{j,t}^\frac{\varepsilon-1}{\varepsilon} \: dj 
+\right)^\frac{\varepsilon}{\varepsilon-1}.
+\]
+
+This firm maximizes its output subject to $\int_0^1 p_{i,j} y_{i,j} \; dj$. The FOC implies that the demand for the intermediate good is given by
+\[
+y_{j,t} = \left( \frac{p_{j,t}}{P_t} \right)^{-\varepsilon} Y_t,
+\]
+where $P_t$ is the equilibrium price of the final good,
+\[
+P_t = \left( \int_0^1 p_{j,t}^{1-\varepsilon} \; dj \right)^{\frac{1}{1-\varepsilon}}.
+\]
+
+We assume a \textcite{rotemberg1982monopolistic} quadratic price adjustment cost given by
+\[
+\frac{\theta_p}{2} \left( \frac{p_{j,t}}{p_{j,t-1}} - \bar \Pi \right)^2 Y_t,
+\]
+where $\theta_p = (\varepsilon-1) / \kappa$ is the adjustment cost multiplier and $\bar \Pi$ the steady-state inflation.
+
+Let $\Xi(y)$ be the intermediary firm's cost. Given last period's price $p_{j,t-1}$, the firm chooses this period's price $p_{j,t}$ to maximize the present discounted values of future profits,
+\[
+V_t^{IF}(p_{j,t-1}) = \max_{p_{j,t}} \frac{p_{j,t}}{P_t} y_{j,t} - \Xi(y_{j,t})
+- \frac{\theta_p}{2} \left( \frac{p_{j,t}}{p_{j,t-1}} - \bar \Pi \right)^2 Y_t
++ \frac{1}{1+r_{t+1}} V_{t+1}^{IF} (p_{j,t}).
+\]
+
+We can replace the demand function into this problem, so
+\[
+V_t(p_{j,t-1}) = \max_{p_{j,t}} \frac{p_{j,t}}{P_t}
+\left( \frac{p_{j,t}}{P_t} \right)^{-\varepsilon} Y_t - \Xi(y_{j,t})
+- \frac{\theta_p}{2} \left( \frac{p_{j,t}}{p_{j,t-1}} - \bar \Pi \right)^2 Y_t
++ \frac{1}{1+r_{t+1}} V_{t+1} (p_{j,t}).
+\]
+
+The FOC with respect to $p_{j,t}$ is
+\[
+(1-\varepsilon) \left( \frac{p_{j,t}}{P_t} \right)^{-\varepsilon} \frac{Y_t}{P_t}
++ \varepsilon mc_{j,t} - \theta_p \left( \frac{p_{j,t}}{p_{j,t-1}} - \bar \Pi \right)
+\frac{Y_t}{p_{j,t}} + \frac{1}{1+r_{t+1}} V'_{t+1}(p_{j,t}) = 0,
+\]
+where $mc_t = \partial \Xi / \partial y_{j,t}$, and the envelope condition gives us
+\[
+V_{t+1}' = \theta_p \left( \frac{p_{j,t+1}}{p_{j,t}} - \bar \Pi \right) \frac{p_{j,t+1}}{p_{j,t}} \frac{Y_{t+1}}{p_{j,t}}.
+\]
+
+Thus, taking $p_{j,t} = P_t$ in equilibrium,
+\[
+\theta_p (\pi_t - \bar \Pi) \pi_t
+= \varepsilon \left( mc_t - \frac{\varepsilon-1}{\varepsilon} \right)
++ \frac{1}{1+r_{t+1}} \theta_p (\pi_{t+1} - \bar \Pi) \pi_{t+1} \frac{Y_{t+1}}{Y_t},
+\]
+where we define the firm's markup as $\mu = \frac{\varepsilon}{\varepsilon-1}$. Linearizing around the steady-state $\pi_t = \bar \Pi$,
+\[
+\ln (1+\pi_t)
+= \frac{\varepsilon}{\theta_p} \left( mc_t - \frac{1}{\mu} \right)
++ \frac{1}{1+r_{t+1}}\ln (1+\pi_{t+1}) \frac{Y_{t+1}}{Y_t},
+\]
+where $\kappa = \varepsilon / \theta_p$ and $mc_t = w_t / Z_t$. This environment is equivalent to \textcite{calvo1983staggered} in first order around zero inflation.
+
+\subsubsection*{Wage Phillips Curve}
+
+We will use the same setting as \textcite{hagedorn2019fiscal}, but considering just the formal sector. Assume there is a union that aggregate effective labor input into
+\[
+h_t = \left(
+    \int_0^1 e_{i,t} (h_{i,t})^\frac{\varepsilon_w-1}{\varepsilon_w} \: di 
+\right)^\frac{\varepsilon_w}{\varepsilon_w-1},
+\]
+sells households labor services $e_{i,t} h_{i,t}$ at nominal wage $W_{i,t}$ to the labor recruiter, which minimizes costs $\int_0^1 W_{i,t} e_{i,t} h_{i,t} \; di$, implying a demand of
+\[
+h_{i,t} = \left( \frac{W_{i,t}}{W_t} \right)^{-\varepsilon_w} h_t.
+\]
+
+The unions sets a nominal wage $\hat W_t$ for an effect unit of labor, $W_{i,t} = \hat W_t$ to maximize profits subject to \textcite{rotemberg1982monopolistic}'s wage adjustment costs
+\[
+e_{i,t} \frac{\theta_w}{2}
+\left( \frac{\hat W_{t}}{\hat W_{t-1}} - \bar \Pi^w \right)^2 h_t.
+\]
+We assume that the union's wage setting problem is
+\[
+V_t^w = \max_{\hat W_t} \int \left[
+ \frac{(1-\tau_\ell)\hat W_t}{P_t} e_{i,t} h_{i,t}
+- \frac{v(h_{i,t})}{u'(\tilde C_t)}
+- e_{i,t} h_t \frac{\theta_w}{2}
+\left( \frac{\hat W_t}{\hat W_{t-1}} - \bar \Pi^w \right)^2
+\right] d\Lambda + \bar \beta V_{t+1}^w.
+\]
+
+Using the same algebra as the price Phillips curve, assuming that the union allocates the same amount of hours in each worker $h_{i,t} = h_t$, and using $\int_F e_{i,t} d\Lambda = L_t$, it is possible to find that
+\[
+\theta_w (\pi_t^w - \bar \Pi^w) \pi_t^w
+= \varepsilon_w \left[ \frac{v'(h_t)}{u'(\tilde C_t)}
+- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) w_t L_t \right]
++ \bar \beta \theta_w (\pi_{t+1}^w - \bar \Pi^w) \pi_{t+1}^w \frac{h_{t+1}}{h_t},
+\]
+which we can linearize around the steady state $\pi_t^w = \bar \Pi^w$ and take $h_{t+1} = h_t$, since there is no population nor technological growth. Thus,
+\[
+\ln (1+\pi_t^w)
+= \frac{\varepsilon_w}{\theta_w} \left[ \frac{v'(h_t)}{u'(\tilde C_t)}
+- (1-\tau_\ell) w_t L_t \frac{\varepsilon_w-1}{\varepsilon_w} \right]
++ \bar \beta \ln (1+\pi_{t+1}^w).
+\]
+
+Therefore, defining $\kappa_w = \varepsilon_w/\theta_w$ and $\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips curve is
+\[
+\ln (1+\pi_t^w)
+= \kappa_w \left[ \psi \cdot h_t^{1/\varphi} \cdot \tilde C_t^{1/\gamma}
+- \frac{(1-\tau_\ell) w_t L_t}{\mu_w}  \right]
++ \bar \beta \ln (1+\pi_{t+1}^w).
+\]
+
+
+
+\end{document}

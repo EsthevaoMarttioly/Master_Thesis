@@ -52,7 +52,7 @@ ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0},
 
 
 compare_bf_steady_states(ss, ss_nobf)
-save_ss_table(ss, ss_nobf, savepath='output/tables/ss_table.tex')
+save_ss_table(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 
 consumption_by_state(ss,  savepath='output/figures/cons_by_state.png')
 

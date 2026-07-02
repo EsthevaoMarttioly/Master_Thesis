@@ -1,0 +1,46 @@
+%---------------------------------------------------
+\begin{table}[htbp]
+\centering
+\caption{External Calibration}
+\label{tab:ext_calibration}
+\small
+\begin{tabular}{llcl}
+\toprule
+& \textbf{Description} & \textbf{Value} & \textbf{Source} \\
+\midrule
+\multicolumn{4}{l}{\textit{Households}} \\[2pt]
+$\gamma$ & EIS & $0.5$ & Standard in Literature \\
+$\delta_\beta$ & Difference: $\beta_H - \beta_L$ & $0.12$ & Approximate Gini Coefficient \\
+$\omega_I$ & Share of Impatient Agents & $0.50$ & \textcite{auclert2025fiscal} \\
+[6pt]
+
+\multicolumn{4}{l}{\textit{Productivity and Asset Grid}} \\[2pt]
+$\underline{a}$ & Borrowing constraint & $0.0$ & No Borrowing \parencite{mckay2016role} \\
+$\bar{a}$ & Maximum asset & $200$ & Sufficient to cover the top of dist. \\
+$N_a$ & Number of Asset Grid & $200$ & Accuracy near constraint \\
+$\rho_e$ & Persistence of Log-Productivity & $0.966$ & \textcite{kaplan2018monetary} \\
+$\sigma_e$ & Productivity Std. Dev. & $0.85$ & \textcite{bartal2024consumption} \\
+$N_e$ & Number of Nodes & $15$ & Standard Discretization \\
+$\mu_F,\mu_I$ & Sector Average Productivity & $0.0$,$-0.2$ & Standard Differentiation \\
+$\sigma_F,\sigma_I$ & Sector Std. Dev. Productivity & $0.2$,$0.4$ & Standard Differentiation \\
+$N_\theta$ & Number of Nodes & $3$ & Standard Discretization \\
+[6pt]
+
+\multicolumn{4}{l}{\textit{Firms}} \\[2pt]
+$Y$ & Aggregate Output & $1.0$ & Normalization \\
+$\xi$ & Wage gap $= w^I / w$ & $0.64$ & PNAD-C Data \\
+$\mu$ & Price Markup & $1.11$ & \textcite{basu1997returns} \\
+$\mu_w$ & Price Markup & $1.11$ & Equal to $\mu$ \\
+$\kappa$ & Price-NKPC Slope & $0.025$ & \textcite{hazell2022national} \\
+$\kappa_w$ & Wage-NKPC slope & $0.025$ & Equal to $\kappa$ \\
+[6pt]
+
+\multicolumn{4}{l}{\textit{Government and Monetary Policy}} \\[2pt]
+$r^*$ & Neutral Real Interest Rate & $1.0\%$ & $4\%$ annual average \\
+$\phi$ & Taylor Rule Coefficient & $1.5$ & Standard \parencite{taylor1993follow} \\
+$\tau_\ell$ & Labor Income Tax Rate & $0.27$ & Average Tax Payroll in Brazil \\
+$T/w$ & Bolsa Família Transfer & $0.14$ & CadÚnico, PNAD-C \\
+\bottomrule
+\end{tabular}
+\end{table}
+%---------------------------------------------------

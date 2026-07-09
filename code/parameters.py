@@ -25,7 +25,7 @@ calibration = dict(
     delta_I = 0.10,      # Job-Loss Probability to Informal
     pi_F    = 0.10,      # Formal Offer Probability
     pi_I    = 0.30,      # Informal Offer Probability
-    sig     = 0.10,      # Smoothness of max (sigma -> 0)
+    sig     = 0.10,      # Smoothness of Max (sigma -> 0)
     
     # --- Sector Productivities ---
     mu_F    = 0.00,      # Formal Average Productivity

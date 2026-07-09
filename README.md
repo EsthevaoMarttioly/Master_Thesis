@@ -32,7 +32,7 @@ All code is written with reproducibility and defensive programming in mind.
 │   ├── biblio.bib                       # References in bibtex
 │   ├── project.tex                      # Paper in LaTeX
 │   └── project.pdf                      # Final Paper
-├── EsthevaoMarttioly_Thesis.RProj       # R Project for downloading data
+├── project.RProj                        # R Project for downloading data
 ├── requirements.txt                     # pip install -r requirements.txt
 └── README.md
 ```

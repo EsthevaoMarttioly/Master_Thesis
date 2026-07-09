@@ -283,3 +283,6 @@ rsconnect/
 *.blg
 *.bcf
 *.run.xml
+.bbl-SAVE-ERROR
+.synctex
+.synctex(busy)

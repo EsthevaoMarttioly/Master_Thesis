@@ -156,7 +156,7 @@ def _status_probs(Vst, p, probF, probI):
     cB = _softmax([Vstay, EVF, EVI], sig)         # Both Offers
 
     a_stay = (1-piF) * (1-piI) + piF * (1-piI) * cF[0] +\
-          (1-piF) * piI * cI[0] + piF * piI * cB[0]
+                (1-piF) * piI * cI[0] + piF * piI * cB[0]
     a_F    = piF * (1-piI) * cF[1] + piF * piI * cB[1]
     a_I    = (1-piF) * piI * cI[1] + piF * piI * cB[2]
 
@@ -269,5 +269,70 @@ if __name__ == "__main__":
 
     for k in ['A', 'C', 'beta_high', 'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF']:
         print(f"  {k:12s} = {ss0[k]:.4f}")
+
+
+# ---------------------------------------------------------------------------
+# Dynamics
+
+# Why Pi is frozen by default, and why you can't just Jacobian it
+# solve_jacobian differentiates aggregates w.r.t. your driving shock treating every
+# input as either endogenous-in-the-DAG or constant. Pi is an input that no block produces,
+# so it sits at Pi_ss. You can't make it a normal endogenous input either: it depends on V, 
+# which is internal to the het block, and it's a huge object (nStates² per period), so a direct 
+# analytic Jacobian w.r.t. Pi is infeasible. The clean route is a nonlinear impulse with an 
+# outer fixed point on the Pi path — the exact dynamic analog of your solve_ss loop.
+
+# Computation
+# Compute both responses with the same nonlinear solver so the difference is purely the 
+# Pi channel (don't mix your linear G for frozen with a nonlinear moving — 
+# that would leak linearization error into the "composition" term).
+
+# def impulse_Pi(hank, ss, unknowns_dyn, targets_dyn, dTr_path,
+#                calib, Pi_b, Pi_e, probF, probI, moving=True,
+#                tol=1e-6, maxit=50):
+#     T = len(dTr_path)
+#     Pi_ss = ss['Pi']
+#     Pi_path = np.broadcast_to(Pi_ss, (T,)+Pi_ss.shape).copy()   # start frozen
+
+#     for it in range(maxit):
+#         # GE transition given the current Pi path + the Tr shock
+#         td = hank.solve_impulse_nonlinear(
+#                 ss, unknowns_dyn, targets_dyn,
+#                 inputs={'Tr': dTr_path, 'Pi': Pi_path})
+
+#         if not moving:                 # FROZEN: keep Pi at SS, one pass, done
+#             return td
+
+#         # MOVING: rebuild Pi_t from the period-t value/dist, iterate to consistency
+#         V_path = td.internals['household']['V']   # (T, nStates, nA)
+#         D_path = td.internals['household']['D']
+#         Pi_new = np.stack([build_Pi(V_path[t], D_path[t], calib,
+#                                     Pi_b, Pi_e, probF, probI) for t in range(T)])
+#         diff = np.max(np.abs(Pi_new - Pi_path)); Pi_path = Pi_new
+#         if diff < tol:
+#             return td
+#     raise RuntimeError("Pi path did not converge")
+
+
+# Caveats to keep honest
+
+# Consistency of methods (above): both nonlinear, same solver.
+# Timing: build Pi_t from (V_t, D_t) with the same convention as your SS build_Pi.
+# There's a one-period subtlety (the choice looks at next-period values), but matching 
+# the SS convention keeps it internally consistent — just state the convention in the thesis.
+# .internals access: SSJ exposes internal paths on the nonlinear result, 
+# but the exact accessor (td.internals['household']['V'] vs. running hh.impulse_nonlinear 
+# on the solved price paths) varies a little by version; if the model-level .internals isn't populated, 
+# feed the solved price paths + Pi_path into the household block alone to get V_t, D_t.
+# Cost: the moving run is an outer loop over full nonlinear transitions — minutes, 
+# but you run it once per shock, not per Jacobian column.
+
+# If you later want the moving-Pi channel linearized (for fast Jacobians / estimation), 
+# the trick is to notice build_Pi already collapses V to a small set of choice probabilities 
+# per (β,e) cell — you can parametrize dPi_t by those few value differences and close a small linear
+#  fixed point instead of iterating full transitions. That's the efficient version, 
+# but I'd ship the two-run nonlinear decomposition first — it's simpler, exact, 
+# and directly gives the thesis figure.
+
 
 

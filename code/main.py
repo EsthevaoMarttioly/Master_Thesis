@@ -129,6 +129,14 @@ irf_ant  = {v: G[v]['Tr'] @ dTr_ant  for v in variables}
 irf_perm = {v: G[v]['Tr'] @ dTr_perm for v in variables}
 
 
+# td_ins  = impulse_Pi(..., moving=False)   # insurance only  (Pi frozen)
+# td_full = impulse_Pi(..., moving=True)    # insurance + composition
+
+# irf_ins  = {v: td_ins[v]  for v in variables}
+# irf_full = {v: td_full[v] for v in variables}
+# irf_comp = {v: td_full[v] - td_ins[v] for v in variables}   # composition channel
+
+
 plot_irfs(irf_mit, T_plot=30,
           title='GE IRFs: Conditional Transfer Targeted (Tr shock)',
           savepath='output/figures/irf_Tr.png')
@@ -137,6 +145,10 @@ plot_irf_comparison({'MIT shock (surprise)'      : irf_mit,
                      f'Anticipated ({k}q ahead)' : irf_ant},
                      variables=['Y', 'C', 'pi', 'w'],
                      T_plot=30, savepath='output/figures/irf_comparison.png')
+
+# plot_irf_comparison({'Insurance (Pi frozen)': irf_ins,
+#                      'Full (Pi moving)': irf_full,
+#                      'Composition': irf_comp}, variables=['C','I','U','Y'])
 
 
 

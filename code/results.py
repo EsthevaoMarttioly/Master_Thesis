@@ -91,7 +91,7 @@ def _save_or_show(fig, savepath):
 def print_ss_summary(ss, var_ss = ['Y', 'C', 'beta_high', 'A', 'B']):
     # Print key Steady-State moments and sanity checks.
     print("\n" + "="*55)
-    print("  STEADY STATE   (Model)        (Theory)")
+    print("  STEADY STATE   (Model)")
     print("="*55)
     for k in var_ss:
         print(f"  {k:12s} = {ss[k]:.4f}")
@@ -356,9 +356,7 @@ def welfare_by_type(ss_bf, ss_nobf, calibration, savepath=None):
 # ---------------------------------------------------------------------------
 
 def plot_impc(G_hh, T_plot=30, savepath=None):
-    """Plot Partial Equilibrium iMPC for BF shock.
-
-    G_hh['C_GHH']['Tr'][:T, 0]:
+    """Plot Partial Equilibrium iMPC for BF shock:
         response of C_t to a unit Tr shock at t=0, holding all prices (r, w, Div) fixed.
     """
     iMPC_Tr = G_hh['C_GHH']['Tr']

@@ -31,10 +31,6 @@ from code.household_block import hh, solve_ss, solve_dyn
 hank_ss = create_model([hh, firm_formal, firm_informal, informal_wage,
                         nkpc_ss, union_ss, monetary, fiscal, mkt_clearing])
 
-print(f"\nModel inputs (SS):  {hank_ss.inputs}")
-print(f"Model outputs (SS): {hank_ss.outputs}")
-
-
 ss = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
 
 
@@ -44,29 +40,8 @@ print_ss_summary(ss, ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
                       'G', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc'])
 
 
-# ---------------------------------------------------------------------------
-# No-BF Counterfactual
+# No-BF Counterfactuals
 ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0}, unknowns, targets, verbose=True)
-
-
-compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
-
-consumption_by_state(ss, savepath='output/figures/consump_by_state.png')
-formality_by_wealth(ss, savepath='output/figures/formality_wealth.png')
-welfare_by_type(ss, ss_nobf, calibration, savepath='output/figures/welfare_type.png')
-
-
-# Re-solves for different Tr (very slow)
-# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets, verbose=False),
-#               calibration, np.linspace(0.0, 0.20, 6), savepath='output/figures/bf_sweep.png')
-
-
-# ---------------------------------------------------------------------------
-# Steady State Distribution and Policy Functions
-lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
-
-plot_consumption_policy(ss, calibration, savepath='output/figures/consump_policy.png')
-plot_wealth_distribution(ss, lorenz_scf_raw, n_bins=30, savepath='output/figures/wealth_distribution.png')
 
 
 # ---------------------------------------------------------------------------
@@ -74,15 +49,11 @@ plot_wealth_distribution(ss, lorenz_scf_raw, n_bins=30, savepath='output/figures
 hank = create_model([hh, firm_formal, firm_informal, informal_wage,
                      phillips_curve, monetary, fiscal, mkt_clearing])
 
-print(f"\nModel inputs (Dynamics):  {hank.inputs}")
-print(f"Model outputs (Dynamics): {hank.outputs}")
-
-
 dyn = hank.steady_state(ss)
 
-# Verify ss0 is also a valid Steady State
+# Verify Dyn is also a valid Steady State
 for k in dyn.keys():
-    assert np.all(np.isclose(dyn[k], ss[k], atol=1e-4)), f"SS mismatch at key {k}"
+    assert np.all(np.isclose(dyn[k], ss[k])), f"SS mismatch at key {k}"
 print("Steady State reached in dynamics DAG.")
 
 
@@ -90,23 +61,22 @@ print("Steady State reached in dynamics DAG.")
 # Partial Equilibrium Jacobians
 T = 100
 G_hh = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
-plot_impc(G_hh, T_plot=30, savepath='output/figures/impc.png')
 
 
 # General Equilibrium Jacobians
-# IRFs:   AR(1) shock,      with   rho = 0.4,  size = 1%,  1 year antecipation
 unknowns_dyn = ['Y', 'pi', 'w']
-targets_dyn  = ['goods_mkt', 'nkpc', 'wage_nkpc']   # gov_budget, unknown B
+targets_dyn  = ['goods_mkt', 'nkpc', 'wage_nkpc']   # adicionar gov_budget, unknown B
 variables    = ['C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w']
 
 
+## IRFs:   AR(1) shock,      with   rho = 0.4,  size = 1%,  1 year antecipation
 dTr0 = 0.01; rho_Tr = 0.40; k = 4
 dTr  = dTr0 * rho_Tr ** np.arange(T)                # MIT Shock
 dTr_ant  = np.concatenate([np.zeros(k), dTr[:-k]])  # Antecipated Shock: Perfect Foresight
 dTr_perm = dTr0 * np.ones(T)                        # Permanent Shock
 
 
-# Build IRFs
+## Build IRFs
 irf_insu = solve_dyn(hank, ss, unknowns_dyn, targets_dyn,
                      dTr, calibration, variables, moving=False, verbose=True)
 
@@ -119,7 +89,32 @@ irf_ant  = solve_dyn(hank, ss, unknowns_dyn, targets_dyn,
 irf_comp = {v: irf_full[v] - irf_insu[v] for v in variables}
 
 
-# Graphics
+# ---------------------------------------------------------------------------
+# Steady-State - Descriptive Statistics
+
+compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
+
+consumption_by_state(ss, savepath='output/figures/consump_by_state.png')
+formality_by_wealth(ss, savepath='output/figures/formality_wealth.png')
+welfare_by_type(ss, ss_nobf, calibration, savepath='output/figures/welfare_type.png')
+
+
+# Steady State - Distribution and Policy Functions
+lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
+plot_consumption_policy(ss, calibration, savepath='output/figures/consump_policy.png')
+plot_wealth_distribution(ss, lorenz_scf_raw, n_bins=30, savepath='output/figures/wealth_distribution.png')
+
+
+# # Steady State - Different Tr
+# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets, verbose=False),
+#               calibration, np.linspace(0.2, 0.6, 6), savepath='output/figures/bf_sweep.png')
+
+
+# Dynamics - Partial Jacobians
+plot_impc(G_hh, T_plot=30, savepath='output/figures/impc.png')
+
+
+# Dynamics - General Jacobians
 plot_channel_decomposition(irf_insu, irf_full, ['C','I','U','BF','pi','w'],
                            savepath='output/figures/irf_decomposition.png')  # Adicionar partial equilibrium
 
@@ -129,11 +124,6 @@ plot_irf({'MIT Shock': irf_full, 'Antecipated Shock': irf_ant},
          savepath='output/figures/irf_antecipated.png')
 
 
-# ---------------------------------------------------------------------------
-# Fiscal Multipliers Summary Table
+# Dynamics - Cumulative Response
 cumulative_response_table(irf_insu, irf_full, var='C',
                           savepath='output/tables/response_consump.tex')
-
-
-
-

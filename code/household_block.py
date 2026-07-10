@@ -34,6 +34,8 @@ def discretize_normal(mu, sigma, n):
 
 
 # 1.2. Exogenous Transition States Grid
+nB = 2     # beta_grid size
+nS = 3     # labor_grid size
 def make_egrid(rho_e, sd_e, nE, amin, amax, nA,
                mu_F, sigma_F, mu_I, sigma_I, nT):
     # Productivity Grids.
@@ -49,20 +51,19 @@ def make_egrid(rho_e, sd_e, nE, amin, amax, nA,
 
 def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
     # Build the beta grid for discount factors.
-    nS = 3
     beta_low = beta_high - dbeta
     b_grid   = np.array([beta_low, beta_high])
     pi_b = np.array([omega_I, 1-omega_I])
-    Pi_b = (1 - q) * np.eye(2) + q * np.outer(np.ones(2), pi_b)
+    Pi_b = (1 - q) * np.eye(nB) + q * np.outer(np.ones(nB), pi_b)
     beta = np.tile(np.repeat(b_grid, nE), nS * nT)
-    return beta, Pi_b, nS
+    return beta, Pi_b
 
 
 # 1.3. Labor Income Function
-def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nS, nT,
+def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nT,
                  thetaF, thetaI, y_bar, tau_l, psi, varphi):
     # Dividend Income and Informal Hours
-    div_i = np.tile(Div * e_grid, 2*nS*nT)
+    div_i = np.tile(Div * e_grid, nB*nS*nT)
 
     e_F = np.exp(thetaF[:, None]) * e_grid[None, :]
     e_I = np.exp(thetaI[:, None]) * e_grid[None, :]
@@ -75,14 +76,18 @@ def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nS, nT,
     y_U = np.full((nT, nE), Tr)
 
     # Expand the income into beta grid.
-    expand = lambda x: np.repeat(x[:, None, :], 2, axis=1).reshape(-1)
+    expand = lambda x: np.repeat(x[:, None, :], nB, axis=1).reshape(-1)
     y = np.r_[expand(y_F), expand(y_I), expand(y_U)] + div_i
     return y, h_I, e_F, e_I, elig
 
 
 # ---------------------------------------------------------------------------
 # 2. Endogenous Grid Method (EGM)
+_HH_WARM = {}                     # cache in household_block.py
 def hh_init(a_grid, y, r, eis):
+    key = (y.shape[0], a_grid.shape[0])
+    if key in _HH_WARM:           # reuse last converged guess to speed up
+        return _HH_WARM[key]
     coh = (1 + r) * a_grid + y[:, None]
     Va  = (1 + r) * (0.1 * coh) ** (-1 / eis)
     V   = u(0.1 * coh, eis) / (1 - 0.96)
@@ -104,7 +109,7 @@ def household(Va_p, V_p, a_grid, y, r, beta, eis):
 # ---------------------------------------------------------------------------
 # 3. Hetoutputs
 def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig):
-    block = c_ghh.shape[0] // 3     # nT * nBeta * nE
+    block = c_ghh.shape[0] // nS     # nT * nBeta * nE
     f, n_f = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
     i, n_i = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
     u, bf  = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
@@ -116,7 +121,7 @@ def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig):
     bf[2*block:]     = 1.0
 
     # Labor Supply = theta * e * h
-    expand = lambda x: np.repeat(x[:, None, :], 2, 1).reshape(-1)
+    expand = lambda x: np.repeat(x[:, None, :], nB, 1).reshape(-1)
     n_f[:block]        = expand(e_F * h_F)[:, None]
     n_i[block:2*block] = expand(e_I * h_I)[:, None]
     bf[block:2*block]  = expand(elig)[:, None]
@@ -174,13 +179,13 @@ def _status_probs(Vst, p, probF, probI):
 def build_Pi(V, D, p, Pi_b, Pi_e, probF, probI):
     # Assemble the full transition matrix:  s (x) theta (x) beta (x) e.
     # `V` is (nS, nT, nBeta, nE, nA):  the value of each sector at (beta,e,a).
-    nS, nT, nBeta, nE, nA = 3, p['nT'], Pi_b.shape[0], Pi_e.shape[0], V.shape[1]
-    Vr = V.reshape(nS*nT, nBeta, nE, nA)
-    Dr = D.reshape(nS*nT, nBeta, nE, nA)
+    nT, nE, nA = p['nT'], Pi_e.shape[0], V.shape[1]
+    Vr = V.reshape(nS*nT, nB, nE, nA)
+    Dr = D.reshape(nS*nT, nB, nE, nA)
 
-    Pstat = np.empty((nBeta, nE, nS*nT, nS*nT))    # Pstat[beta, e, from, to]
+    Pstat = np.empty((nB, nE, nS*nT, nS*nT))    # Pstat[beta, e, from, to]
 
-    for _beta in range(nBeta):
+    for _beta in range(nB):
         for _e in range(nE):
             P = _status_probs(Vr[:, _beta, _e, :].reshape(nS, nT, nA), p, probF, probI)
             w = Dr[:, _beta, _e, :]
@@ -191,7 +196,7 @@ def build_Pi(V, D, p, Pi_b, Pi_e, probF, probI):
     # Order:   s (x) theta (x) beta (x) e
     # Pi[(s,t,b,e),(s',t',b',e')] = Pstat[b,e,s,s'] * Pi_b[b,b'] * Pi_e[e,e']
     Pi = np.einsum('beMN,bB,eE->MbeNBE', Pstat, Pi_b, Pi_e)
-    Pi = Pi.reshape(nS * nT * nBeta * nE, nS * nT * nBeta * nE)
+    Pi = Pi.reshape(nS * nT * nB * nE, nS * nT * nB * nE)
     return Pi
 
 
@@ -215,34 +220,35 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None,
     nE, nA, nT = calib['nE'], calib['nA'], calib['nT']
 
     _, Pi_e, _, _, probF, _, probI =\
-        make_egrid(calib['rho_e'], calib['sd_e'], nE, calib['amin'], calib['amax'],
-                   nA, calib['mu_F'], calib['sigma_F'], calib['mu_I'], calib['sigma_I'], nT)
+        make_egrid(calib['rho_e'], calib['sd_e'], nE, calib['amin'],
+                   calib['amax'], nA, calib['mu_F'], calib['sigma_F'],
+                   calib['mu_I'], calib['sigma_I'], nT)
 
-    _, Pi_b, nS = make_bgrid(calib['beta_high'], calib['dbeta'],
-                             calib['omega_I'], calib['q'], nE, nT)
+    _, Pi_b = make_bgrid(calib['beta_high'], calib['dbeta'],
+                         calib['omega_I'], calib['q'], nE, nT)
 
     # Initial guess for Pi.
-    Pi = build_Pi(np.zeros((nS * nT * 2 * nE, nA)),
-                  np.ones((nS * nT * 2 * nE, nA)), calib, Pi_b, Pi_e, probF, probI)
-    c = dict(calib)
+    Pi = build_Pi(np.zeros((nS*nT*nB*nE, nA)),
+                  np.ones((nS*nT*nB*nE, nA)), calib, Pi_b, Pi_e, probF, probI)
+    c = dict(calib); diff = 1
 
     for it in range(maxit):
         # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
-        c['Pi'] = Pi
+        c['Pi'] = Pi; gtol = diff
         if unknowns == None or targets == None:     # Equivalent to steady_steate() in SSJ
             ss = hank_block.steady_state(c)
         else:                                       # Equivalent to solve_steady_steate()
-            ss = hank_block.solve_steady_state(c, unknowns, targets, solver='hybr')
+            ss = hank_block.solve_steady_state(c, unknowns, targets, solver='hybr',
+                                               ttol=gtol, ctol=gtol)
             for k in unknowns:
                 c[k] = float(ss[k])
-        V = ss.internals['household']['V']
-        D = ss.internals['household']['D']
-        Pi_new = build_Pi(V, D, calib, Pi_b, Pi_e, probF, probI)
-        diff = np.max(np.abs(Pi_new - Pi))
-        Pi = Pi_new
-        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.2e}")
+        hhi = ss.internals['household']
+        Pi_new = build_Pi(hhi['V'], hhi['D'], calib, Pi_b, Pi_e, probF, probI)
+        diff = np.max(np.abs(Pi_new - Pi)); Pi = Pi_new
+        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.1e}")
+        _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
         if diff < tol:
-            if verbose: print(f"Steady State solved in {\
+            print(f"Steady State solved in {\
                 time.time()-start:.1f}s ({(time.time()-start)/60:.1f}min).")
             return ss
     raise RuntimeError(f"Pi did not converge in {maxit} iterations.")
@@ -273,42 +279,45 @@ if __name__ == "__main__":
 
 # ---------------------------------------------------------------------------
 # Dynamics
-def solve_dyn(hank, ss, unknowns, targets, dTr_path, calib,
-               moving=True, nonlinear=True, tol=1e-6, maxit=50, verbose=False):
+def solve_dyn(hank, ss, unknowns, targets, dTr, calib, var,
+               moving=True, tol=1e-6, maxit=50, verbose=False):
     # Import grid
     start = time.time()
-    T = len(dTr_path)
+    T = len(dTr)
+
+    if not moving:
+        G = hank.solve_jacobian(ss, unknowns, targets, ['Tr'], T=T)
+        return {v: G[v]['Tr'] @ dTr for v in var}
+
     _, Pi_e, _, _, probF, _, probI =\
         make_egrid(calib['rho_e'], calib['sd_e'], calib['nE'], calib['amin'],
                    calib['amax'], calib['nA'], calib['mu_F'], calib['sigma_F'],
                    calib['mu_I'], calib['sigma_I'], calib['nT'])
 
-    _, Pi_b, _ = make_bgrid(calib['beta_high'], calib['dbeta'],
-                            calib['omega_I'], calib['q'], calib['nE'], calib['nT'])
+    _, Pi_b = make_bgrid(calib['beta_high'], calib['dbeta'], calib['omega_I'],
+                         calib['q'], calib['nE'], calib['nT'])
     
     Pi_ss = ss['Pi']; dPi = np.zeros((T,) + Pi_ss.shape)
+    V_ss  = ss.internals['household']['V']
+    D_ss  = ss.internals['household']['D']
 
     for it in range(maxit):
         # GE Transition given the Current Pi Path + shock
-        if nonlinear:
-            td = hank.solve_impulse_nonlinear(ss, unknowns, targets, {'Tr': dTr_path, 'Pi': dPi})
-        else:
-            td = hank.solve_impulse_linear(ss, unknowns, targets, {'Tr': dTr_path, 'Pi': dPi})
-
-        if not moving: return td
+        td = hank.solve_impulse_nonlinear(ss, unknowns, targets, {'Tr': dTr, 'Pi': dPi},
+                                          internals=['household'], verbose=False)
 
         # MOVING: Rebuild Pi_t from the period-t value/dist, iterate to consistency
-        V = td.internals['household']['V']   # (T, nS * nT * 2 * nE, nA)
-        D = td.internals['household']['D']
-        Pi_new = np.stack([build_Pi(V[t], D[t], calib, Pi_b, Pi_e, probF, probI) for t in range(T)])
+        V = V_ss[None] + td.internals['household']['V']   # Levels + Deviations
+        D = D_ss[None] + td.internals['household']['D']
+        Pi_new = np.stack([build_Pi(V[t], D[t], calib, Pi_b, Pi_e, probF, probI)
+                           for t in range(T)])
         dPi_new = Pi_new - Pi_ss
-        diff = np.max(np.abs(dPi_new - dPi))
-        dPi = dPi_new
+        diff = np.max(np.abs(dPi_new - dPi)); dPi = dPi_new
         if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.2e}")
-        if diff < tol or not nonlinear:
-            if verbose: print(f"Dynamics solved in {\
+        if diff < tol:
+            print(f"Dynamics solved in {\
                 time.time()-start:.1f}s ({(time.time()-start)/60:.1f}min).")
-            return td
+            return {v: td[v] for v in var}
     raise RuntimeError("Pi path did not converge in {maxit} iterations.")
 
 

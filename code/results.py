@@ -400,18 +400,18 @@ def plot_irf(irf_dict, variables, T_plot=30, savepath=None):
         ax.set_title(VAR_LABELS.get(var, var))
         ax.set_xlabel('Quarters')
         ax.set_xlim(0, T_plot)
+        ax.set_ylabel('% deviation from SS')
         ax.xaxis.set_major_locator(mticker.MultipleLocator(5))
 
     # Hide unused panels
     for ax in axes_flat[n:]:
         ax.set_visible(False)
 
-    axes[0].set_ylabel('% deviation from SS')
-    axes[-1].legend(frameon=False, fontsize=8)
+    axes_flat[-1].legend(frameon=False, fontsize=8)
     fig.suptitle('GE IRFs: Conditional Transfer Targeted (BF shock)', fontsize=11)
 
     _save_or_show(fig, savepath)
-    return fig, axes
+    return fig, axes_flat
 
 
 def plot_channel_decomposition(irf_ins, irf_full, variables=('C','I','U','BF'),
@@ -432,23 +432,23 @@ def plot_channel_decomposition(irf_ins, irf_full, variables=('C','I','U','BF'),
         ax.fill_between(x, ins, full, color='tomato', alpha=0.15, label='Composition Channel')
         ax.axhline(0, color='gray', ls=':')
         ax.set_title(VAR_LABELS.get(v, v)); ax.set_xlabel('Quarters'); ax.set_xlim(0, T_plot)
+        ax.set_ylabel('% deviation from SS')
     
     # Hide unused panels
     for ax in axes_flat[n:]:
         ax.set_visible(False)
 
-    axes[0].set_ylabel('% deviation from SS')
-    axes[-1].legend(frameon=False, fontsize=8)
+    axes_flat[-1].legend(frameon=False, fontsize=8)
     _save_or_show(fig, savepath)
-    return fig, axes
+    return fig, axes_flat
 
 
 # ---------------------------------------------------------------------------
 # 8. Fiscal Multipliers Summary Table
 # ---------------------------------------------------------------------------
 
-def cumulative_response_table(irf_ins, irf_full, var='C',
-                              horizons=(4, 8, 20, 100), savepath=None):
+def cumulative_response_table(irf_ins, irf_full, var='C', horizons=(4, 8, 20, 100),
+                              savepath=None, label='tab:response_consump'):
     # Cumulative response of `var` split into insurance / full / composition.
     ins, full = irf_ins[var], irf_full[var]
     comp = full - ins
@@ -461,11 +461,14 @@ def cumulative_response_table(irf_ins, irf_full, var='C',
         print(f"{h:>5}{si:>12.4f}{sf:>12.4f}{sc:>14.4f}{pc:>7.1f}%")
     if savepath is not None:
         with open(savepath, 'w') as f:
-            f.write("\\begin{tabular}{lrrrr}\\toprule\n"
+            f.write("\\begin{table}[htbp]\\centering\n"
+                    "\\caption{Response in Consumption: Different Horizons}\n"
+                    f"\\label{{{label}}}\n"
+                    "\\begin{tabular}{ccccc}\n\\toprule\n"
                     " Horizon & Insurance & Full & Composition & Comp.\\ (\\%) \\\\\\midrule\n")
             for h, si, sf, sc, pc in rows:
                 f.write(f" {h} & {si:.4f} & {sf:.4f} & {sc:.4f} & {pc:.1f} \\\\\n")
-            f.write("\\bottomrule\\end{tabular}\n")
+            f.write("\\bottomrule\n\\end{tabular}\n\\end{table}\n")
     else:
         return rows
 

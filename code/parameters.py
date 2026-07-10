@@ -10,7 +10,7 @@
 calibration = dict(
     # --- Household Preferences ---
     eis    = 0.5,   # EIS = gamma = 0.5 (CRRA sigma = 2)
-    psi    = 0.3,   # Calibrated: Disutility of Labor
+    psi    = 0.4,   # Calibrated: Disutility of Labor
     varphi = 0.15,  # Frisch Elasticity
     h_F    = 1.0,   # Normalized: Formal Worked Hours
 
@@ -56,7 +56,7 @@ calibration = dict(
 
     # --- Firms ---
     Y        = 1.0,    # Normalized: Output
-    Z        = 2.0,    # Calibrated: Productivity
+    Z        = 1.6,    # Calibrated: Productivity
     xi       = 0.64,   # Informal Wage Gap
     mu       = 1.11,   # Price Markup
     mu_w     = 1.11,   # Wage Markup

@@ -34,7 +34,8 @@ def firm_informal(w_I, N_I):
 @simple
 def nkpc_ss(mu, Z):
     w = Z / mu
-    return w
+    nkpc = w / Z - 1 / mu
+    return w, nkpc
 
 @simple
 def informal_wage(w, xi):

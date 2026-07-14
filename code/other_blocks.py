@@ -74,27 +74,27 @@ def phillips_curve(w, r, pi, h_F, Z, Y, L, C_GHH, tau_l, mu, mu_w,
 # ---------------------------------------------------------------------------
 # Government Block
 @simple
-def fiscal(r, tau_l, Tr, BF, Y, B, G):
+def fiscal(r, tau_l, Tr, BF, Y, B, tau):
     tax_revenue = tau_l * Y
     BF_Total    = Tr * BF
-    gov_budget  = (1 + r) * B(-1) - B + G + BF_Total - tax_revenue
+    gov_budget  = (1 + r) * B(-1) - B + tau + BF_Total - tax_revenue
     return tax_revenue, gov_budget
 
 # Monetary Policy
 @simple
 def monetary(pi, rstar, phi):
-    r = (1 + rstar + phi * pi(-1)) / (1 + pi) - 1
-    return r
+    i = rstar + phi * pi
+    r = (1 + i(-1)) / (1 + pi) - 1
+    return i, r
 
 
 
 # ---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, B, C_GHH, Y, Y_I, G, L, N_F, varphi):
-    C = C_GHH + varphi/(1+varphi) * Y_I
+def mkt_clearing(A, B, C, Y, Y_I, L, N_F):
     asset_mkt = A - B
     labor_mkt = N_F - L
-    goods_mkt = Y + Y_I - C - G
-    return C, asset_mkt, labor_mkt, goods_mkt
+    goods_mkt = Y + Y_I - C
+    return asset_mkt, labor_mkt, goods_mkt
 

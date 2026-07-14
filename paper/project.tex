@@ -181,7 +181,7 @@ where $w_t^I = \xi w_t$ and $\xi\in(0,1)$ is the wage gap.
 Let $y_t(s,e)$ be this non-financial income,
 \[
     y_t(s,e,\theta) = \begin{cases}
-        (1-\tau_t) \theta^F w_t h_t e, &\text{if formal;} \\
+        (1-\tau_\ell) \theta^F w_t h_t e, &\text{if formal;} \\
         \theta^I w_t^I h_t e
             + T_t \cdot \mathbbm{1}[\text{eligible}],
             \quad &\text{if informal;} \\
@@ -198,20 +198,22 @@ size is $\text{BF}_t$.
 Households save into liquid assets $a_{i,t}$ with ex-ante real
 return $1+r_t = (1+i_{t-1})/(1+\pi_t)$, where $i_t$ represents the
 nominal interest rate and $\pi_t$ denotes inflation.
-They also receive dividends $d_{i,t}$ from firms, which we assume
-to be proportional to productivity $d_{i,t} = d_t \cdot e_{i,t}$\footnote{
+They also receive lump-sum transfers $\tau_t$ by the government and dividends
+$d_{i,t}$ from firms, which we assume to be proportional to productivity
+$d_{i,t} = d_t \cdot e_{i,t}$\footnote{
     Dividends are proportional to productivity in order to
     increase inequality. We aim to perform robustness tests with other
     specifications.}.
 Their budget constraint at time $t$ reads:
 \[
-c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + d_{i,t} + y_{i,t}(s,e).
+c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + y_{i,t}(s,e) + d_{i,t} + \tau_t.
 \]
 
 Incomplete markets impose a borrowing constraint $a_{i,t} \geq \underline{a}$.
 Frictions in the labor market imply formal households delegate their labor supply
 decisions to labor unions, and thus take worked hours as given.
 While, informal ones choose hours to maximize their utility, thus, for each $i$,
+% this is novel, better to explain it later
 \[
 \psi \left( h \right)^{1/\varphi} = \theta  w^I e
 \quad \Leftrightarrow \quad h^I(e)
@@ -247,7 +249,7 @@ The Bellman Equation for each individual $i$ in sector $s\in\{F,I\}$ is
             V_{t+1}^I(.,\theta'), V_{t+1}^F(.,\theta')\right\} \\
     &\quad\qquad + (1-\pi_F)(1-\pi_I) V_{t+1}^s(.,\theta)
     \bigg) \bigg] \Bigg\} \\
-    \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(s,e,\theta) + d_{i,t} \\
+    \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(s,e,\theta) + d_{i,t} + \tau_t \\
     &a' \in [\underline a, \infty), \qquad \tilde c = c - v(h),
 \end{align*}
 and for each unemployed worker is
@@ -262,7 +264,7 @@ and for each unemployed worker is
     &\quad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^U(.), 
             V_{t+1}^I(.), V_{t+1}^F(.)\right\}
     \bigg] \Bigg\} \\
-    \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(U) + d_{i,t} \\
+    \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(U) + d_{i,t} + \tau_t \\
     &a' \in [\underline a, \infty).
 \end{align*}
 
@@ -318,6 +320,9 @@ the worker is in sector $s$,
 \qquad \phi_U(U) = 1 - \phi_U(F) - \phi_U(I).
 \end{align*}
 
+We denominate the steady-state size of each sector $s\in\{F,I,U\}$ as
+$\alpha_s$, such that $\alpha_F+\alpha_I+\alpha_U=1$. Also, the size of
+Bolsa Familia program is denominated by $\text{BF}$.
 
 %---------------------------------------------------
 %	FIRMS
@@ -334,10 +339,10 @@ where $\varepsilon>0$ is a constant substitution elasticity (CES).
 Each intermediate good $j$ is produced by a monopolistic competitive
 firm $y_{j,t} = Z_{t} l_{j,t} $. They hire labor at real wage $w_t$ and set
 a constant markup of $\mu = \frac{\varepsilon}{\varepsilon-1}$.
-Hence, $P_t = \mu Z_t W_t$, and the real wage equals $w_t = Z_t/\mu$
-at every date in steady-state. Firms' dividends are taxed at the same rate
-$\tau_{\ell}$ as labor income, so $d_t = (1-\tau_{\ell}) (Y_t - w_t L_t)$,
-where $L_t = \E[l_{j,t}]$ is the aggregate formal labor.
+Hence, $P_t = \mu Z_t W_t$, and real wage equals $w_t = Z_t/\mu$ at every date
+in steady-state. Firms' dividends are taxed at the same rate $\tau_{\ell}$ as
+labor income, so $d_t = (1-\tau_{\ell}) (Y_t - w_t L_t)$, where
+$L_t = \E[l_{j,t}]$ is the aggregate formal labor.
 
 We assume sticky prices following \textcite{rotemberg1982monopolistic},
 standard in Neo-Keynesian's literature. Such as \textcite{hagedorn2019fiscal},
@@ -350,8 +355,8 @@ the Phillips curve for price inflation is given by
 
 Additionally, there is a representative informal firm operating in a perfectly
 competitive market and producing under constant returns to scale,
-so $Y_t^I = w^I_t L_t^I$. The steady-state wage gap $\xi = w_t^I / w_t$ is
-calibrated to match \textit{PNAD Contínua} data.
+so $Y_t^I = w^I_t L_t^I$, where the steady-state wage gap $\xi = w_t^I / w_t$
+is calibrated to match \textit{PNAD Contínua} data.
 
 %---------------------------------------------------
 %	UNIONS
@@ -363,8 +368,8 @@ We assume that unions allocate all formal labor hours uniformly across agents,
 so $ h_{i,t} = h_t $ \parencite{auclert2025fiscal}.
 
 Also, as in \textcite{hagedorn2019fiscal}, union's objective is to maximize
-the utility of an agent with average consumption $\bar C_t = \int_0^1 c_{it} \: di$,
-discounted by the average discount factor
+the utility of an agent with average consumption $\bar C_t = \int_0^1 c_{it}
+\: di$, discounted by the average discount factor
 $\bar \beta = \lambda_I \beta_L + (1-\lambda_I) \beta_H$
 \parencite{auclert2021exchange}. This results in a Phillips curve for wage
 inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ given by
@@ -385,18 +390,32 @@ and only with an inflation target, $i_t = r^*_{t-1} + \phi \pi_{t-1} $,
 where $r^*$ is the neutral real interest rate, and $\phi > 1$
 \parencite{taylor1993follow}.
 
-In the governmental sphere, we have a government that purchase public goods,
-collects taxes, makes transfers, and incurs debt; therefore, the government's
-budget constraint is characterized by
+In the governmental sphere, we have a government that collects taxes, makes
+transfers, and incurs debt; therefore, the government's budget constraint
+is characterized by
 \[
-G_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1} = B_t + \tau_t Y_t,
+\tau_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1} = B_t + \tau_\ell Y_t.
 \]
-which means that, in steady-state, $G = \tau w L - r B - T \cdot \text{BF}$.
 
-For dynamic simulations, we intend to apply two regimes: one financed by debt,
-with $T$ fixed and $B_t = (1+r) B + T \cdot \text{BF} - \tau w L - G$,
-and another financed by taxes with $B$ fixed and $T$ variable. For now,
-we consider fixed $T_t$ and $B_t$, treated as exogenous, with $G_t$ adjusting to it.
+We consider two types of government policy, a revenue-neutral and a deficit-financed.
+The policymaker chooses a path of the conditional transfers and adjusts transfers
+or debt such that the budget is balanced at each period.
+
+The revenue-neutral policy sets a path of $T_t$ and adjusts transfers such that
+\[
+\tau_t = \tau_\ell Y_t - T_t \cdot \text{BF}_t - r_t \bar B,
+\]
+which means that the fiscal policy is passive and the monetary policy is active.
+The nominal interest rate adjust at least one-for-one to changes in inflation.
+
+However, governments normally finance themselves by increasing deficit and
+issuing new debt. The deficit-financed policy sets a path of $T_t$ and adjusts
+debt, keeping the nominal interest rate fixed $i_t = \bar i$.
+
+This situation leads to larger multipliers and great inequality
+\parencite{auclert2023trickling}. In the presence of nominal rigidity and non-
+Ricardian consumer behavior, \textcite{angeletos2024can} show that fiscal
+deficits of this sort self finance, so $\lim_{t\to\infty} B_t = \bar B$.
 
 %---------------------------------------------------
 %	MKT CLEARING
@@ -414,30 +433,13 @@ the firm's demand for labor
     &L_t = \int \mathbbm{1}\{s_{i,t}=F \} \cdot \theta^F_{i,t} \cdot
             e_{i,t} \cdot h_{i,t} \; d\Lambda_t(s,\beta,e,a); \\
     &L_t^I = \int \mathbbm{1}\{s_{i,t}=I \} \cdot \theta^I_{i,t} \cdot
-            e_{i,t} \cdot h_{i,t} \; d\Lambda_t(s,\beta,e,a); \\
-    &\text{and} \qquad F_t + I_t + U_t = 1;
+            e_{i,t} \cdot h_{i,t} \; d\Lambda_t(s,\beta,e,a);
 \end{align*}
-the BF benefit clears when it is given to the eligible households
+and the goods market clear when $Y + Y^I = C$. We set the goods market to clear
+by Walras' Law. Lastly, the BF benefit is given to all eligible households,
 \[
 \text{BF}_t = U_t + \int \mathbbm{1}\{s_{i,t} = I, e_{i,t} < e^*\}
-        \; d\Lambda(s,\beta,e,a);
-\]
-and the goods market clear when $Y + Y^I = C + G$ in the steady-state.
-However, due to the GHH utility, we have
-$C = \tilde C + \int v(h) \; d\Lambda_t(.)$ and
-\[
-\int \psi \frac{h_{i,t}^{1+\frac{1}{\varphi}}}{1+\frac{1}{\varphi}}
-        \; d\Lambda_t(s,\beta,e,a)
-= \int \frac{\varphi h_{i,t} w_t^I e_{i,t}}{1+\varphi} \; d\Lambda_t(s,\beta,e,a)
-= \frac{\varphi w^I_t L_t^I}{1+\varphi}
-= \frac{\varphi}{1+\varphi} Y_t^I.
-\]
-
-Thus,
-\[
-Y_t + Y_t^I
-= \int \tilde c_{i,t} \; d\Lambda_t(s,\beta,e,a) + G_t
-= \tilde C_t + \frac{\varphi}{1+\varphi} Y_I + G_t.
+        \; d\Lambda(s,\beta,e,a).
 \]
 
 %---------------------------------------------------
@@ -474,16 +476,16 @@ on small business, specially informal ones.
 %---------------------------------------------------
 \subsection*{Methods}
 
-The main method is the Sequence-Space Jacobian (SSJ) \parencite{auclert2021using},
-with the Endogenous Grid Method (EGM) \parencite{carroll2006method} to solve the
-heterogeneity. The EGM was combined with the discrete choice among sectors using
-\textcite{iskhakov2017endogenous}.
+The main computational methods are the Sequence-Space Jacobian (SSJ)
+\parencite{auclert2021using}, and the Endogenous Grid Method (EGM)
+\parencite{carroll2006method}. The EGM was combined with the discrete choice
+among sectors using \textcite{iskhakov2017endogenous}.
 
 The central idea of SSJ is to summarize the entire model by a matrix equation
 $\mathbf{F}_t(\textbf{X},\textbf{Z}) = \textbf{0}$, where $\textbf{X}$ are the
-endogenous variables and $\textbf{Z}$ are the exogenous ones. The Implicit Function
-Theorem allows us to differentiate this system and obtain General Equilibrium
-Jacobians, written as
+endogenous variables and $\textbf{Z}$ are the exogenous ones. The Implicit
+Function Theorem allows us to differentiate this system and obtain General
+Equilibrium Jacobians, written as
 \[
 d\textbf{X} = \textbf{G} \, d\textbf{Z}
 = -\textbf{F}_\textbf{X}^{-1} \textbf{F}_\textbf{Z} \, d\textbf{Z}.
@@ -604,7 +606,7 @@ The \textit{Bolsa Família} statistics were obtained from the Cadastro Único\fo
     Available in \href{https://aplicacoes.cidadania.gov.br/vis/data3/data-explorer.php}{VIS DATA 3}
     and \href{https://paineis.mds.gov.br/public/extensions/observatorio-do-cadastro-unico/index.html}{Cadastro Único}.},
 where we calibrated the $T/w$ ratio in steady-state to be equal to the data
-from the Brazilian economy, where $T =$ R\$ 600 and $w =$ R\$ 4,294.
+from the Brazilian economy, with $T =$ R\$ 600 and $w =$ R\$ 4,294.
 We also calibrated the \textit{Bolsa Família} threshold $\bar y$ to
 match the actual size of the program\footnote{
     We used the average household size in PNAD-C to calculate a percentage
@@ -640,25 +642,9 @@ match the actual size of the program\footnote{
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.4\linewidth]{consump_by_state.png}
-    \caption{Steady-State Average Consumption by State}
-    \label{fig:consump_by_state}
-\end{figure}
-
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.6\linewidth]{formality_wealth.png}
-    \caption{Formality and Unemployment by Wealth}
-    \label{fig:formality_wealth}
-\end{figure}
-
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.6\linewidth]{welfare_type.png}
-    \caption{Welfare gains by Type of Household}
-    \label{fig:welfare_type}
+    \includegraphics[width=1.0\linewidth]{bf_descript.png}
+    \caption{Steady-State Descriptive Statistics}
+    \label{fig:bf_descript}
 \end{figure}
 
 
@@ -701,15 +687,8 @@ such as $\gamma$, $\delta_\beta$, $\omega_I$, $\xi$, $\mu$, and $\kappa_w$.
 This parameters might have minor implications in the results, but it is expected
 that the model continues to have the same results.
 
-Further, since there are several combinations of the sector transition
-probabilities that implies in the same sector sizes, we aim to changing each
-of this probability and capture the result. This change will affect the dynamics
-and may alter the transfer effects, due to a faster or slower transition to the
-informal sector. If the transition data is feasible in PNAD-C, it will not be
-necessary.
-
-Also, as we commented early, we intent to perform other dividend specifications
-instead of $d_{i,t} = d_t \cdot e_{i,t}$. We also aim to change the GHH utility
+Also, we intent to perform other dividend specifications instead of
+$d_{i,t} = d_t \cdot e_{i,t}$. We also aim to change the GHH utility
 to a standard separable utility in the form of $u(c) - v(h)$, which must have
 similar results.
 

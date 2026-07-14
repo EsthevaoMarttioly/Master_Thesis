@@ -18,7 +18,7 @@ random.seed(20260415)
 # 1. Utility, Grid, and Income
 
 # 1.1. Utility Functions
-def u(c, eis):
+def u(c, eis):                   # change it to separable utility later
     c = np.maximum(c, 1e-12)
     return np.log(c) if eis == 1 else c ** (1-1/eis) / (1-1/eis)
 
@@ -60,10 +60,11 @@ def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
 
 
 # 1.3. Labor Income Function
-def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nT,
+def labor_income(w, w_I, h_F, Div, Tr, tau, e_grid, nE, nT,
                  thetaF, thetaI, y_bar, tau_l, psi, varphi):
     # Dividend Income and Informal Hours
-    div_i = np.tile(Div * e_grid, nB*nS*nT)
+    div_i = np.tile(Div * e_grid, nS*nT*nB)
+    tau_i = np.tile(tau, nS*nT*nB*nE)
 
     e_F = np.exp(thetaF[:, None]) * e_grid[None, :]
     e_I = np.exp(thetaI[:, None]) * e_grid[None, :]
@@ -77,7 +78,7 @@ def labor_income(w, w_I, h_F, Div, Tr, e_grid, nE, nT,
 
     # Expand the income into beta grid.
     expand = lambda x: np.repeat(x[:, None, :], nB, axis=1).reshape(-1)
-    y = np.r_[expand(y_F), expand(y_I), expand(y_U)] + div_i
+    y = np.r_[expand(y_F), expand(y_I), expand(y_U)] + div_i + tau_i
     return y, h_I, e_F, e_I, elig
 
 
@@ -95,20 +96,23 @@ def hh_init(a_grid, y, r, eis):
 
 
 @het(exogenous=['Pi'], policy='a', backward=['Va', 'V'], backward_init=hh_init)
-def household(Va_p, V_p, a_grid, y, r, beta, eis):
+def household(Va_p, V_p, a_grid, y, h_F, r, beta, eis, psi, varphi):
     c_nextgrid = (beta[:, None] * Va_p) ** (-eis)
     coh = (1 + r) * a_grid + y[:, None]
     a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
     a = np.maximum(a, a_grid[0])
     c_ghh = coh - a
     Va = (1 + r) * c_ghh ** (-1 / eis)
-    V = u(c_ghh, eis) + beta[:, None] * V_p
+    # Value Function
+    dis = np.zeros_like(c_ghh)
+    dis[:c_ghh.shape[0] // 3] = v(h_F, psi, varphi)
+    V = u(c_ghh, eis) - dis + beta[:, None] * V_p
     return Va, V, a, c_ghh
 
 
 # ---------------------------------------------------------------------------
 # 3. Hetoutputs
-def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig):
+def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig, psi, varphi):
     block = c_ghh.shape[0] // nS     # nT * nBeta * nE
     f, n_f = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
     i, n_i = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
@@ -126,7 +130,11 @@ def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig):
     n_i[block:2*block] = expand(e_I * h_I)[:, None]
     bf[block:2*block]  = expand(elig)[:, None]
 
-    return f, i, u, n_f, n_i, bf
+    # Informal Consumption (readjusted)
+    c = c_ghh.copy()
+    c[block:2*block] += expand(v(h_I, psi, varphi))[:, None]
+
+    return c, f, i, u, n_f, n_i, bf
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +222,7 @@ print(f'Macro outputs: {hh.outputs}')
 # ---------------------------------------------------------------------------
 # Solve the Transition in Steady State
 def solve_ss(hank_block, calib, unknowns=None, targets=None,
-             tol=1e-8, maxit=200, verbose=False):
+             tol=1e-8, maxit=100, verbose=False):
     start = time.time()
     # Import Grids
     nE, nA, nT = calib['nE'], calib['nA'], calib['nT']
@@ -226,55 +234,32 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None,
 
     _, Pi_b = make_bgrid(calib['beta_high'], calib['dbeta'],
                          calib['omega_I'], calib['q'], nE, nT)
-
+    
     # Initial guess for Pi.
     Pi = build_Pi(np.zeros((nS*nT*nB*nE, nA)),
                   np.ones((nS*nT*nB*nE, nA)), calib, Pi_b, Pi_e, probF, probI)
-    c = dict(calib); diff = 1
+    c = dict(calib); diff, gtol = 0.1, 0.1
 
     for it in range(maxit):
         # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
-        c['Pi'] = Pi; gtol = diff
+        c['Pi'] = Pi; gtol = max(1e-9, min(gtol, 1e-2 * diff))
         if unknowns == None or targets == None:     # Equivalent to steady_steate() in SSJ
             ss = hank_block.steady_state(c)
         else:                                       # Equivalent to solve_steady_steate()
             ss = hank_block.solve_steady_state(c, unknowns, targets, solver='hybr',
                                                ttol=gtol, ctol=gtol)
-            for k in unknowns:
-                c[k] = float(ss[k])
+            for k in unknowns: c[k] = float(ss[k])
         hhi = ss.internals['household']
         Pi_new = build_Pi(hhi['V'], hhi['D'], calib, Pi_b, Pi_e, probF, probI)
         diff = np.max(np.abs(Pi_new - Pi)); Pi = Pi_new
         if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.1e}")
         _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
         if diff < tol:
-            print(f"Steady State solved in {\
-                time.time()-start:.1f}s ({(time.time()-start)/60:.1f}min).")
+            tdiff = time.time() - start
+            print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min).")
             return ss
     raise RuntimeError(f"Pi did not converge in {maxit} iterations.")
 
-
-# ---------------------------------------------------------------------------
-# Run it
-if __name__ == "__main__":
-    from code.parameters import *
-    from code.other_blocks import *
-    from sequence_jacobian import create_model
-
-    # Solve the household block in isolation
-    calibration_hh = calibration | dict(
-        w = 2.3, w_I = 0.64 * 2.3, Div = 0.9, r = calibration['rstar'])
-
-    ss1 = solve_ss(hh, calibration_hh, verbose=True)
-
-    # Solve the full model in Steady State
-    hank_ss = create_model([hh, firm_formal, firm_informal, informal_wage,
-                            nkpc_ss, union_ss, monetary, fiscal, mkt_clearing])
-
-    ss0 = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
-
-    for k in ['A', 'C', 'beta_high', 'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF']:
-        print(f"  {k:12s} = {ss0[k]:.4f}")
 
 
 # ---------------------------------------------------------------------------
@@ -315,10 +300,31 @@ def solve_dyn(hank, ss, unknowns, targets, dTr, calib, var,
         diff = np.max(np.abs(dPi_new - dPi)); dPi = dPi_new
         if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.2e}")
         if diff < tol:
-            print(f"Dynamics solved in {\
-                time.time()-start:.1f}s ({(time.time()-start)/60:.1f}min).")
+            tdiff = time.time() - start
+            print(f"Dynamics solved in {tdiff:.1f}s ({tdiff/60:.1f}min).")
             return {v: td[v] for v in var}
     raise RuntimeError("Pi path did not converge in {maxit} iterations.")
 
 
+# ---------------------------------------------------------------------------
+# Run it
+if __name__ == "__main__":
+    from code.parameters import *
+    from code.other_blocks import *
+    from sequence_jacobian import create_model
+
+    # Solve the household block in isolation
+    calibration_hh = calibration | dict(
+        w = 1.5, w_I = 0.64 * 1.5, Div = 0.08, r = calibration['rstar'])
+
+    ss1 = solve_ss(hh, calibration_hh, verbose=True)
+
+    # Solve the full model in Steady State
+    hank_ss = create_model([hh, firm_formal, firm_informal, informal_wage,
+                            nkpc_ss, union_ss, monetary, fiscal, mkt_clearing])
+
+    ss0 = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
+
+    for k in ['A', 'C', 'beta_high', 'psi', 'w', 'w_I', 'F', 'I', 'U', 'BF']:
+        print(f"  {k:12s} = {ss1[k]:.4f}")
 

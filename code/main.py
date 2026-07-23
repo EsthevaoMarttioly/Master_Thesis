@@ -22,7 +22,7 @@ random.seed(20260415)
 # Import parameters
 from code.parameters import *
 from code.other_blocks import *
-from code.results import *
+from code.results import *          # B diverges in debt-dynamics
 from code.household_block import hh, solve_ss, solve_dyn
 
 
@@ -58,19 +58,15 @@ print("Steady State reached in dynamics DAG.")
 
 
 # ---------------------------------------------------------------------------
-# Partial Equilibrium Jacobians
+# Equilibrium Jacobians
 T = 100
-G_hh = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
-
-
-# General Equilibrium Jacobians
 unknowns_tax  = ['Y', 'pi', 'w', 'tau_l']     # revenue-financed
 unknowns_debt = ['Y', 'pi', 'w', 'B']         # debt-financed
 targets_dyn   = ['goods_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']
-variables     = ['C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w']
+variables     = ['C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i']
 
 
-## IRFs:   AR(1) shock,      with   rho = 0.4,  size = 1%,  1 year antecipation
+# IRFs:   AR(1) shock,      with   rho = 0.4,  size = 1%,  1 year antecipation
 dTr0 = 0.01; rho_Tr = 0.40; k = 4
 dTr  = dTr0 * rho_Tr ** np.arange(T)                # MIT Shock
 dTr_ant  = np.concatenate([np.zeros(k), dTr[:-k]])  # Antecipated Shock: Perfect Foresight
@@ -78,22 +74,23 @@ dTr_perm = dTr0 * np.ones(T)                        # Permanent Shock
 
 
 ## Build IRFs
-irf_insu = solve_dyn(hank, ss, unknowns_tax, targets_dyn,
-                     dTr, calibration, variables, moving=False, verbose=True)
+def build_irfs(unknowns_reg, variables, verbose=False):
+    run = lambda shock, mv: solve_dyn(hank, ss, unknowns_reg, targets_dyn,
+                                      shock, calibration, variables,
+                                      moving=mv, verbose=verbose)
+    full, insu, ant = run(dTr, True), run(dTr, False), run(dTr_ant, True)
+    comp = {v: full[v] - insu[v] for v in variables}
+    return dict(insu=insu, full=full, ant=ant, comp=comp)
 
-irf_full = solve_dyn(hank, ss, unknowns_tax, targets_dyn,
-                     dTr, calibration, variables, moving=True, verbose=True)
-
-irf_ant  = solve_dyn(hank, ss, unknowns_tax, targets_dyn,
-                     dTr_ant, calibration, variables, moving=True, verbose=True)
+G_hh     = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
+irf_tax  = build_irfs(unknowns_tax, variables)
+irf_debt = build_irfs(unknowns_debt, variables+['B'])
 
 irf_pe = {v: G_hh[v]['Tr'] @ dTr for v in variables if v in G_hh.outputs}
-irf_comp = {v: irf_full[v] - irf_insu[v] for v in variables}
 
 
 # ---------------------------------------------------------------------------
 # Steady-State - Descriptive Statistics
-
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, calibration, savepath='output/figures/bf_descript.png')
 
@@ -104,9 +101,8 @@ plot_consumption_policy(ss, calibration, savepath='output/figures/consump_policy
 plot_wealth_distribution(ss, lorenz_scf_raw, savepath='output/figures/wealth_distribution.png')
 
 
-# Steady State - Different Tr
-plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets),
-              calibration, ss, span=0.2, nT=5, savepath='output/figures/bf_sweep.png')
+# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets),
+#               calibration, ss, span=0.2, nT=5, savepath='output/figures/bf_sweep.png')
 
 
 # ---------------------------------------------------------------------------
@@ -115,15 +111,19 @@ plot_impc(G_hh, savepath='output/figures/impc.png')
 
 
 # Dynamics - General Jacobians
-plot_channel_decomposition(irf_insu, irf_full, irf_pe, ['C','I','U','BF','pi','w'],
-                           savepath='output/figures/irf_decomposition.png')
+plot_irf_financing(irf_tax['full'], irf_debt['full'],
+                   savepath='output/figures/irf_financing.png')
 
 
-plot_irf({'MIT Shock': irf_full, 'Antecipated Shock': irf_ant},
-         variables=['C','I','U','BF','pi','w'],
+plot_irf_decomposition(irf_debt['insu'], irf_debt['full'], irf_pe,
+                       savepath='output/figures/irf_decomposition.png')
+
+
+plot_irf({'MIT Shock': irf_debt['full'], 'Antecipated Shock': irf_debt['ant']},
          savepath='output/figures/irf_antecipated.png')
 
 
 # Dynamics - Cumulative Response
-cumulative_response_table(irf_insu, irf_full, var='C',
+cumulative_response_table(irf_debt['ant'], irf_debt['full'], var='C',
                           savepath='output/tables/response_consump.tex')
+

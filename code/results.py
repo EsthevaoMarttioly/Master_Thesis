@@ -28,7 +28,9 @@ LS = {0: '-', 1: '--', 2: ':', 3: '-.'}
 COLORS = {
     'Tr'   : BLUE,     # Conditional Transfer (BF) shock
     'Z'    : GREEN,    # TFP shock
-    'r'    : ORANGE,   # interest rate
+    'i'    : ORANGE,   # nominal interest rate
+    'r'    : ORANGE,   # real interest rate
+    'B'    : PURPLE,   # real debt
     'F'    : BLUE,     # formal employment
     'I'    : RED,      # informal employment
     'U'    : PURPLE,   # unemployed
@@ -54,7 +56,7 @@ VAR_LABELS = {
     'pi_w' : 'Wage inflation $\\pi^w$',
     'r'    : 'Real rate $r$',
     'i'    : 'Nominal rate $i$',
-    'Div'  : 'Dividends',
+    'B'    : 'Real Debt $B$',
     'A'    : 'Assets $A$',
     'G'    : 'Gov. spending $G$',
 }
@@ -409,7 +411,7 @@ def plot_impc(G_hh, T_plot=16, savepath=None):
 # 7. GE IRFs
 # ---------------------------------------------------------------------------
 
-def plot_irf(irf_dict, variables, T_plot=30, savepath=None):
+def plot_irf(irf_dict, variables=('C','I','U','BF','pi','w'), T_plot=30, savepath=None):
     n = len(variables)
     fig, axes = _panels(n)
 
@@ -433,8 +435,8 @@ def plot_irf(irf_dict, variables, T_plot=30, savepath=None):
     return fig, axes
 
 
-def plot_channel_decomposition(irf_ins, irf_full, irf_pe=None,
-                               variables=('C', 'I', 'U', 'BF'), T_plot=30, savepath=None):
+def plot_irf_decomposition(irf_ins, irf_full, irf_pe=None,
+                               variables=('C','I','U','BF','pi','w'), T_plot=30, savepath=None):
     # Insurance (Pi frozen) vs Full (Pi moving); shade the composition gap.
     variables = list(variables)
     n = len(variables)
@@ -463,6 +465,28 @@ def plot_channel_decomposition(irf_ins, irf_full, irf_pe=None,
     axes[0].legend(frameon=False)
     _save_or_show(fig, savepath)
     return fig, axes
+
+
+def plot_irf_financing(irf_tax, irf_debt, variables=('C','Y','pi','w','r','B'),
+                              T_plot=30, savepath=None):
+    variables = list(variables); n = len(variables)
+    ncols = max(1, (n + 1)//2); nrows = 2 if n > ncols else 1
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows))
+    axf = np.array(axes).flatten(); x = np.arange(T_plot)
+    for ax, v in zip(axf, variables):
+        if v in irf_tax:
+            ax.plot(x, irf_tax[v][:T_plot]*100,  color='steelblue', lw=1.8, label='Tax-financed')
+        if v in irf_debt:
+            ax.plot(x, irf_debt[v][:T_plot]*100, color='tomato', lw=1.8, ls='--', label='Debt-financed')
+        ax.axhline(0, color='gray', ls=':')
+        ax.set_title(VAR_LABELS.get(v, v)); ax.set_xlabel('Quarters')
+        ax.set_xlim(0, T_plot); ax.set_ylabel('% deviation from SS')
+    for ax in axf[n:]:
+        ax.set_visible(False)
+        
+    axf[0].legend(frameon=False)
+    _save_or_show(fig, savepath)
+    return fig, axf
 
 
 # ---------------------------------------------------------------------------
@@ -517,7 +541,7 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, span=0.2, nT=5, savepath=
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7))
     for ax, k in zip(axes.flat, keys):
-        ax.plot(Tr_grid, series[k], marker='o', ms=4, color=BLUE, lw=1.8)
+        ax.plot(Tr_grid, series[k], marker='o', ms=4, color=BLUE, lw=2.0)
         ax.axvline(Tr0, color='gray', ls='--', lw=1)
         ax.set_xticks(Tr_grid)
         ax.set_xlabel('BF generosity $Tr$')

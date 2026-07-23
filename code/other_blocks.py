@@ -17,11 +17,12 @@ from sequence_jacobian import simple
 # Firm Block:
 # 1. Production
 @simple
-def firm_formal(Y, Z, w, tau_l):
+def firm_formal(Y, Z, w, pi, tau_l, mu, kappa):
     # Formal sector: monopolistic competition with constant markup.
     L   = Y / Z       # Y = Z * L  =>  L = Y / Z
-    Div = (1 - tau_l) * (Y - w*L)
-    return L, Div
+    adj = mu / (mu-1) / (2 * kappa) * (1 + pi).apply(np.log) ** 2 * Y
+    Div = (1 - tau_l) * (Y - w*L) - adj
+    return L, Div, adj
 
 @simple
 def firm_informal(w_I, N_I):
@@ -92,9 +93,9 @@ def monetary(pi, rstar, phi):
 # ---------------------------------------------------------------------------
 # Market Clearing
 @simple
-def mkt_clearing(A, B, C, Y, Y_I, L, N_F):
+def mkt_clearing(A, B, C, Y, Y_I, L, N_F, adj):
     asset_mkt = A - B
     labor_mkt = N_F - L
-    goods_mkt = Y + Y_I - C
+    goods_mkt = Y + Y_I - C - adj
     return asset_mkt, labor_mkt, goods_mkt
 

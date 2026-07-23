@@ -287,3 +287,4 @@ rsconnect/
 *.bcf-SAVE-ERROR
 *.synctex
 *.synctex(busy)
+project-blx.bib

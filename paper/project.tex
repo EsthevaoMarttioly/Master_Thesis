@@ -13,14 +13,15 @@
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{fancyhdr}
-\setlength{\headheight}{29pt}
+\setlength{\headheight}{30pt}
 \usepackage{titlesec}
 \usepackage{ragged2e}
 \usepackage{amssymb}
 \usepackage{bbm}
 \usepackage{csquotes}
 \usepackage{float}
-\usepackage[backend=biber,style=authoryear,doi=false,isbn=false,url=true]{biblatex}
+% Use bibtex backend to avoid requiring Biber in the build environment
+\usepackage[backend=bibtex,style=authoryear,doi=false,isbn=false,url=true]{biblatex}
 \addbibresource{biblio.bib}
 \graphicspath{{../output/figures/}}
 \makeatletter
@@ -340,13 +341,19 @@ Each intermediate good $j$ is produced by a monopolistic competitive
 firm $y_{j,t} = Z_{t} l_{j,t} $. They hire labor at real wage $w_t$ and set
 a constant markup of $\mu = \frac{\varepsilon}{\varepsilon-1}$.
 Hence, $P_t = \mu Z_t W_t$, and real wage equals $w_t = Z_t/\mu$ at every date
-in steady-state. Firms' dividends are taxed at the same rate $\tau_{\ell}$ as
-labor income, so $d_t = (1-\tau_{\ell}) (Y_t - w_t L_t)$, where
-$L_t = \E[l_{j,t}]$ is the aggregate formal labor.
+in steady-state.
 
 We assume sticky prices following \textcite{rotemberg1982monopolistic},
-standard in Neo-Keynesian's literature. Such as \textcite{hagedorn2019fiscal},
-the Phillips curve for price inflation is given by
+standard in Neo-Keynesian's literature, with a quadratic adjustment cost
+\[
+\Psi_t(\pi_t) = \frac{\mu}{\mu-1} \frac{1}{2\kappa}
+\left[ \log (1+\pi_t) \right]^2 Y_t.
+\]
+
+Firms' dividends are taxed at the same rate $\tau_{\ell}$ as labor income, so
+$d_t = (1-\tau_{\ell}) (Y_t - w_t L_t) - \Psi_t(\pi_t)$, where $L_t = \E[l_{j,t}]$
+is the aggregate formal labor. Such as \textcite{hagedorn2019fiscal}, the Phillips
+curve for price inflation is given by
 \[
 \ln(1+\pi_t) = \kappa \left[
 \frac{w_t}{Z_t} - \frac{1}{\mu}
@@ -435,8 +442,8 @@ the firm's demand for labor
     &L_t^I = \int \mathbbm{1}\{s_{i,t}=I \} \cdot \theta^I_{i,t} \cdot
             e_{i,t} \cdot h_{i,t} \; d\Lambda_t(s,\beta,e,a);
 \end{align*}
-and the goods market clear when $Y + Y^I = C$. We set the goods market to clear
-by Walras' Law. Lastly, the BF benefit is given to all eligible households,
+and the goods market clear when $Y + Y^I = C + \Psi_t$. We set the goods market to
+clear by Walras' Law. Lastly, the BF benefit is given to all eligible households,
 \[
 \text{BF}_t = U_t + \int \mathbbm{1}\{s_{i,t} = I, e_{i,t} < e^*\}
         \; d\Lambda(s,\beta,e,a).
@@ -663,6 +670,14 @@ match the actual size of the program\footnote{
     \includegraphics[width=0.9\linewidth]{impc.png}
     \caption{Partial Equilibrium iMPC}
     \label{fig:impc}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irf_financing.png}
+    \caption{IRFs: Financing Rules (shock in $T$)}
+    \label{fig:irf_financing}
 \end{figure}
 
 

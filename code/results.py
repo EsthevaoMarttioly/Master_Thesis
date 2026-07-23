@@ -501,21 +501,27 @@ def cumulative_response_table(irf_ins, irf_full, var='C', horizons=(4, 8, 20, 10
 # 9. Sensitivity analysis
 # ---------------------------------------------------------------------------
 
-def plot_bf_sweep(solve_fn, calibration, span=0.2, nT=5, savepath=None):
+def plot_bf_sweep(solve_fn, calibration, ss_base=None, span=0.2, nT=5, savepath=None):
     # Re-solve the steady state across BF generosity and plot key margins.
     keys = ['Informal share', 'Unemployed share', 'Wealth Gini', 'Welfare E[V]']
     series = {k: [] for k in keys}
-    Tr_grid = np.linspace(calibration['Tr'] - span, calibration['Tr'] + span, nT)
+    Tr0 = calibration['Tr']
+    Tr_grid = np.linspace(Tr0 - span, Tr0 + span, nT)
     for Tr in Tr_grid:
-        st = _ss_stats(solve_fn({**calibration, 'Tr': Tr}))
+        if ss_base is not None and np.isclose(Tr, Tr0):
+            st = _ss_stats(ss_base)
+        else:
+            st = _ss_stats(solve_fn({**calibration, 'Tr': Tr}))
         for k in keys:
             series[k].append(st[k])
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7))
     for ax, k in zip(axes.flat, keys):
         ax.plot(Tr_grid, series[k], marker='o', ms=4, color=BLUE, lw=1.8)
+        ax.axvline(Tr0, color='gray', ls='--', lw=1)
+        ax.set_xticks(Tr_grid)
         ax.set_xlabel('BF generosity $Tr$')
         ax.set_title(k)
     fig.suptitle('Steady state vs BF generosity', fontsize=11)
     _save_or_show(fig, savepath)
-    return fig, ax
+    return fig, axes

@@ -105,8 +105,8 @@ plot_wealth_distribution(ss, lorenz_scf_raw, savepath='output/figures/wealth_dis
 
 
 # Steady State - Different Tr
-# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets),
-#               calibration, span=0.2, nT=5, savepath='output/figures/bf_sweep.png')
+plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets),
+              calibration, ss, span=0.2, nT=5, savepath='output/figures/bf_sweep.png')
 
 
 # ---------------------------------------------------------------------------

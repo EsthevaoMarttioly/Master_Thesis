@@ -19,10 +19,10 @@ random.seed(20260415)
 
 
 # Import parameters
-from code.parameters import *
-from code.other_blocks import *
-from code.results import *          # B diverges in debt-dynamics
-from code.household_block import hh, solve_ss, solve_dyn
+from code.p1_household_block import hh, solve_ss, solve_dyn
+from code.p2_other_blocks import *
+from code.p3_parameters import *
+from code.p4_results import *          # B diverges in debt-dynamics
 
 
 # ---------------------------------------------------------------------------

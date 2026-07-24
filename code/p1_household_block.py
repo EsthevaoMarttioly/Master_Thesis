@@ -309,8 +309,8 @@ def solve_dyn(hank, ss, unknowns, targets, dTr, calib, var,
 # ---------------------------------------------------------------------------
 # Run it
 if __name__ == "__main__":
-    from code.parameters import *
-    from code.other_blocks import *
+    from code.p3_parameters import *
+    from code.p2_other_blocks import *
     from sequence_jacobian import create_model
 
     # Solve the household block in isolation

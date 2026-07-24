@@ -10,9 +10,9 @@ import matplotlib.ticker as mticker
 
 def rr():
     # Reload results.py into the global namespace (interactive use).
-    import importlib, code.results
+    import importlib, code.p4_results
     importlib.reload(code.results)
-    globals().update({k: v for k, v in vars(code.results).items()
+    globals().update({k: v for k, v in vars(code.p4_results).items()
                       if not k.startswith('_')})
 
 

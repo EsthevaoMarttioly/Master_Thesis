@@ -222,10 +222,14 @@ renv
 renv.lock
 
 # Session Data files
+*.csv
+*.txt
 .RData
 .RDataTmp
-data/
-!data/lorenz_nw_scf_2019.raw.csv
+data/pnad/pynad/
+data/pnad/metadados/
+data/pnad/originais/
+data/pnad/microdados/
 
 # User-specific files
 .Ruserdata

@@ -6,8 +6,9 @@
 #=
 
 # ---- Packages --------------------------------------------------------------
-import os
+import os, time
 import pandas as pd
+from shutil import rmtree
 from pathlib import Path
 from zipfile import ZipFile
 from contextlib import redirect_stdout
@@ -34,10 +35,11 @@ def _quiet():
 
 
 def _keep_file(f, years):
-    # Keep the dictionary and the quarter zips (of "years", or all if years is None).
+    # Keep the dictionary, the deflators and the quarter zips (of "years", or all).
     p = f["path"]
     if not p.startswith("trimestral"): return False
-    if p == "trimestral/Documentacao": return f["name"].startswith("Dicionario_e_input")
+    if p == "trimestral/Documentacao":
+        return f["name"].startswith(("Dicionario_e_input", "Deflatores"))
     if years is None: return p.split("/")[-1].isdigit()
     return p.split("/")[-1] in {str(y) for y in years}
 
@@ -48,19 +50,16 @@ def panels_covering_year(year):
                   [year * 10 + q for q in range(1, 5)])
 
 
-def _year_of(name):
-    # Year of a quarterly file: 'PNADC_012025.zip' -> 2025.
-    return int(Path(name).name.split("_")[1][2:6])
-
-
 # ---------------------------------------------------------------------------
 # 1. Download
-def download(folder, years):
+def download(folder, years, redownload=False):
     if not Path(folder, copia_local.IDFILE).is_file(): copia_local.register(folder)
     remote = copia_local.list_remote_files()
     if not remote: raise ConnectionError("Cannot reach IBGE FTP (ports 20000-21000).")
     local = copia_local.list_local_files(folder)
-    for f in [f for f in remote if _keep_file(f, years) and f not in local]:
+    for f in remote:
+        if not _keep_file(f, years): continue
+        if not redownload and f in local: continue    # skip files already on disk
         with _quiet(): copia_local.download_manager([f], folder)
         print(f"[down] {f['name']} done")
     copia_local.register(folder)
@@ -72,7 +71,9 @@ def build(folder, years, only):
     with _quiet(): metadados.generate(folder)
 
     updates = converter.verify(folder, _PARQUET)[0]
-    for u in [u for u in updates if _year_of(u[0]) in set(years)]:
+    yrs = None if years is None else set(years)  # None -> convert every quarter
+    for u in [u for u in updates if yrs is None
+              or int(Path(u[0]).name.split("_")[1][2:6]) in yrs]:  # name -> year
         with _quiet(): converter.conversion_manager(folder, [u], _PARQUET)
         print(f"[conv] {Path(u[0]).name} done")
 
@@ -84,7 +85,6 @@ def build(folder, years, only):
         panels = {p: v for p, v in panels.items() if p in only}
     for pid, pan in panels.items():
         with _quiet(): paineis.build_manager(folder, {pid: pan}, _CSV)
-        print(f"[panel] {pid} done")
     return sorted(panels)
 
 
@@ -99,10 +99,11 @@ def collect(folder, years):
         for csv in Path(folder, paineis.PAINEISCSV).glob(f"{paineis.FILESTUB}*.csv"):
             (final / csv.name).write_bytes(csv.read_bytes())
 
-    # dictionary + column layout kept in data/pnad/ (used by the R survey code)
-    dz = next((tri / "Documentacao").glob("Dicionario_e_input*.zip"), None)
-    if dz:
-        with ZipFile(dz) as z: z.extractall(folder)
+    # dictionary + column layout + deflator kept in data/pnad/ (used by R survey code)
+    for zp in ("Dicionario_e_input*.zip", "Deflatores.zip"):
+        dz = next((tri / "Documentacao").glob(zp), None)
+        if dz:
+            with ZipFile(dz) as z: z.extractall(folder)
 
     # raw/ : the unzipped fixed-width quarter .txt
     if raw.is_dir():
@@ -120,14 +121,27 @@ def collect(folder, years):
 
 
 # ---------------------------------------------------------------------------
-def run_all(folder, target_year=2025, do_download=True):
-    # Build the matched panel for a target calendar year.
+def run_all(folder, target_year=2025, redownload=False):
+    # Build the matched panel for a target year. target_year=None -> all years/panels.
+    start = time.time()
     make_noninteractive()
-    years = range(target_year - 1, target_year + 2)
-    if do_download: download(folder, years)
-    built = build(folder, years, panels_covering_year(target_year))
+    if target_year is None:
+        years, pids = None, None                    # every quarter, every panel
+    else:
+        years = range(target_year - 1, target_year + 2)
+        pids = panels_covering_year(target_year)
+        if not redownload:
+            pids = [p for p in pids if not
+                    Path(folder, "final", f"{paineis.FILESTUB}{p}.csv").is_file()]
+            if not pids:
+                print("Skipping download, panels already in final/."); return []
+    download(folder, years, redownload)
+    built = build(folder, years, pids)
     collect(folder, years)
-    print(f"done — panels {built} in final/, raw txt in raw/")
+    for name in (copia_local.COPIA_LOCAL, converter.MICRO, paineis.PAINEIS,
+                 metadados.META, "pynad"):    # Removes pynad's scaffoding.
+        rmtree(Path(folder, name), ignore_errors=True)
+    print(f"Done in {(time.time()-start)/60:.1f}min ({(time.time()-start)/3600:.1f})h.")
     return built
 
 
@@ -150,7 +164,5 @@ def load_year_panels(folder, year):
 # ---------------------------------------------------------------------------
 # Running
 if __name__ == "__main__":
-    # download("data/pnad/", None)
-    run_all("data/pnad/", target_year=2025)
-    # run_all("data/pnad/", target_year=2025, do_download=False)
+    run_all("data/pnad/", None, False)
     # panels = load_year_panels("data/pnad/", 2025)   # {pid: DataFrame}

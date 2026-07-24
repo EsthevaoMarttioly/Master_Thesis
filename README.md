@@ -16,13 +16,14 @@ All code is written with reproducibility and defensive programming in mind.
 ├── .venv                                # Package version lockfile
 ├── code/
 │   ├── main.py                          # Master script - runs everything
-│   ├── household_block.py               # Household's block
-│   ├── other_blocks.py                  # Firm, Fiscal, Monetary, and Mkt Clearing
-│   ├── parameters.py                    # Calibration Parameters
-│   ├── results.py                       # Graphics and Tables
-│   ├── get_pnad.py                      # PNAD: Panel Matching
-│   └── get_pnad.R                       # PNAD: Calibration Data
+│   ├── p1_household_block.py            # Household's block
+│   ├── p2_other_blocks.py               # Firm, Fiscal, Monetary, and Mkt Clearing
+│   ├── p3_parameters.py                 # Calibration Parameters
+│   ├── p4_results.py                    # Graphics and Tables
+│   ├── p5_get_pnad.py                   # PNAD: Panel Matching
+│   └── p6_get_pnad.R                    # PNAD: Calibration Data
 ├── data/
+│   ├── pnad/                            # PNAD Data
 │   ├── lorenz_nw_scf_2019.raw           # SCF Data for US Lorenz Curve
 │   └── data.csv                         # Not yet
 ├── output/

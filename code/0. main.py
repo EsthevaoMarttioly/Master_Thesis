@@ -10,7 +10,6 @@
 # Write this in the terminal to install packages
 # pip install -r requirements.txt
 
-
 # ---- Packages --------------------------------------------------------------
 import random
 import numpy as np

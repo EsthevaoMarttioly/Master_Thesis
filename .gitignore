@@ -31,6 +31,7 @@ data/pnad/microdados/
 *.csv
 *.txt
 !data/pnad/input_PNADC_trimestral.txt
+data/pnad/raw/annual/PNADC_2025_visita1_20260508.zip
 
 # LaTeX build artifacts (regenerated on every compile)
 *.aux

@@ -21,7 +21,7 @@
 \usepackage{csquotes}
 \usepackage{float}
 % Use bibtex backend to avoid requiring Biber in the build environment
-\usepackage[backend=bibtex,style=authoryear,doi=false,isbn=false,url=true]{biblatex}
+\usepackage[backend=biber,style=authoryear,doi=false,isbn=false,url=true]{biblatex}
 \addbibresource{biblio.bib}
 \graphicspath{{../output/figures/}}
 \makeatletter
@@ -696,7 +696,7 @@ match the actual size of the program\footnote{
     \label{fig:irf_antecipated}
 \end{figure}
 
-\input{response_consump.tex}
+\input{cumulative_response.tex}
 
 
 %---------------------------------------------------

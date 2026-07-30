@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 #=
 
-# ---- Packages --------------------------------------------------------------
+# ---- Packages -------------------------------------------------------------
 import numpy as np
 import time, random
 from sequence_jacobian import het, interpolate, grids
@@ -18,12 +18,9 @@ random.seed(20260415)
 # 1. Utility, Grid, and Income
 
 # 1.1. Utility Functions
-def u(c, eis):                   # change it to separable utility later
-    c = np.maximum(c, 1e-12)
-    return np.log(c) if eis == 1 else c ** (1-1/eis) / (1-1/eis)
-
-def v(h, psi, varphi):
-    return psi * np.maximum(h, 1e-8) ** (1+1/varphi) / (1+1/varphi)
+u = lambda c, eis: np.log(np.maximum(c, 1e-12)) if eis == 1 else\
+                            np.maximum(c, 1e-12)  ** (1-1/eis) / (1-1/eis)
+v = lambda h, psi, varphi: psi * np.maximum(h, 1e-8) ** (1+1/varphi)/(1+1/varphi)
 
 def discretize_normal(mu, sigma, n):
     # theta_s ~ N(mu_s, sigma_s^2) as Gauss-Hermite quadrature with nT nodes.
@@ -34,8 +31,7 @@ def discretize_normal(mu, sigma, n):
 
 
 # 1.2. Exogenous Transition States Grid
-nB = 2     # beta_grid size
-nS = 3     # labor_grid size
+nB, nS = 2, 3     # beta_grid x labor_grid size
 def make_egrid(rho_e, sd_e, nE, amin, amax, nA,
                mu_F, sigma_F, mu_I, sigma_I, nT):
     # Productivity Grids.
@@ -264,15 +260,15 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None,
 
 # ---------------------------------------------------------------------------
 # Dynamics
-def solve_dyn(hank, ss, unknowns, targets, dTr, calib, var,
-               moving=True, tol=1e-6, maxit=50, verbose=False):
-    # Import grid
+def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var,
+              moving=True, tol=1e-6, maxit=50, verbose=False):
+    # `shock` is the exogenous input name ('Tr', 'rstar', ...); `dZ` its path.
     start = time.time()
-    T = len(dTr)
+    T = len(dZ)
 
     if not moving:
-        G = hank.solve_jacobian(ss, unknowns, targets, ['Tr'], T=T)
-        return {v: G[v]['Tr'] @ dTr for v in var}
+        G = hank.solve_jacobian(ss, unknowns, targets, [shock], T=T)
+        return {v: G[v][shock] @ dZ for v in var}
 
     _, Pi_e, _, _, probF, _, probI =\
         make_egrid(calib['rho_e'], calib['sd_e'], calib['nE'], calib['amin'],
@@ -288,7 +284,7 @@ def solve_dyn(hank, ss, unknowns, targets, dTr, calib, var,
 
     for it in range(maxit):
         # GE Transition given the Current Pi Path + shock
-        td = hank.solve_impulse_nonlinear(ss, unknowns, targets, {'Tr': dTr, 'Pi': dPi},
+        td = hank.solve_impulse_nonlinear(ss, unknowns, targets, {shock: dZ, 'Pi': dPi},
                                           internals=['household'], verbose=False)
 
         # MOVING: Rebuild Pi_t from the period-t value/dist, iterate to consistency

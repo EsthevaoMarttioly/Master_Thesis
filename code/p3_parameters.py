@@ -43,11 +43,12 @@ calibration = dict(
     nA    = 200,
 
     # --- Government ---
-    tau_l = 0.2,      # Labor Tax = 20% of Wage Bill
-    Tr    = 0.2,      # Tr/w = R$ 600 / R$ 4294 = 0.14     --- attention!
-    y_bar = 0.2,      # Eligibility Threshold for BF       --- attention!
-    B     = 3.2,      # Debt/GDP = 80% (annual)
-    tau   = 0.1,      # Calibrated: Transfers
+    tau_l  = 0.2,      # Labor Tax = 20% of Wage Bill       --- attention!
+    Tr     = 0.2,      # Tr/w = R$ 600 / R$ 4294 = 0.14     --- attention!
+    y_bar  = 0.2,      # Eligibility Threshold for BF       --- attention!
+    B      = 3.2,      # Debt/GDP = 80% (annual)
+    tau    = 0.1,      # Calibrated: Transfers
+    phi_B  = 0.2,      # Transfer response to debt          --- attention!
 
     # --- Monetary ---
     phi   = 1.5,     # Taylor rule coefficient on inflation
@@ -67,7 +68,8 @@ calibration = dict(
 
 # ---------------------------------------------------------------------------
 # Values to be calibrated
-unknowns = {k: calibration[k] for k in ['beta_high', 'Z', 'tau', 'psi']}
+calibration = {**calibration, 'B_ss': calibration['B'], 'tau_ss': calibration['tau']}
+unknowns    = {k: calibration[k] for k in ['beta_high', 'Z', 'tau', 'psi', 'tau_ss']}
 
 
 # Target Equations
@@ -77,5 +79,12 @@ targets = {
     'gov_budget'  : 0,    # adjust tau to balance govt budget
     # 'goods_mkt'   : 0,    # untargeted - Walras' Law
     'wage_nkpc'   : 0,    # adjust psi to set h_F = 1
+    'debt_rule'   : 0     # adjust tau_ss = tau
 }
+
+
+
+# ---------------------------------------------------------------------------
+# Calibration to Latex Table
+
 

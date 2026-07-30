@@ -10,7 +10,7 @@
 # Write this in the terminal to install packages
 # pip install -r requirements.txt
 
-# ---- Packages --------------------------------------------------------------
+# ---- Packages -------------------------------------------------------------
 import random
 import numpy as np
 from sequence_jacobian import create_model
@@ -22,7 +22,7 @@ random.seed(20260415)
 from code.p1_household_block import hh, solve_ss, solve_dyn
 from code.p2_other_blocks import *
 from code.p3_parameters import *
-from code.p4_results import *          # B diverges in debt-dynamics
+from code.p4_results import *
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,8 @@ ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0}, unknowns, targets, verbo
 hank = create_model([hh, firm_formal, firm_informal, informal_wage,
                      phillips_curve, monetary, fiscal, mkt_clearing])
 
-dyn = hank.steady_state(ss)
+dyn      = hank.steady_state(ss)
+dyn_nobf = hank.steady_state(ss_nobf)
 
 # Verify Dyn is also a valid Steady State
 for k in dyn.keys():
@@ -59,34 +60,41 @@ print("Steady State reached in dynamics DAG.")
 # ---------------------------------------------------------------------------
 # Equilibrium Jacobians
 T = 100
-unknowns_tax  = ['Y', 'pi', 'w', 'tau_l']     # revenue-financed
-unknowns_debt = ['Y', 'pi', 'w', 'B']         # debt-financed
-targets_dyn   = ['goods_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']
-variables     = ['C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i']
+unknowns_dyn  = ['B', 'Y', 'pi', 'w', 'tau']
+targets_dyn   = ['debt_rule', 'goods_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']
+variables     = ['B', 'C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i']
 
 
-# IRFs:   AR(1) shock,      with   rho = 0.4,  size = 1%,  1 year antecipation
-dTr0 = 0.01; rho_Tr = 0.40; k = 4
-dTr  = dTr0 * rho_Tr ** np.arange(T)                # MIT Shock
-dTr_ant  = np.concatenate([np.zeros(k), dTr[:-k]])  # Antecipated Shock: Perfect Foresight
-dTr_perm = dTr0 * np.ones(T)                        # Permanent Shock
+# IRFs
+dTr0, rho_Tr, k = 0.01, 0.40, 4             # Tr: AR(1), rho = 0.4, size = 1%
+di0, rho_i      = -0.0025, 0.60             # i:  25bps expansionist, rho = 0.6
+dTr = dTr0 * rho_Tr ** np.arange(T)
+di  = di0  * rho_i  ** np.arange(T)
+dTr_ant = np.concatenate([np.zeros(k), dTr[:-k]])  # Antecipated Shock
+di_ant  = np.concatenate([np.zeros(k), di[:-k]])
+dTr_perm = dTr0 * np.ones(T)                       # Permanent Shock
 
 
 ## Build IRFs
-def build_irfs(unknowns_reg, variables, verbose=False):
-    run = lambda shock, mv: solve_dyn(hank, ss, unknowns_reg, targets_dyn,
-                                      shock, calibration, variables,
-                                      moving=mv, verbose=verbose)
-    full, insu, ant = run(dTr, True), run(dTr, False), run(dTr_ant, True)
-    comp = {v: full[v] - insu[v] for v in variables}
-    return dict(insu=insu, full=full, ant=ant, comp=comp)
+def build_irfs(shock, dZ, unk=unknowns_dyn, targ=targets_dyn, var=variables, verbose=False):
+    run = lambda mv: solve_dyn(hank, dyn, shock, dZ, unk, targ,
+                               calibration, var, moving=mv, verbose=verbose)
+    insu, full = run(False), run(True)
+    comp = {v: full[v] - insu[v] for v in var}
+    return dict(insu=insu, full=full, comp=comp)
 
 G_hh     = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
-irf_tax  = build_irfs(unknowns_tax, variables)
-irf_debt = build_irfs(unknowns_debt, variables+['B'])
+irf_tax  = build_irfs('Tr', dTr, unknowns_dyn[1:], targets_dyn[1:], variables[1:])
+irf_debt = build_irfs('Tr', dTr)
+irf_ant  = solve_dyn(hank, dyn, 'Tr', dTr_ant, unknowns_dyn, targets_dyn, calibration, variables)
 
-irf_pe = {v: G_hh[v]['Tr'] @ dTr for v in variables if v in G_hh.outputs}
 
+irfm_bf   = build_irfs('rstar', di)
+irfm_nobf = solve_dyn(hank, dyn_nobf, 'rstar', di, unknowns_dyn, targets_dyn,
+                      {**calibration, 'Tr': 0.0}, variables)
+
+irf_pe  = {v: G_hh[v]['Tr'] @ dTr for v in variables if v in G_hh.outputs}
+irfm_pe = {v: G_hh[v]['r']  @ di  for v in variables if v in G_hh.outputs}
 
 # ---------------------------------------------------------------------------
 # Steady-State - Descriptive Statistics
@@ -118,11 +126,28 @@ plot_irf_decomposition(irf_debt['insu'], irf_debt['full'], irf_pe,
                        savepath='output/figures/irf_decomposition.png')
 
 
-plot_irf({'MIT Shock': irf_debt['full'], 'Antecipated Shock': irf_debt['ant']},
+plot_irf_decomposition(irfm_bf['insu'], irfm_bf['full'], irfm_pe,
+                       savepath='output/figures/irfm_decomposition.png')
+
+
+plot_irf({'With BF (insurance)': irfm_bf['insu'],
+          'With BF (total)': irfm_bf['full'], 'Without BF': irfm_nobf},
+          savepath='output/figures/irfm_bf_vs_nobf.png')
+
+
+plot_irf({'MIT Shock': irf_debt['full'], 'Antecipated Shock': irf_ant},
          savepath='output/figures/irf_antecipated.png')
 
 
 # Dynamics - Cumulative Response
-cumulative_response_table(irf_debt['ant'], irf_debt['full'], var='C',
-                          savepath='output/tables/response_consump.tex')
+cumulative_response_table(irf_debt['insu'], irf_debt['full'],
+                          savepath='output/tables/cumulative_response.tex')
+
+
+cumulative_response_table(irfm_bf['insu'], irfm_bf['full'],
+                          savepath='output/tables/monetary_cumulative.tex')
+
+
+rr()
+from code.p4_results import *
 

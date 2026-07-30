@@ -11,7 +11,7 @@ import matplotlib.ticker as mticker
 def rr():
     # Reload results.py into the global namespace (interactive use).
     import importlib, code.p4_results
-    importlib.reload(code.results)
+    importlib.reload(code.p4_results)
     globals().update({k: v for k, v in vars(code.p4_results).items()
                       if not k.startswith('_')})
 
@@ -493,32 +493,45 @@ def plot_irf_financing(irf_tax, irf_debt, variables=('C','Y','pi','w','r','B'),
 # 8. Fiscal multipliers summary table
 # ---------------------------------------------------------------------------
 
-def cumulative_response_table(irf_ins, irf_full, var='C', horizons=(4, 8, 20, 100),
-                              savepath=None, label='tab:response_consump'):
-    # Cumulative response of `var` split into insurance / full / composition.
-    ins, full = irf_ins[var], irf_full[var]
-    comp = full - ins
-    rows = [(h, ins[:h].sum(), full[:h].sum(), comp[:h].sum(),
-             100 * comp[:h].sum() / full[:h].sum() if full[:h].sum() else np.nan)
-            for h in horizons]
+def cumulative_response_table(irf_ins, irf_full, variables=('C','U','pi','w'),
+                              horizons=(1, 4, 20, 100), savepath=None,
+                              label='tab:cumulative_response'):
+    # Cumulative response (sum of dX_t up to horizon, in %) split into
+    # insurance / full / composition, for every requested variable.
+    if isinstance(variables, str):
+        variables = [variables]
 
-    print(f"\nCumulative Response of {var}  (sum of dX_t up to horizon)")
-    print(f"{'H':>5}{'Insurance':>12}{'Full':>12}{'Composition':>14}{'Comp%':>8}")
-    for h, si, sf, sc, pc in rows:
-        print(f"{h:>5}{si:>12.4f}{sf:>12.4f}{sc:>14.4f}{pc:>7.1f}%")
+    all_rows = {}
+    for var in variables:
+        ins  = np.asarray(irf_ins[var])  * 100          # % deviation
+        full = np.asarray(irf_full[var]) * 100
+        cins, cfull = ins.cumsum(), full.cumsum()       # running cumulative
+        ccomp = cfull - cins
+        rows = []
+        for h in horizons:
+            i = min(h, len(cfull)) - 1                  # guard h > T
+            rows.append((h, cins[i], cfull[i], ccomp[i]))
+        all_rows[var] = rows
+
+        print(f"\nCumulative Response of {var}  (sum of dX_t up to h, %)")
+        print(f"{'H':>5}{'Insurance':>12}{'Full':>12}{'Composition':>14}")
+        for h, si, sf, sc in rows:
+            print(f"{h:>5}{si:>12.3f}{sf:>12.3f}{sc:>14.3f}")
 
     if savepath is not None:
         with open(savepath, 'w') as f:
             f.write("\\begin{table}[htbp]\\centering\n"
-                    "\\caption{Response in Consumption: Different Horizons}\n"
+                    "\\caption{Cumulative Response by Horizon (\\%)}\n"
                     f"\\label{{{label}}}\n"
-                    "\\begin{tabular}{ccccc}\n\\toprule\n"
-                    " Horizon & Insurance & Full & Composition & Comp.\\ (\\%) \\\\\\midrule\n")
-            for h, si, sf, sc, pc in rows:
-                f.write(f" {h} & {si:.4f} & {sf:.4f} & {sc:.4f} & {pc:.1f} \\\\\n")
+                    "\\begin{tabular}{lccccc}\n\\toprule\n"
+                    "Variable & Horizon & Insurance & Full & Composition \\\\\\midrule\n")
+            for var in variables:
+                lab = VAR_LABELS.get(var, var)
+                for j, (h, si, sf, sc) in enumerate(all_rows[var]):
+                    name = lab if j == 0 else ''               # label once per block
+                    f.write(f" {name} & {h} & {si:.3f} & {sf:.3f} & {sc:.3f} \\\\\n")
+                f.write("\\midrule\n")
             f.write("\\bottomrule\n\\end{tabular}\n\\end{table}\n")
-    else:
-        return rows
 
 
 # ---------------------------------------------------------------------------

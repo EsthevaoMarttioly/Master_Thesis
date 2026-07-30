@@ -5,15 +5,15 @@
 # as well as the market clearing conditions.
 #
 # SS-DAG   (for calibration)   +   Dynamics DAG (for IRFs and Jacobians)
-#----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 #=
 
-# ---- Packages --------------------------------------------------------------
+# ---- Packages -------------------------------------------------------------
 import numpy as np
 from sequence_jacobian import simple
 
 
-#----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Firm Block:
 # 1. Production
 @simple
@@ -33,10 +33,11 @@ def firm_informal(w_I, N_I):
 
 # 2. SS Phillips Curve
 @simple
-def nkpc_ss(mu, Z):
+def nkpc_ss(mu, Z, tau):
     w = Z / mu
     nkpc = w / Z - 1 / mu
-    return w, nkpc
+    tau_ss = tau
+    return w, nkpc, tau_ss
 
 @simple
 def informal_wage(w, xi):
@@ -75,11 +76,12 @@ def phillips_curve(w, r, pi, h_F, Z, Y, L, C_GHH, tau_l, mu, mu_w,
 # ---------------------------------------------------------------------------
 # Government Block
 @simple
-def fiscal(r, tau_l, Tr, BF, Y, B, tau):
-    tax_revenue = tau_l * Y
+def fiscal(r, tau_l, Tr, BF, Y, B, tau, tau_ss, B_ss, phi_B):
     BF_Total    = Tr * BF
+    tax_revenue = tau_l * Y
+    debt_rule   = tau - tau_ss + phi_B * (B(-1) - B_ss)
     gov_budget  = (1 + r) * B(-1) - B + tau + BF_Total - tax_revenue
-    return tax_revenue, gov_budget
+    return tax_revenue, gov_budget, debt_rule
 
 # Monetary Policy
 @simple

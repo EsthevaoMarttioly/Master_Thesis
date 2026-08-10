@@ -19,7 +19,7 @@ random.seed(20260415)
 
 
 # Import parameters
-from code.p1_household_block import hh, solve_ss, solve_dyn
+from code.p1_household import hh, solve_ss, solve_dyn
 from code.p2_other_blocks import *
 from code.p3_parameters import *
 from code.p4_results import *

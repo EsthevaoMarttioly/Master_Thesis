@@ -27,25 +27,27 @@ from code.p4_results import *
 
 # ---------------------------------------------------------------------------
 # Steady State
-hank_ss = create_model([hh, firm_formal, firm_informal, informal_wage,
-                        nkpc_ss, union_ss, monetary, fiscal, mkt_clearing])
+hank_ss = create_model([hh, firm_formal, firm_informal, nkpc_ss,
+                        union_ss, monetary, fiscal, mkt_clearing])
 
+cal = solve_ss(hank_ss, {**calibration, 'nA': 50}, unknowns, targets, shares=True, verbose=True)
+calibration.update(pi_F = cal['pi_F'], pi_I = cal['pi_I'])
 ss = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
 
 
 # Steady State Diagnostics
 print_ss_summary(ss, ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
-                      'psi', 'w', 'w_I', 'Z', 'F', 'I', 'U', 'BF', 'L', 'Div',
+                      'psi', 'w', 'Z', 'F', 'I', 'U', 'BF', 'L', 'Div',
                       'tau', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc'])
 
 
 # No-BF Counterfactuals
-ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0}, unknowns, targets, verbose=True)
+ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0, 'y_bar': 1000}, unknowns, targets, verbose=True)
 
 
 # ---------------------------------------------------------------------------
 # Dynamics
-hank = create_model([hh, firm_formal, firm_informal, informal_wage,
+hank = create_model([hh, firm_formal, firm_informal,
                      phillips_curve, monetary, fiscal, mkt_clearing])
 
 dyn      = hank.steady_state(ss)
@@ -98,6 +100,9 @@ irfm_pe = {v: G_hh[v]['r']  @ di  for v in variables if v in G_hh.outputs}
 
 # ---------------------------------------------------------------------------
 # Steady-State - Descriptive Statistics
+tex_macros(ss, calibration, savepath='output/tables/macros.tex')
+transition_table(ss, savepath='output/tables/transition_table.tex')
+
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, calibration, savepath='output/figures/bf_descript.png')
 
@@ -109,7 +114,7 @@ plot_wealth_distribution(ss, lorenz_scf_raw, savepath='output/figures/wealth_dis
 
 
 # plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets),
-#               calibration, ss, span=0.2, nT=5, savepath='output/figures/bf_sweep.png')
+#               calibration, ss, span=0.2, nTr=5, savepath='output/figures/bf_sweep.png')
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +137,7 @@ plot_irf_decomposition(irfm_bf['insu'], irfm_bf['full'], irfm_pe,
 
 plot_irf({'With BF (insurance)': irfm_bf['insu'],
           'With BF (total)': irfm_bf['full'], 'Without BF': irfm_nobf},
-          savepath='output/figures/irfm_bf_vs_nobf.png')
+          title='Monetary Policy Shock (i)', savepath='output/figures/irfm_bf_vs_nobf.png')
 
 
 plot_irf({'MIT Shock': irf_debt['full'], 'Antecipated Shock': irf_ant},

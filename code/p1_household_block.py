@@ -56,7 +56,7 @@ def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
 
 
 # 1.3. Labor Income Function
-def labor_income(w, w_I, h_F, Div, Tr, tau, e_grid, nE, nT,
+def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT,
                  thetaF, thetaI, y_bar, tau_l, psi, varphi):
     # Dividend Income and Informal Hours
     div_i = np.tile(Div * e_grid, nS*nT*nB)
@@ -65,11 +65,11 @@ def labor_income(w, w_I, h_F, Div, Tr, tau, e_grid, nE, nT,
     e_F = np.exp(thetaF[:, None]) * e_grid[None, :]
     e_I = np.exp(thetaI[:, None]) * e_grid[None, :]
 
-    h_I = (w_I * e_I / np.maximum(psi, 1e-8)) ** (varphi)
-    elig = (w_I * e_I * h_I < y_bar).astype(float)     # Elegibility
+    h_I = (w * e_I / np.maximum(psi, 1e-8)) ** (varphi)
+    elig = (w * e_I * h_I < y_bar).astype(float)     # Elegibility
 
     y_F = (1 - tau_l) * w * e_F * h_F
-    y_I = 1/(1+varphi) * w_I * e_I * h_I + Tr * elig
+    y_I = 1/(1+varphi) * w * e_I * h_I + Tr * elig
     y_U = np.full((nT, nE), Tr)
 
     # Expand the income into beta grid.
@@ -188,20 +188,25 @@ def build_Pi(V, D, p, Pi_b, Pi_e, probF, probI):
     Dr = D.reshape(nS*nT, nB, nE, nA)
 
     Pstat = np.empty((nB, nE, nS*nT, nS*nT))    # Pstat[beta, e, from, to]
+    flow  = np.zeros((nS*nT, nS*nT))            # mass flowing from -> to
 
     for _beta in range(nB):
         for _e in range(nE):
             P = _status_probs(Vr[:, _beta, _e, :].reshape(nS, nT, nA), p, probF, probI)
             w = Dr[:, _beta, _e, :]
+            flow += np.einsum('mna,ma->mn', P, w)              # Weight by mass
             tot = w.sum(1, keepdims=True)
             w = np.where(tot > 1e-14, w / np.where(tot > 1e-14, tot, 1.0), 1.0 / nA)
             Pstat[_beta, _e] = np.einsum('mna,ma->mn', P, w)    # Average over assets
-    
+
     # Order:   s (x) theta (x) beta (x) e
     # Pi[(s,t,b,e),(s',t',b',e')] = Pstat[b,e,s,s'] * Pi_b[b,b'] * Pi_e[e,e']
     Pi = np.einsum('beMN,bB,eE->MbeNBE', Pstat, Pi_b, Pi_e)
     Pi = Pi.reshape(nS * nT * nB * nE, nS * nT * nB * nE)
-    return Pi
+
+    # Sector Transition F/I/U, collapsing theta
+    flow = flow.reshape(nS, nT, nS, nT).sum((1, 3))
+    return Pi, flow / flow.sum(1)[:, None]
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +222,8 @@ print(f'Macro outputs: {hh.outputs}')
 
 # ---------------------------------------------------------------------------
 # Solve the Transition in Steady State
-def solve_ss(hank_block, calib, unknowns=None, targets=None,
-             tol=1e-8, maxit=100, verbose=False):
+def solve_ss(hank_block, calib, unknowns=None, targets=None, shares=False,
+             gain=2.0, smax=0.2, tol=1e-8, stol=1e-3, maxit=400, verbose=False):
     start = time.time()
     # Import Grids
     nE, nA, nT = calib['nE'], calib['nA'], calib['nT']
@@ -232,30 +237,47 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None,
                          calib['omega_I'], calib['q'], nE, nT)
     
     # Initial guess for Pi.
-    Pi = build_Pi(np.zeros((nS*nT*nB*nE, nA)),
-                  np.ones((nS*nT*nB*nE, nA)), calib, Pi_b, Pi_e, probF, probI)
-    c = dict(calib); diff, gtol = 0.1, 0.1
+    unk = dict(unknowns) if unknowns else None
+    c = dict(calib); diff, dpi, gtol = 0.1, 0.0, 0.1; x0 = f0 = None
+    Pi, _ = build_Pi(np.zeros((nS*nT*nB*nE, nA)),
+                     np.ones((nS*nT*nB*nE, nA)), c, Pi_b, Pi_e, probF, probI)
 
     for it in range(maxit):
         # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
         c['Pi'] = Pi; gtol = max(1e-9, min(gtol, 1e-2 * diff))
-        if unknowns == None or targets == None:     # Equivalent to steady_steate() in SSJ
+        if unk == None or targets == None:          # Equivalent to steady_steate() in SSJ
             ss = hank_block.steady_state(c)
         else:                                       # Equivalent to solve_steady_steate()
-            ss = hank_block.solve_steady_state(c, unknowns, targets, solver='hybr',
+            ss = hank_block.solve_steady_state(c, unk, targets, solver='hybr',
                                                ttol=gtol, ctol=gtol)
-            for k in unknowns: c[k] = float(ss[k])
+            for k in unk: c[k] = unk[k] = float(ss[k])
+
+        if shares:        # shares = True for calibrating Pi_s
+            x = np.log([c['pi_F'], c['pi_I']])
+            f = np.log([ss['F'] / calib['F_ss'], ss['I'] / calib['I_ss']])
+            dpi = np.max(np.abs(f))
+            if dpi > stol:    # freeze pi once close enough, then let Pi settle
+                if x0 is not None:
+                    gain = np.clip(np.where(np.abs(f - f0) > 1e-12,
+                                            (x - x0) / (f - f0), gain), 0.1, 20.0)
+                x0, f0 = x, f
+                c['pi_F'], c['pi_I'] = np.exp(np.clip(
+                    x - np.clip(gain * f, -smax, smax), np.log(1e-4), 0.0))
+
         hhi = ss.internals['household']
-        Pi_new = build_Pi(hhi['V'], hhi['D'], calib, Pi_b, Pi_e, probF, probI)
+        Pi_new, P_s = build_Pi(hhi['V'], hhi['D'], c, Pi_b, Pi_e, probF, probI)
         diff = np.max(np.abs(Pi_new - Pi)); Pi = Pi_new
-        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.1e}")
-        _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
-        if diff < tol:
+        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.1e}  |dpi|={dpi:.1e}")
+        if np.isfinite(hhi['Va']).all():
+            _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
+        if diff < tol and dpi < stol:
+            hhi['P'] = P_s                  # F/I/U transition, rows = origin
+            for k in ('pi_F', 'pi_I'): ss.toplevel[k] = c[k]
             tdiff = time.time() - start
-            print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min).")
+            print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min),"
+                  f"  pi_F={c['pi_F']:.4f}  pi_I={c['pi_I']:.4f}")
             return ss
     raise RuntimeError(f"Pi did not converge in {maxit} iterations.")
-
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +312,7 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var,
         # MOVING: Rebuild Pi_t from the period-t value/dist, iterate to consistency
         V = V_ss[None] + td.internals['household']['V']   # Levels + Deviations
         D = D_ss[None] + td.internals['household']['D']
-        Pi_new = np.stack([build_Pi(V[t], D[t], calib, Pi_b, Pi_e, probF, probI)
+        Pi_new = np.stack([build_Pi(V[t], D[t], calib, Pi_b, Pi_e, probF, probI)[0]
                            for t in range(T)])
         dPi_new = Pi_new - Pi_ss
         diff = np.max(np.abs(dPi_new - dPi)); dPi = dPi_new
@@ -311,16 +333,16 @@ if __name__ == "__main__":
 
     # Solve the household block in isolation
     calibration_hh = calibration | dict(
-        w = 1.5, w_I = 0.64 * 1.5, Div = 0.08, r = calibration['rstar'])
+        w = 1.5, Div = 0.08, r = calibration['rstar'])
 
-    ss1 = solve_ss(hh, calibration_hh, verbose=True)
+    ss1 = solve_ss(hh, calibration_hh, shares=True, verbose=True)
 
     # Solve the full model in Steady State
-    hank_ss = create_model([hh, firm_formal, firm_informal, informal_wage,
+    hank_ss = create_model([hh, firm_formal, firm_informal,
                             nkpc_ss, union_ss, monetary, fiscal, mkt_clearing])
 
-    ss0 = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
+    ss0 = solve_ss(hank_ss, calibration, unknowns, targets, shares=True, verbose=True)
 
-    for k in ['A', 'C', 'beta_high', 'psi', 'w', 'w_I', 'F', 'I', 'U', 'BF']:
+    for k in ['A', 'C', 'beta_high', 'psi', 'w', 'F', 'I', 'U', 'BF']:
         print(f"  {k:12s} = {ss1[k]:.4f}")
 

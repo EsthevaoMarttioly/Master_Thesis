@@ -19,15 +19,15 @@ from sequence_jacobian import simple
 @simple
 def firm_formal(Y, Z, w, pi, tau_l, mu, kappa):
     # Formal sector: monopolistic competition with constant markup.
-    L   = Y / Z       # Y = Z * L  =>  L = Y / Z
+    L   = Y / Z      # Y = Z * L
     adj = mu / (mu-1) / (2 * kappa) * (1 + pi).apply(np.log) ** 2 * Y
     Div = (1 - tau_l) * (Y - w*L) - adj
     return L, Div, adj
 
 @simple
-def firm_informal(w_I, N_I):
+def firm_informal(w, N_I):
     # Informal sector: perfectly competitive.
-    Y_I = w_I * N_I
+    Y_I = w * N_I
     return Y_I
 
 
@@ -38,11 +38,6 @@ def nkpc_ss(mu, Z, tau):
     nkpc = w / Z - 1 / mu
     tau_ss = tau
     return w, nkpc, tau_ss
-
-@simple
-def informal_wage(w, xi):
-    w_I = xi * w
-    return w_I
 
 
 # 3. SS Union's Wage Setting

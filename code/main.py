@@ -30,19 +30,24 @@ from code.p4_results import *
 hank_ss = create_model([hh, firm_formal, firm_informal, nkpc_ss,
                         union_ss, monetary, fiscal, mkt_clearing])
 
-cal = solve_ss(hank_ss, {**calibration, 'nA': 50}, unknowns, targets, shares=True, verbose=True)
+cal = solve_ss(hank_ss, {**calibration, 'nA': 50},
+               unknowns, targets, shares=True, verbose=True)
 calibration.update(pi_F = cal['pi_F'], pi_I = cal['pi_I'])
+
 ss = solve_ss(hank_ss, calibration, unknowns, targets, verbose=True)
+unknowns = {k: float(ss[k]) for k in unknowns}
+calibration.update(unknowns)
 
 
 # Steady State Diagnostics
-print_ss_summary(ss, ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B',
-                      'psi', 'w', 'Z', 'F', 'I', 'U', 'BF', 'L', 'Div',
-                      'tau', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc'])
+print_ss_summary(ss)
+tex_macros(ss, calibration, savepath='output/tables/macros.tex')
+transition_table(ss, savepath='output/tables/transition_table.tex')
 
 
 # No-BF Counterfactuals
-ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0, 'y_bar': 1000}, unknowns, targets, verbose=True)
+ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0, 'y_bar': 0},
+                   unknowns, targets, verbose=True)
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +64,13 @@ for k in dyn.keys():
 print("Steady State reached in dynamics DAG.")
 
 
+
 # ---------------------------------------------------------------------------
 # Equilibrium Jacobians
 T = 100
 unknowns_dyn  = ['B', 'Y', 'pi', 'w', 'tau']
 targets_dyn   = ['debt_rule', 'goods_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']
-variables     = ['B', 'C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i']
+variables     = ['B', 'C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i', 'tau']
 
 
 # IRFs
@@ -98,23 +104,20 @@ irfm_nobf = solve_dyn(hank, dyn_nobf, 'rstar', di, unknowns_dyn, targets_dyn,
 irf_pe  = {v: G_hh[v]['Tr'] @ dTr for v in variables if v in G_hh.outputs}
 irfm_pe = {v: G_hh[v]['r']  @ di  for v in variables if v in G_hh.outputs}
 
+
 # ---------------------------------------------------------------------------
 # Steady-State - Descriptive Statistics
-tex_macros(ss, calibration, savepath='output/tables/macros.tex')
-transition_table(ss, savepath='output/tables/transition_table.tex')
-
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, calibration, savepath='output/figures/bf_descript.png')
 
 
 # Steady State - Distribution and Policy Functions
-lorenz_scf_raw = np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=',')
 plot_consumption_policy(ss, calibration, savepath='output/figures/consump_policy.png')
-plot_wealth_distribution(ss, lorenz_scf_raw, savepath='output/figures/wealth_distribution.png')
+plot_wealth_distribution(ss, calibration, savepath='output/figures/wealth_distribution.png')
 
 
-# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets),
-#               calibration, ss, span=0.2, nTr=5, savepath='output/figures/bf_sweep.png')
+# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, unknowns, targets, verbose=True),
+#               calibration, ss, ss_nobf, savepath='output/figures/bf_sweep.png')
 
 
 # ---------------------------------------------------------------------------
@@ -135,12 +138,12 @@ plot_irf_decomposition(irfm_bf['insu'], irfm_bf['full'], irfm_pe,
                        savepath='output/figures/irfm_decomposition.png')
 
 
-plot_irf({'With BF (insurance)': irfm_bf['insu'],
-          'With BF (total)': irfm_bf['full'], 'Without BF': irfm_nobf},
+plot_irf({'With BF (total)': irfm_bf['full'], 'Without BF': irfm_nobf,
+          'With BF (insurance)': irfm_bf['insu']},
           title='Monetary Policy Shock (i)', savepath='output/figures/irfm_bf_vs_nobf.png')
 
 
-plot_irf({'MIT Shock': irf_debt['full'], 'Antecipated Shock': irf_ant},
+plot_irf({'Instant Shock': irf_debt['full'], 'Antecipated Shock': irf_ant},
          savepath='output/figures/irf_antecipated.png')
 
 
@@ -149,8 +152,9 @@ cumulative_response_table(irf_debt['insu'], irf_debt['full'],
                           savepath='output/tables/cumulative_response.tex')
 
 
-cumulative_response_table(irfm_bf['insu'], irfm_bf['full'],
-                          savepath='output/tables/monetary_cumulative.tex')
+cumulative_response_table(irfm_bf['insu'], irfm_bf['full'], shock='i',
+                          savepath='output/tables/monetary_cumulative.tex',
+                          label='tab:monetary_cumulative')
 
 
 rr()

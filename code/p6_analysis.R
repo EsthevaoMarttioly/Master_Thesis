@@ -19,8 +19,10 @@ transition = FALSE     # TRUE to run every panel
 
 
 # ---- Config ---------------------------------------------------------------
-S          = c("F", "I", "U")     # N = Outside Labor Force
+mw         = 1518                 # Minimum Wage
+bf_line    = c(218, mw / 2, mw)       # Poverty Line and Regra de Protecao
 wedges     = seq(0, 8000, 200)
+S          = c("F", "I", "U")     # N = Outside Labor Force
 formal_idx = c("01", "03", "05", "07", "08")
 inform_idx = c("02", "04", "06", "09", "10")
 input_txt  = "data/pnad/input_PNADC_trimestral.txt"
@@ -111,18 +113,17 @@ dfp = subset(df, wage > 0)
 ln_par = function(d) c(coef(svymean(~I(log(wage)), d, na.rm = TRUE))[[1]],   # MLE for lognorm
                        sqrt(coef(svyvar(~I(log(wage)), d, na.rm = TRUE))[[1]]))
 
-dens = function(d, g, f = ~wage)
-  with(svysmooth(f, d, bandwidth = 200, xlim = c(0, cap))[[1]],
+dens = function(d, g, f = ~wage, bw = 200)
+  with(svysmooth(f, d, bandwidth = bw, xlim = c(0, cap))[[1]],
        tibble(group = g, wage = x, y = y))
 
 # Theta
-lp_F = ln_par(subset(dfp, status == "F" & wage <= cap))    # c(mu, sigma) of log wage
+lp_F = ln_par(subset(dfp, status == "F" & wage <= cap))     # c(mu, sigma) of log wage
 lp_I = ln_par(subset(dfp, status == "I" & wage <= cap))
-theta = c(mu_F = -lp_F[2]^2 / 2,                           # E[theta_F] = 1
-          mu_I = -lp_I[2]^2 / 2 + (lp_I[1] - lp_F[1]),     # E[theta_I] = exp(d_mu)
-          sd_F = lp_F[2], sd_I = lp_I[2],                  # sd of log wage
-          d_mu = lp_I[1] - lp_F[1])
-dataset = cbind(dataset, t(theta))
+dataset = cbind(dataset, t(c(mu_F = -lp_F[2]^2 / 2,                         # E[theta_F] = 1
+                             mu_I = -lp_I[2]^2 / 2 + (lp_I[1] - lp_F[1]),   # E[theta_I] = exp(d_mu)
+                             sd_F = lp_F[2], sd_I = lp_I[2],                # sd of log wage
+                             d_mu = lp_I[1] - lp_F[1])))
 
 wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F") %>%
                         mutate(lognormal = dlnorm(wage, lp_F[1], lp_F[2])),
@@ -134,13 +135,18 @@ wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F") %>%
 # ---------------------------------------------------------------------------
 # 3. Bolsa Familia (PNAD)
 subs = list(Total = df,
-            Formal = subset(df, status=="F"),
-            Informal = subset(df, status=="I"))
+            Formal = subset(df, status == "F"),
+            Informal = subset(df, status == "I"))
 
-bf_size   = coef(svytotal(~bf_hh, df, na.rm = TRUE))
-bf_sector = coef(svyby(~bf_hh, ~status, df, svymean, na.rm = TRUE))
-bf_share  = coef(svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE))
-bf_value  = coef(svymean(~V5002A2, subset(df, bf == 1), na.rm = TRUE))
+bf_size     = coef(svytotal(~bf_hh, df, na.rm = TRUE))
+bf_sector   = coef(svyby(~bf_hh, ~status, df, svymean, na.rm = TRUE))
+bf_value    = coef(svymean(~V5002A2, subset(df, bf == 1), na.rm = TRUE))
+bf_share_lf = coef(svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE))[[1]]
+bf_value_lf = coef(svymean(~V5002A2, subset(df, bf == 1 & status %in% S), na.rm = TRUE))[[1]]
+dataset     = cbind(dataset, t(c(BF = bf_share_lf,
+                                 BF_I = bf_sector[["I"]],
+                                 BF_U = bf_sector[["U"]],
+                                 Tr_y = bf_value_lf / dataset$y_F)))
 
 
 # Wage Distribution
@@ -152,6 +158,14 @@ cov_dist$group = factor(cov_dist$group, levels = names(subs))
 
 bf_wage_dist = bind_rows(dens(subset(dfp, bf_hh == 1), "Receives BF"),
                          dens(subset(dfp, bf_hh == 0), "No BF"))
+
+
+# Household Income per Capita
+df$variables$hh_pc = ave(df$variables$wage, df$variables$id_dom, FUN = sum) /
+                     as.numeric(df$variables$V2001)
+
+wage_pc_dist = bind_rows(dens(subset(df, bf_hh == 1 & status == "F"), "F", ~hh_pc, 40),
+                         dens(subset(df, bf_hh == 1 & status == "I"), "I", ~hh_pc, 40))
 
 
 # Household-level
@@ -230,10 +244,16 @@ P_ss = P_ss / sum(P_ss); names(P_ss) = S
 # Results
 # ---------------------------------------------------------------------------
 xmax = max(wedges)        # plotting window for wage densities
-pal  = c("#141827", "#62455b", "#736681", "#c1d9d0", "#fffae3")
-col_sector = c(F = pal[1], I = pal[2])
-col_state  = c(F = pal[1], I = pal[2], U = pal[4])
-col_bf     = c("Receives BF" = pal[2], "No BF" = pal[3])
+pal  = c('#1b325f', '#9cc4e4', '#e9f2f9', '#3a89c9', '#f26c4f', '#a8a3af')
+col_sector = c(F = pal[1], I = pal[4])
+col_state  = c(F = pal[1], I = pal[4], U = pal[2])
+col_bf     = c("Receives BF" = pal[5], "No BF" = pal[1])
+col_cal    = c(h_F = pal[1], h_I = pal[4], y_F = pal[1], xi = pal[5])
+cal_lab    = c(h_F = "Formal, usual weekly hours",
+               h_I = "Informal, usual weekly hours",
+               y_F = paste0("Formal, monthly wage (R$ of ", def_base, ")"),
+               xi  = "Wage Gap: Informal / Formal")
+
 
 mytheme = theme(legend.position = "bottom",
                 plot.title = element_text(size = 12, face = "bold"),
@@ -246,18 +266,32 @@ mytheme = theme(legend.position = "bottom",
                 panel.grid.major.x = element_line(colour = "transparent"),
                 panel.grid.minor.x = element_line(colour = "transparent"),
                 axis.text = element_text(colour = "black", size = 9),
-                strip.background = element_rect(fill = pal[5], colour = "black"),
+                strip.background = element_rect(fill = pal[6], colour = "black"),
                 strip.text = element_text(colour = "black", size = 9))
 
 save_fig = function(g, name, h = 5) ggsave(paste0("output/figures/", name, ".png"),
                                            g, width = 8, height = h, dpi = 150)
+
+# Table for Latex.
+esc = function(x) gsub("([$_%&#])", "\\\\\\1", x)
+save_tex = function(d, name, caption, label, rows = esc(rownames(d))) {
+  rule = "%---------------------------------------------------"
+  body = paste(apply(cbind(rows, format(d, trim = TRUE)), 1,
+                     paste, collapse = " & "), "\\\\")
+  writeLines(c(rule, "\\begin{table}[htbp]", "\\centering",
+               paste0("\\caption{", caption, "}"), paste0("\\label{", label, "}"), "\\small",
+               paste0("\\begin{tabular}{l", strrep("c", ncol(d)), "}"), "\\toprule",
+               paste(paste(c("", esc(colnames(d))), collapse = " & "), "\\\\"), "\\midrule",
+               body, "\\bottomrule", "\\end{tabular}", "\\end{table}", rule),
+             paste0("output/tables/", name, ".tex"))
+}
 
 
 # ---- Graphics -------------------------------------------------------------
 g = ggplot(wage_dist, aes(wage, y, colour = group)) +
   geom_line(linewidth = 1.2) + mytheme +
   geom_line(aes(y = lognormal), linetype = "dashed", linewidth = 1.2) +
-  geom_vline(xintercept = 1518, color = "black", linetype = "dashed", linewidth = 0.8) +
+  geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
   scale_colour_manual(values = col_sector) +
   coord_cartesian(xlim = c(0, xmax)) +
   labs(title = paste("PNAD", year, "- Wage Distribution vs Log-Normal"),
@@ -265,26 +299,38 @@ g = ggplot(wage_dist, aes(wage, y, colour = group)) +
 save_fig(g, "wage_distribution")
 
 
-g = ggplot(bf_wage_dist, aes(wage, y, colour = group, fill = group)) +
+g = ggplot(bf_wage_dist, aes(wage, 100 * y, colour = group, fill = group)) +
   geom_area(alpha = 0.25, position = "identity") +
   geom_line(linewidth = 1) + mytheme +
-  geom_vline(xintercept = 1518, color = "black", linetype = "dashed", linewidth = 0.8) +
+  geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
   scale_colour_manual(values = col_bf) +
   scale_fill_manual(values = col_bf) +
   coord_cartesian(xlim = c(0, xmax)) +
   labs(title = paste("PNAD", year, "- Wage Distribution by BF"),
-       x = "Monthly wage (R$)", y = "Density", colour = "", fill = "")
+       x = "Monthly Wage (R$)", y = "Density (%)", colour = "", fill = "")
 save_fig(g, "bf_wage")
 
 
-g = ggplot(cov_wage, aes(wage, y)) +
+g = ggplot(wage_pc_dist, aes(wage, 100 * y, colour = group)) +
+  geom_line(linewidth = 1.2) + mytheme +
+  geom_vline(xintercept = bf_line, color = "black", linetype = "dashed", linewidth = 0.8) +
+  annotate("text", x = bf_line, y = 0, hjust = -0.1, vjust = -0.5, size = 3,
+           label = c(paste0("R$ ", bf_line[1]), paste0("R$ ", bf_line[2]), paste0("R$ ", bf_line[3]))) +
+  scale_colour_manual(values = col_sector) +
+  coord_cartesian(xlim = c(0, 3000)) +
+  labs(title = paste("PNAD", year, "- Household Labor Income per Capita, by Status (Only Beneficiaries)"),
+       x = "Monthly Household Income per Capita (R$)", y = "Density (%)", colour = "")
+save_fig(g, "bf_eligibility")
+
+
+g = ggplot(cov_wage, aes(wage, 100 * y)) +
   geom_col(fill = pal[2], alpha = 0.5) +
   geom_line(data = cov_dist, colour = pal[1], linewidth = 1.2) + mytheme +
-  geom_vline(xintercept = 1518, color = "black", linetype = "dashed", linewidth = 0.8) +
+  geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
   facet_wrap(~group) +
   coord_cartesian(xlim = c(0, xmax)) +
   labs(title = paste("PNAD", year, "- Population receiving BF, by Wage and Status"),
-       x = "Monthly Wage (R$)", y = "Share receiving BF")
+       x = "Monthly Wage (R$)", y = "Share receiving BF (%)")
 save_fig(g, "bf_coverage_by_wage")
 
 
@@ -303,7 +349,7 @@ area_ts = function(d, breaks, title, x_lab, y_lab, fill_lab = "", labels = NULL)
     scale_x_continuous(breaks = breaks, expand = c(0, 0)) +
     scale_y_continuous(labels = scales::percent, expand = c(0, 0)) +
     labs(title = title, x = x_lab, y = y_lab, fill = fill_lab)
-  if (is.null(d$panel)) g else g + facet_wrap(~panel, labeller = as_labeller(labels))
+  if (!"panel" %in% names(d)) g else g + facet_wrap(~panel, labeller = as_labeller(labels))
 }
 
 save_fig(area_ts(transmute(th, x = y0, y = p, group = s1, panel = s0),
@@ -315,26 +361,17 @@ save_fig(area_ts(transmute(th, x = y0, y = p, group = s1, panel = s0),
 
 save_fig(area_ts(history %>% filter(Information %in% S) %>%
                    transmute(x = t, y = value, group = Information),
-                 tbreaks, "Sector Shares over Time (PNAD)",
-                 "Year", "Share of the Labor Force"),
+                 tbreaks, "Sector Shares over Time (PNAD)", "Year", "Share of Labor Force"),
          "shares_timeseries")
 
-
-# Calibrated Moments
-cal_lab = c(h_F = "Formal, usual weekly hours",
-            h_I = "Informal, usual weekly hours",
-            y_F = paste0("Formal, monthly wage (R$ of ", def_base, ")"),
-            xi  = "Wage Gap: Informal / Formal")
-
 cal = history %>% filter(Information %in% names(cal_lab)) %>%
-  mutate(Information = factor(Information, levels = names(cal_lab)),
-         sector = case_when(Information %in% c("h_F", "y_F") ~ "F",
-                            Information == "h_I" ~ "I", TRUE ~ "X"))
-g = ggplot(cal, aes(t, value, colour = sector)) +
+  mutate(Information = factor(Information, levels = names(cal_lab)))
+
+g = ggplot(cal, aes(t, value, colour = Information)) +
   geom_line(linewidth = 1) + mytheme +
   facet_wrap(~Information, ncol = 2, scales = "free_y",
              labeller = as_labeller(cal_lab)) +
-  scale_colour_manual(values = c(col_sector, X = pal[3]), guide = "none") +
+  scale_colour_manual(values = col_cal, guide = "none") +
   scale_x_continuous(breaks = tbreaks) +
   labs(title = "Labor Moments over Time (PNAD)", x = "Year", y = NULL)
 save_fig(g, "calibration_timeseries", h = 6)
@@ -349,30 +386,39 @@ write.csv(rbind(P, P_ss), "data/final/pnad_transition_matrix.csv")
 
 # Labor Market
 print(data.frame(row.names   = c("Formal", "Informal", "Unemployed"),
-                 share       = round(c(t(dataset[S])), 4),
-                 hours       = round(c(dataset$h_F, dataset$h_I, NA), 1),
-                 wage        = round(c(dataset$y_F, dataset$y_I, NA)),
-                 `wage/y_F`  = round(c(1, dataset$xi, NA), 3),
+                 Share       = round(c(t(dataset[S])), 4),
+                 Hours       = round(c(dataset$h_F, dataset$h_I, NA), 1),
+                 Wage        = round(c(dataset$y_F, dataset$y_I, NA)),
+                 `Wage/y_F`  = round(c(1, dataset$xi, NA), 3),
                  `theta_mu`  = round(c(dataset$mu_F, dataset$mu_I, NA), 3),
                  `theta_sd`  = round(c(dataset$sd_F, dataset$sd_I, NA), 3),
                  check.names = FALSE))
 
-# Bolsa Familia: Survey vs Administrative Record
-print(data.frame(row.names = c("Households (M)", "Individuals (M)", "People/HH",
-                               "Value (R$/month)"),
-                 PNAD  = round(c(bf_size_hh / 1e6, bf_size / 1e6, pphh, bf_value), 2),
-                 VisData = round(c(bf_size_vis / 1e6, bf_ind_vis / 1e6,
-                                   pphh_vis, bf_value_vis), 2),
-                 ratio = round(c(bf_size_vis / bf_size_hh, bf_ind_vis / bf_size,
-                                 pphh_vis / pphh, bf_value_vis / bf_value), 2)))
 
-print(data.frame(row.names = "coverage",
-                 share_of_LF = round(bf_share[[1]], 4),
-                 in_formal   = round(bf_sector[["F"]], 4),
-                 in_informal = round(bf_sector[["I"]], 4),
-                 `Tr/y_F`    = round(bf_value_vis / dataset$y_F, 3),
-                 check.names = FALSE))
+# Bolsa Familia: Survey vs Administrative Record
+bf_size_tab = data.frame(
+  row.names = c("Households (M)", "Individuals (M)", "People/HH", "Value (R$/month)"),
+  PNAD    = round(c(bf_size_hh / 1e6, bf_size / 1e6, pphh, bf_value), 2),
+  VisData = round(c(bf_size_vis / 1e6, bf_ind_vis / 1e6, pphh_vis, bf_value_vis), 2),
+  Ratio   = round(c(bf_size_vis / bf_size_hh, bf_ind_vis / bf_size,
+                    pphh_vis / pphh, bf_value_vis / bf_value), 2))
+print(bf_size_tab)
+save_tex(bf_size_tab, "bf_size",
+         paste0("Bolsa Fam\\'ilia ", year, ": Statistics"), "tab:bf_size")
+
+bf_cover_tab = data.frame(
+  row.names = c("BF / Labor Force", "BF in Formal", "BF in Informal",
+                "BF in Unemployed", "BF in Non-Participating", "Tr/y_F"),
+  Coverage  = round(c(bf_share_lf, bf_sector[["F"]], bf_sector[["I"]],
+                      bf_sector[["U"]], bf_sector[["N"]],
+                      bf_value_lf / dataset$y_F), 3))
+print(bf_cover_tab)
+save_tex(bf_cover_tab, "bf_coverage",
+         paste0("Bolsa Fam\\'ilia ", year, ": Coverage"), "tab:bf_coverage",
+         rows = replace(esc(rownames(bf_cover_tab)),
+                        rownames(bf_cover_tab) == "Tr/y_F", "$T / \\E(y^F)$"))
+
 
 # Quarter-to-quarter Transitions
-print(rbind(round(P, 4), `stationary` = round(P_ss, 4), `survey` = round(c(t(dataset[S])), 4)))
+print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(c(t(dataset[S])), 4)))
 

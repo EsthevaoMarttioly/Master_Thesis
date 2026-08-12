@@ -8,37 +8,36 @@
 \toprule
 & \textbf{Description} & \textbf{Value} & \textbf{Source} \\
 \midrule
-\multicolumn{4}{l}{\textit{Households}} \\[2pt]
-$\gamma$ & EIS & $0.5$ & Standard in Literature \\
-$\delta_\beta$ & Difference: $\beta_H - \beta_L$ & $0.12$ & Approximate Gini Coefficient \\
-$\omega_I$ & Share of Impatient Agents & $0.50$ & \textcite{auclert2025fiscal} \\
+\multicolumn{4}{l}{\textit{Households and Labor Market}} \\[2pt]
+$\gamma$ & EIS & $\mEis$ & Standard in Literature \\
+$\delta_F$ & Job-Loss Probability to Formal & $\mDeltaF$ & PNAD-C Data \parencite{osorio2022montagem} \\
+$\delta_I$ & Job-Loss Probability to Informal & $\mDeltaI$ & PNAD-C Data \parencite{osorio2022montagem} \\
+$\sigma_S$ & Smoothness of Labor Decision & $\mSig$ & Arbitrary \\
 [6pt]
 
 \multicolumn{4}{l}{\textit{Productivity and Asset Grid}} \\[2pt]
-$\underline{a}$ & Borrowing constraint & $0.0$ & No Borrowing \parencite{mckay2016role} \\
-$\bar{a}$ & Maximum asset & $200$ & Sufficient to cover the top of dist. \\
-$N_a$ & Number of Asset Grid & $200$ & Accuracy near constraint \\
-$\rho_e$ & Persistence of Log-Productivity & $0.966$ & \textcite{kaplan2018monetary} \\
-$\sigma_e$ & Productivity Std. Dev. & $0.85$ & \textcite{bartal2024consumption} \\
-$N_e,N_\theta$ & Number of Nodes & $15,3$ & Standard Discretization \\
-$\mu_F,\mu_I$ & Sector Average Productivity & $0.0$,$-0.2$ & Standard Differentiation \\
-$\sigma_F,\sigma_I$ & Sector Std. Dev. Productivity & $0.2$,$0.4$ & Standard Differentiation \\
+$(\underline{a}, \bar{a})$ & Log-Asset Grid & $(\mAmin, \mAmax)$ & No Borrowing \\
+$N_a$ & Number of Asset Grid & $\mNA$ & Accuracy near Constraint \\
+$\rho_e$ & Persistence of Log-Productivity & $\mRhoE$ & \textcite{kaplan2018monetary} \\
+$\sigma_e$ & Productivity Std. Dev. & $\mSdE$ & Arbitrary \\
+$\mu_F$ & Formal Average Productivity & $\mMuF$ & PNAD-C Data \\
+$\sigma_F$ & Formal Std. Dev. Productivity & $\mSigmaF$ & PNAD-C Data \\
+$\sigma_I$ & Informal Std. Dev. Productivity & $\mSigmaI$ & PNAD-C Data \\
 [6pt]
 
 \multicolumn{4}{l}{\textit{Firms}} \\[2pt]
-$Y$ & Aggregate Output & $1.0$ & Normalization \\
-$\xi$ & Wage gap $= w^I / w$ & $0.64$ & PNAD-C Data \\
-$\mu$ & Price Markup & $1.11$ & \textcite{basu1997returns} \\
-$\mu_w$ & Price Markup & $1.11$ & Equal to $\mu$ \\
-$\kappa$ & Price-NKPC Slope & $0.025$ & \textcite{hazell2022national} \\
-$\kappa_w$ & Wage-NKPC slope & $0.025$ & Equal to $\kappa$ \\
+$Y$ & Aggregate Output & $\mY$ & Normalization \\
+$\mu, \mu_w$ & Price Markup & $\mMu$ & \textcite{basu1997returns} \\
+$\kappa$ & Price-NKPC Slope & $\mKappa$ & \textcite{hazell2022national} \\
+$\kappa_w$ & Wage-NKPC slope & $\mKappaW$ & Equal to $\kappa$ \\
 [6pt]
 
 \multicolumn{4}{l}{\textit{Government and Monetary Policy}} \\[2pt]
-$r^*$ & Neutral Real Interest Rate & $1.0\%$ & $4\%$ annual average \\
-$\phi$ & Taylor Rule Coefficient & $1.5$ & Standard \parencite{taylor1993follow} \\
-$\tau_\ell$ & Labor Income Tax Rate & $0.27$ & Average Tax Payroll in Brazil \\
-$T/w$ & Bolsa Família Transfer & $0.14$ & CadÚnico, PNAD-C \\
+$r^*$ & Neutral Real Interest Rate & $\mRstar$ & $4\%$ annual average \\
+$\phi$ & Taylor Rule Coefficient & $\mPhi$ & Standard \parencite{taylor1993follow} \\
+$\phi_B$ & Sensitivity to pay the Debt & $\mPhiB$ & Sufficient to $B$ converges \\
+$\tau_\ell$ & Labor Income Tax Rate & $\mTauL$ & Average Tax Payroll \\
+$T/w$ & Bolsa Família Transfer & $\mTr$ & CadÚnico, PNAD-C \\
 \bottomrule
 \end{tabular}
 \end{table}

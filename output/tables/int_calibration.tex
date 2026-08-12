@@ -9,16 +9,18 @@
 & \textbf{Description} & \textbf{Value} & \textbf{Target} & \textbf{Model} & \textbf{Data} & \textbf{Source} \\
 \midrule
 \multicolumn{4}{l}{\textit{Households}} \\[2pt]
-$\psi$ & Disutility of Labor & $0.42$ & $h_F$ & $1.0$ & $1.0$ & Normalization \\
-$\varphi$ & Frisch Elasticity & $0.15$ & $\E(h_I)$ & $0.89$ & $0.87$ & PNAD-C Data \\
-$\beta_H$ & Patient's Discount Factor & $0.971$ & $B/Y$ & $3.2$ & $3.2$ & Tesouro Nacional \\
+$\psi$ & Disutility of Labor & $\mPsi$ & $h_F$ & $\mHF$ & $1.0$ & Normalization \\
+$\varphi$ & Frisch Elasticity & $\mVarphi$ & X & X & X & PNAD-C Data \\
+$\beta_H$ & Patient's Discount Factor & $\mBetaHigh$ & $B/Y$ & $\mB$ & $3.2$ & Tesouro Nacional \\
+$\delta_\beta$ & Difference: $\beta_H - \beta_L$ & $\mDbeta$ & X & X & X & Arbitrary \\
+$\omega_I$ & Share of Impatient Agents & $\mOmegaI$ & X & X & X & Arbitrary \\
 [6pt]
 
-\multicolumn{4}{l}{\textit{Labor market}} \\[2pt]
-$\pi_F$ & Formal Offer Probability & $0.10$ & $F$ & $44.5\%$ & $50.0\%$ & PNAD-C Data \\
-$\pi_I$ & Informal Offer Probability & $0.30$ & $I$ & $40.2\%$ & $44.2\%$ & PNAD-C Data \\
-$\delta_F, \delta_I$ & Layoff Probabilities & $0.03,0.10$ & $U$ & $15.4\%$ & $5.8\%$ & PNAD-C Data \\
-$\bar y$ & Bolsa Família Threshold & $0.6$ & $BF$ & $0.433$ & $0.294$ & CadÚnico, PNAD-C \\
+\multicolumn{4}{l}{\textit{Labor Market}} \\[2pt]
+$\pi_F$ & Formal Offer Probability & $\mPiF$ & $F$ & $\mF$ & $\mDatF$ & PNAD-C Data \\
+$\pi_I$ & Informal Offer Probability & $\mPiI$ & $I$ & $\mI$ & $\mDatI$ & PNAD-C Data \\
+$\mu_I$ & Informal Average Productivity & $\mMuI$ & $\xi$ & X & \mDatXi & PNAD-C Data \\
+$\bar y$ & Bolsa Família Threshold & $\mYBar$ & $BF$ & $\mBF$ & $\mDatBF$ & CadÚnico \\
 \bottomrule
 \end{tabular}
 \end{table}

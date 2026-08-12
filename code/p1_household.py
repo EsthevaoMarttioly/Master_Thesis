@@ -56,8 +56,8 @@ def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
 
 
 # 1.3. Labor Income Function
-def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT,
-                 thetaF, thetaI, y_bar, tau_l, psi, varphi):
+def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT, thetaF,
+                 thetaI, y_bar, tau_l, psi, varphi, sig_y):
     # Dividend Income and Informal Hours
     div_i = np.tile(Div * e_grid, nS*nT*nB)
     tau_i = np.tile(tau, nS*nT*nB*nE)
@@ -67,6 +67,7 @@ def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT,
 
     h_I = (w * e_I / np.maximum(psi, 1e-8)) ** (varphi)
     elig = (w * e_I * h_I < y_bar).astype(float)     # Elegibility
+    # elig = 1 / (1 + np.exp((w * e_I * h_I - y_bar) / sig_y))
 
     y_F = (1 - tau_l) * w * e_F * h_F
     y_I = 1/(1+varphi) * w * e_I * h_I + Tr * elig
@@ -237,7 +238,6 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None, shares=False,
                          calib['omega_I'], calib['q'], nE, nT)
     
     # Initial guess for Pi.
-    unk = dict(unknowns) if unknowns else None
     c = dict(calib); diff, dpi, gtol = 0.1, 0.0, 0.1; x0 = f0 = None
     Pi, _ = build_Pi(np.zeros((nS*nT*nB*nE, nA)),
                      np.ones((nS*nT*nB*nE, nA)), c, Pi_b, Pi_e, probF, probI)
@@ -245,14 +245,14 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None, shares=False,
     for it in range(maxit):
         # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
         c['Pi'] = Pi; gtol = max(1e-9, min(gtol, 1e-2 * diff))
-        if unk == None or targets == None:          # Equivalent to steady_steate() in SSJ
+        if unknowns == None or targets == None:     # Equivalent to steady_steate() in SSJ
             ss = hank_block.steady_state(c)
         else:                                       # Equivalent to solve_steady_steate()
-            ss = hank_block.solve_steady_state(c, unk, targets, solver='hybr',
+            ss = hank_block.solve_steady_state(c, unknowns, targets, solver='hybr',
                                                ttol=gtol, ctol=gtol)
-            for k in unk: c[k] = unk[k] = float(ss[k])
+            for k in unknowns: c[k] = float(ss[k])
 
-        if shares:        # shares = True for calibrating Pi_s
+        if shares:            # shares = True for calibrating Pi_s
             x = np.log([c['pi_F'], c['pi_I']])
             f = np.log([ss['F'] / calib['F_ss'], ss['I'] / calib['I_ss']])
             dpi = np.max(np.abs(f))
@@ -277,7 +277,7 @@ def solve_ss(hank_block, calib, unknowns=None, targets=None, shares=False,
             print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min),"
                   f"  pi_F={c['pi_F']:.4f}  pi_I={c['pi_I']:.4f}")
             return ss
-    raise RuntimeError(f"Pi did not converge in {maxit} iterations.")
+    raise RuntimeError(f"Pi did not converge in {maxit} iterations (|dPi|={diff:.1e}).")
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +289,9 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var,
     T = len(dZ)
 
     if not moving:
-        G = hank.solve_jacobian(ss, unknowns, targets, [shock], T=T)
-        return {v: G[v][shock] @ dZ for v in var}
+        td = hank.solve_impulse_nonlinear(ss, unknowns, targets, {shock: dZ},
+                                          internals=['household'], verbose=False)
+        return {v: td[v] for v in var}
 
     _, Pi_e, _, _, probF, _, probI =\
         make_egrid(calib['rho_e'], calib['sd_e'], calib['nE'], calib['amin'],

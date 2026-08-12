@@ -27,6 +27,7 @@
 \makeatletter
 \def\input@path{{../output/tables/}}  % search path for \input
 \makeatother
+\input{macros.tex}
 
 % % Usar "&" antes do último autor (em refs e citações)
 % \DeclareDelimFormat{finalnamedelim}{%
@@ -168,22 +169,20 @@ where $\gamma$ is the elasticity of intertemporal substitution
 
 A household faces idiosyncratic labor productivity shocks $e_{i,t}$ with
 $\E[e_{i,t}] = 1$, and discount factor heterogeneity
-$\beta_i\in\{ \beta_L, \beta_H \}$, where there is $\omega_I$
+$\beta_i\in\{ \beta_L, \beta_H \}$, and we fix $\omega_I$
 impatient households. They can work in the formal or informal sector,
-or be unemployed $s\in\{F,I,U\}$.Each sector has a specific productivity
-$\theta^s_{i,t}$, re-drawn on each new offer.
+or be unemployed $s\in\{F,I,U\}$. Each sector has a specific productivity
+$\theta^s_{i,t}$ which their wage depends on, re-drawn on each new offer.
 
 Formal workers earn labor income
-$(1-\tau_{\ell}) \theta_{i,t}^F w_t e_{i,t} h_{i,t}$,
-where $w_t$ is the formal wage rate and $\tau_{\ell}$ is a fixed labor
-income tax rate. While, informal workers receive benefits
-$\theta_{i,t}^I w_t^I e_{i,t} h_{i,t}$,
-where $w_t^I = \xi w_t$ and $\xi\in(0,1)$ is the wage gap.
-Let $y_t(s,e)$ be this non-financial income,
+$(1-\tau_{\ell}) \theta_{i,t}^F w_t e_{i,t} h_{i,t}$, while informal workers
+earn $\theta_{i,t}^I w_t e_{i,t} h_{i,t}$, where $w_t$ is the baseline wage,
+$\tau_{\ell}$ is a fixed labor income tax rate. Let $y_t(s,e,\theta)$ be this
+non-financial income,
 \[
     y_t(s,e,\theta) = \begin{cases}
         (1-\tau_\ell) \theta^F w_t h_t e, &\text{if formal;} \\
-        \theta^I w_t^I h_t e
+        \theta^I w_t h_t e
             + T_t \cdot \mathbbm{1}[\text{eligible}],
             \quad &\text{if informal;} \\
         T_t, &\text{if unemployed}.
@@ -193,8 +192,8 @@ Let $y_t(s,e)$ be this non-financial income,
 We assume that formal wages are observable by the government, so that
 only informal workers and unemployed may be eligible to receive
 \textit{Bolsa Família} (BF). We assume that informal households are
-eligible if $y_{i,t}(I,e,\theta) < \bar y$ and that the total benefit
-size is $\text{BF}_t$.
+eligible if $y_{i,t}(I,e,\theta) < \bar y$ and that the total number of
+beneficiaries is $\text{BF}_t$.
 
 Households save into liquid assets $a_{i,t}$ with ex-ante real
 return $1+r_t = (1+i_{t-1})/(1+\pi_t)$, where $i_t$ represents the
@@ -207,7 +206,7 @@ $d_{i,t} = d_t \cdot e_{i,t}$\footnote{
     specifications.}.
 Their budget constraint at time $t$ reads:
 \[
-c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + y_{i,t}(s,e) + d_{i,t} + \tau_t.
+c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + y_{i,t}(s,e,\theta) + d_{i,t} + \tau_t.
 \]
 
 Incomplete markets impose a borrowing constraint $a_{i,t} \geq \underline{a}$.
@@ -216,17 +215,17 @@ decisions to labor unions, and thus take worked hours as given.
 While, informal ones choose hours to maximize their utility, thus, for each $i$,
 % this is novel, better to explain it later
 \[
-\psi \left( h \right)^{1/\varphi} = \theta  w^I e
+\psi \left( h \right)^{1/\varphi} = \theta w e
 \quad \Leftrightarrow \quad h^I(e)
-= \left[ \frac{\theta w^I e}{\psi} \right]^\varphi.
+= \left[ \frac{\theta w e}{\psi} \right]^\varphi.
 \]
 
 This generates a productivity cutoff for informal workers of
 \[
-\theta w^I e \left( \frac{\theta w^I e}{\psi}
+\theta w e \left( \frac{\theta w e}{\psi}
 \right)^\varphi < \bar y
 \quad \Leftrightarrow \quad
-e < e^* = \frac{\left( \psi^\varphi \bar y \right)^\frac{1}{1+\varphi}}{\theta w^I}.
+e < e^* = \frac{\left( \psi^\varphi \bar y \right)^\frac{1}{1+\varphi}}{\theta w}.
 \]
 
 Such as \textcite{esteban2021labor} and \textcite{finamor2025labor},
@@ -322,8 +321,9 @@ the worker is in sector $s$,
 \end{align*}
 
 We denominate the steady-state size of each sector $s\in\{F,I,U\}$ as
-$\alpha_s$, such that $\alpha_F+\alpha_I+\alpha_U=1$. Also, the size of
-Bolsa Familia program is denominated by $\text{BF}$.
+$\alpha_s$, such that $\alpha_F+\alpha_I+\alpha_U=1$.
+Let $\Lambda_t(s,\beta,e,a)$ be the household distribution over a given
+period of time.
 
 %---------------------------------------------------
 %	FIRMS
@@ -352,8 +352,8 @@ standard in Neo-Keynesian's literature, with a quadratic adjustment cost
 
 Firms' dividends are taxed at the same rate $\tau_{\ell}$ as labor income, so
 $d_t = (1-\tau_{\ell}) (Y_t - w_t L_t) - \Psi_t(\pi_t)$, where $L_t = \E[l_{j,t}]$
-is the aggregate formal labor. Such as \textcite{hagedorn2019fiscal}, the Phillips
-curve for price inflation is given by
+is the aggregate formal labor. Such as \textcite{hagedorn2019fiscal},
+the Phillips curve for price inflation is given by
 \[
 \ln(1+\pi_t) = \kappa \left[
 \frac{w_t}{Z_t} - \frac{1}{\mu}
@@ -362,8 +362,7 @@ curve for price inflation is given by
 
 Additionally, there is a representative informal firm operating in a perfectly
 competitive market and producing under constant returns to scale,
-so $Y_t^I = w^I_t L_t^I$, where the steady-state wage gap $\xi = w_t^I / w_t$
-is calibrated to match \textit{PNAD Contínua} data.
+so $Y_t^I = w_t L_t^I$.
 
 %---------------------------------------------------
 %	UNIONS
@@ -416,8 +415,14 @@ which means that the fiscal policy is passive and the monetary policy is active.
 The nominal interest rate adjust at least one-for-one to changes in inflation.
 
 However, governments normally finance themselves by increasing deficit and
-issuing new debt. The deficit-financed policy sets a path of $T_t$ and adjusts
-debt, keeping the nominal interest rate fixed $i_t = \bar i$.
+issuing new debt. The deficit-financed policy sets a path of $T_t$ and $\tau_t$
+and adjusts debt, keeping the nominal interest rate fixed $i_t = \bar i$.
+We assume that the government repays its debt in the long run by reducing
+transfer (when $\tau_t > 0$) or increasing taxes (when $\tau_t < 0$), with
+elasticity $\phi_B$,
+\[
+\tau_t = \bar \tau - \phi_B \cdot (B_{t-1} - \bar B).
+\]
 
 This situation leads to larger multipliers and great inequality
 \parencite{auclert2023trickling}. In the presence of nominal rigidity and non-
@@ -428,8 +433,7 @@ deficits of this sort self finance, so $\lim_{t\to\infty} B_t = \bar B$.
 %	MKT CLEARING
 \subsubsection*{Market Clearing}
 Finally, the asset, labor, and goods markets reach equilibrium
-(Market Clearing Conditions). We define $\Lambda_t(s,\beta,e,a)$ as the household
-distribution over a given period of time. First, the asset market reaches
+(Market Clearing Conditions). First, the asset market reaches
 equilibrium when household savings equal government bonds
 \[
 A_t = \int a_{i,t} \; d\Lambda_t(s,\beta,e,a) = B_t;
@@ -461,22 +465,104 @@ in HANK Literature. Most of the data refers to their average values in 2025.
 The labor market moments were obtained in
 \textit{Pesquisa Nacional por Amostra de Domicílio Contínua} (PNAD-C),
 an annual survey reporting formality status, wages, weekly worked hours, etc.
-This panel is interesting to match mainly the sector sizes and the worked hours,
-for both formal and informal households. However, since it is a survey,
-it might have under-reporting of informal firms.
+This panel is interesting to match the sector transitions and the worked hours
+and wages, for both formal and informal households. However, since it is a
+survey, it might have under-reporting of informal households.
 
 Some general macroeconomic measures were also used, such as the Government Debt
 (in the Brazilian National Treasure), the interest rates, and the inflation,
 available in the \textit{Índice Brasileiro de Geografia e Estatística} (IBGE).
 The Gini coefficient of wealth was obtained from the 2025 Global Wealth Report,
 from UBS. \textit{Bolsa Família} data is available in \textit{Cadastro Único}
-(CadÚnico), a platform with several statistics about the benefit.
+(CadÚnico), in VIS Data, a platform with several statistics about the benefit.
 
-In the future, we aim to gather information also in the
-\textit{Relação Anual de Informações Sociais} (RAIS), a mandatory annual reporting
-of firms, but without informality information and only up to 2003, and
-\textit{Economia Informal Urbana} (ECINF), a survey conducted by IBGE that focus
-on small business, specially informal ones.
+Additionally, Annual PNAD-C has information about whether a individual
+is beneficiary of the benefit. We identify each household and consider every
+individual living in a beneficiary household as receiving the benefit.
+Among those, we calculate the mean reported benefit $T$ and the mean share of
+beneficiaries.
+
+\input{bf_size.tex}
+\input{bf_coverage.tex}
+
+The rule to receive BF is based on a R\$ 218 threshold for the family income
+per capita, therefore there are some formal individuals receiving the benefit.
+Also, CadÚnico normally delay to remove the benefit for non-eligible individuals,
+which can explain why some formal individuals receive BF.
+
+In order to construct quarter-to-quarter transition probabilities across the
+three sectors $s\in\{F,I,U\}$, we reconstruct the PNAD-C rotating panel using
+\textcite{osorio2022montagem}, which estimates the dwelling and individual
+identifiers in the survey. The estimation of the pandemic years is not reliable.
+
+The formality status is defined as (i) formal workers have signed work card,
+are militaries, or employers, and (ii) informal workers do not have a signed
+work card, are self-employed, or unpaid family. We only consider household
+in the labor force, dropping those who are non-participating, retired, or
+students, to keep the empirical states aligned with the model's.
+
+% In the future, we aim to gather information also in the
+% \textit{Relação Anual de Informações Sociais} (RAIS), a mandatory annual reporting
+% of firms, but without informality information and only up to 2003, and
+% \textit{Economia Informal Urbana} (ECINF), a survey conducted by IBGE that focus
+% on small business, specially informal ones.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{shares_timeseries.png}
+    \caption{Share of Formal, Informal, and Unemployed Households}
+    \label{fig:shares_timeseries}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{transition_timeseries.png}
+    \caption{Sector Transitions over time}
+    \label{fig:transition_timeseries}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{calibration_timeseries.png}
+    \caption{Wage and Worked Hours for each Sector}
+    \label{fig:calibration_timeseries}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{wage_distribution.png}
+    \caption{Wage Distribution for each Sector (vs MLE-estimated Log-Normal)}
+    \label{fig:wage_distribution}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{bf_coverage_by_wage.png}
+    \caption{Share of Households Receiving Benefit by Wage Level}
+    \label{fig:bf_coverage_by_wage}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{bf_wage.png}
+    \caption{Wage Distribution by Benefit Status}
+    \label{fig:bf_wage}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{bf_eligibility.png}
+    \caption{Familiar Wage Distribution by Sector, for Beneficiaries}
+    \label{fig:bf_eligibility}
+\end{figure}
+
+
 
 %---------------------------------------------------
 %	METHODS
@@ -486,7 +572,7 @@ on small business, specially informal ones.
 The main computational methods are the Sequence-Space Jacobian (SSJ)
 \parencite{auclert2021using}, and the Endogenous Grid Method (EGM)
 \parencite{carroll2006method}. The EGM was combined with the discrete choice
-among sectors using \textcite{iskhakov2017endogenous}.
+among sectors using \textcite{iskhakov2017endogenous}, with taste shocks.
 
 The central idea of SSJ is to summarize the entire model by a matrix equation
 $\mathbf{F}_t(\textbf{X},\textbf{Z}) = \textbf{0}$, where $\textbf{X}$ are the
@@ -566,58 +652,70 @@ The goods market was left untargeted to verify the Walras' Law.
 
 The idiosyncratic productivity follows a log-normal $AR(1)$ process,
 $\ln e' = \rho_e \ln e + \varepsilon^e$, with $\varepsilon^e \sim N(0,\sigma^2_e)$.
-This is approximated by a finite Markov chain with $N_e$ grid points
+This is approximated by a finite Markov chain with $N_e = \mNE$ grid points
 \parencite{rouwenhorst1995asset}. We also assume a log-spaced grid for assets
+$\ln a \in [\ln \underline a, \ln \bar a]$ with $N_a = \mNA$ points,
 and a log-normal sector productivity grid $\ln \theta^s \sim N(\mu_s, \sigma_s^2)$,
-that is discretized by a Gauss-Hermite quadrature with $N_\theta$ nodes
+that is discretized by a Gauss-Hermite quadrature with $N_\theta = \mNT$ nodes
 \parencite{meghir2015wages}.
 
-Each household has a $q = 0.10$ probability of drawing a discount factor
+Each household has a $q = \mQ$ probability of drawing a new discount factor
 $(\beta_L, \beta_H)$, corresponding to an average type duration of 25 years,
 used to capture a generation \parencite{auclert2025fiscal}.
 This aims to capture similar results in relation to a life-cycle
 overlapping generations with permanent ability shock model.
-% pq delta_beta = 0.12 e w_I = 0.5   =>   Calibrar internamente!!
 
 In the household preferences, elasticity of intertemporal substitution is standard
-in literature $\gamma=0.5$\footnote{
-    EIS $\gamma=0.5$ is consistent with micro estimates surveyed by
+in literature $\gamma=\mEis$\footnote{
+    EIS $\gamma=\mEis$ is consistent with micro estimates surveyed by
     \textcite{valickova2015financial}.}.
-% The disutility of labor $\psi = 0.30$ is internally calibrated to normalize
-% formal hours $h_F = 1.0$. At last, $\varphi = 0.15$ is chosen to approximate
+The disutility of labor $\psi = \mPsi$ is internally calibrated to normalize
+formal hours $h_F = \mHF$.
+% At last, $\varphi = \mVarphi$ is chosen to approximate
 % informal worked hours to PNAD-C Data, in average (model = $0.891$, data = $0.867$)
-% and in standard error (model = $0.35$, data = $0.34$)\footnote{
-%     We used the average of half the sample because, in the future,
-%     high-productivity informal workers will choose for formalization.}.
+% and in standard error (model = $0.35$, data = $0.34$).
+The patient's discount factor $\beta_H = \mBetaHigh$ balances the asset market.
+We will use $\delta_\beta = \mDbeta$ and $\omega_I = \mOmegaI$ to approximate
+the Wealth Gini Coefficient.
 
-% The labor market transition probabilities are defined to match the sector sizes
-% in PNAD-C, $F = 50.5\%$ (data = $50.0\%$), $I = 44.0\%$ (data = $44.2\%$),
-% and $U = 5.0\%$ (data = $5.8\%$). Their values are $p_{fi} = 0.11$, $p_{if} = 0.12$,
-% $p_{ui} = 0.11$, $p_{uf} = 0.05$, and $p_{iu} = 0.02$. In the future, I am
-% interested in estimating the sectoral transition risk in the PNAD-C, if feasible.
+The layoff probabilities are equal to the transition probabilities in PNAD-C,
+$\delta_F = \P[\text{F}\to\text{U}] = \mDeltaF$ and
+$\delta_I = \P[\text{I}\to\text{U}] = \mDeltaI$. Further, the job offer
+probabilities are calibrated to match sector sizes $s\in\{F,I,U\}$ in
+equilibrium, as shown in Table \ref{tab:transitions}. The other transition
+probabilities were left untargeted. The taste preferences smoothness is governed
+by $\sigma_S = \mSig$. % talvez setar \sigma_S para aproximar F -> F, I -> I, U -> U
+% muitos desempregados ficam no desemprego, talvez não deixar \sigma para ele
 
-% escrever mu_F, mu_I, sigma_F, sigma_I    ->    dados PNAD
-The output is normalized $Y=1.0$ and we defined $\mu = 1.11$, which is standard in
+\input{transition_table.tex}
+
+We estimate the distribution of $\theta$ by fitting a log-normal to the observed
+wage distribution via maximum likelihood, which yields $\sigma_F = \mSigmaF$ and
+$\sigma_I = \mSigmaI$. We normalize average formal productivity to
+$\E(\theta^F) = 1$, so that $\mu_F = \mMuF$. Finally, we set $\mu_I = \mMuI$ to
+match the observed cross-sector wage gap $\xi := \E(y^F) / \E(y^I) = \mDatXi$.
+
+The output is normalized $Y=\mY$ and we defined $\mu = \mMu$, which is standard in
 the HANK literature \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{
-    Markup $\mu=1.11$ is also consistent with the estimates of
-    \textcite{basu1997returns}.}, and $\kappa = \kappa_w = 0.025$,
+    Markup $\mu=\mMu$ is also consistent with the estimates of
+    \textcite{basu1997returns}.}, and $\kappa = \kappa_w = \mKappa$,
 consistent with \textcite{hazell2022national} estimates.
 
-Taylor Rule is pretty standard, with $\phi=1.5$ and $r^* = 1\%$, consistent with
-a $4\%$ annual real interest rate for Brazilian economy \parencite{dos2024natural}.
-The Government debt is set to $80\%$ of yearly GDP, consistent with Brazilian
-National Treasure data. Wage tax is an average of all contributions levied on
-the payroll, $\tau_\ell = 0.27$.   % ver esse tau_l
+Taylor Rule is pretty standard, with $\phi=\mPhi$ and $r^* = \mRstar$, consistent
+with a $4\%$ annual real interest rate for Brazilian economy
+\parencite{dos2024natural}. The Government debt is set to $80\%$ of yearly GDP,
+consistent with Brazilian National Treasure data. Wage tax is an average of
+all contributions levied on the payroll, $\tau_\ell = \mTauL$.
 
-The \textit{Bolsa Família} statistics were obtained from the Cadastro Único\footnote{
+The \textit{Bolsa Família} statistics were obtained from the Cadastro
+Único\footnote{
     Available in \href{https://aplicacoes.cidadania.gov.br/vis/data3/data-explorer.php}{VIS DATA 3}
     and \href{https://paineis.mds.gov.br/public/extensions/observatorio-do-cadastro-unico/index.html}{Cadastro Único}.},
 where we calibrated the $T/w$ ratio in steady-state to be equal to the data
-from the Brazilian economy, with $T =$ R\$ 600 and $w =$ R\$ 4,294.
-We also calibrated the \textit{Bolsa Família} threshold $\bar y$ to
-match the actual size of the program\footnote{
-    We used the average household size in PNAD-C to calculate a percentage
-    estimate of the program.}.
+from the Brazilian economy, with $T = \text{R\$ }670$ and $w = \text{R\$ }\mDatYF$.
+We also calibrated the \textit{Bolsa Família} threshold $\bar y = \mYBar$ to
+match the size of the program $BF = \mDatBF$, considering only households in
+the labor force.
 
 %---------------------------------------------------
 %	RESULTS
@@ -668,7 +766,7 @@ match the actual size of the program\footnote{
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{impc.png}
-    \caption{Partial Equilibrium iMPC}
+    \caption{iMPC: Partial Equilibrium Profile}
     \label{fig:impc}
 \end{figure}
 
@@ -676,7 +774,7 @@ match the actual size of the program\footnote{
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{irf_financing.png}
-    \caption{IRFs: Financing Rules (shock in $T$)}
+    \caption{Response to a Shock in $T$ by Financing Rules}
     \label{fig:irf_financing}
 \end{figure}
 
@@ -684,7 +782,7 @@ match the actual size of the program\footnote{
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{irf_decomposition.png}
-    \caption{IRFs: Insurance vs Composition Effect (shock in $T$)}
+    \caption{Response to a Shock in $T$ by Channel}
     \label{fig:irf_decomposition}
 \end{figure}
 
@@ -692,11 +790,32 @@ match the actual size of the program\footnote{
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{irf_antecipated.png}
-    \caption{IRFs: MIT vs Antecipated Shock (shock in $T$)}
+    \caption{Response to a Shock in $T$: Instant vs Antecipated}
     \label{fig:irf_antecipated}
 \end{figure}
 
 \input{cumulative_response.tex}
+
+
+%---------------------------------------------------
+% Monetary Shock
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irfm_decomposition.png}
+    \caption{Response to an increase in $i$ by Channel}
+    \label{fig:irfm_decomposition}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irfm_bf_vs_nobf.png}
+    \caption{Response to an increase in $i$: With and Without CCT}
+    \label{fig:irfm_bf_vs_nobf}
+\end{figure}
+
+\input{monetary_cumulative.tex}
+
 
 
 %---------------------------------------------------
@@ -706,14 +825,14 @@ match the actual size of the program\footnote{
 
 Lastly, in order to verify whether this results are representatives and robust,
 we intent to do some robustness tests changing some calibration parameters,
-such as $\gamma$, $\delta_\beta$, $\omega_I$, $\xi$, $\mu$, and $\kappa_w$.
-This parameters might have minor implications in the results, but it is expected
-that the model continues to have the same results.
+such as $\gamma$, $\mu$, and $\kappa_w$. This parameters might have minor
+implications in the results, but it is expected that the model continues
+to have the same results.
 
 Also, we intent to perform other dividend specifications instead of
 $d_{i,t} = d_t \cdot e_{i,t}$. We also aim to change the GHH utility
-to a standard separable utility in the form of $u(c) - v(h)$, which must have
-similar results.
+to a standard separable utility in the form of $u(c) - v(h)$, which must
+have similar results.
 
 
 %---------------------------------------------------

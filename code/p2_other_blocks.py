@@ -4,7 +4,7 @@
 # Define the firms, government and monetary policy blocks of the model,
 # as well as the market clearing conditions.
 #
-# SS-DAG   (for calibration)   +   Dynamics DAG (for IRFs and Jacobians)
+# SS-DAG   (for calibration)   +   Dynamics DAG   (for IRFs and Jacobians)
 # ---------------------------------------------------------------------------
 #=
 
@@ -18,7 +18,7 @@ from sequence_jacobian import simple
 # 1. Production
 @simple
 def firm_formal(Y, Z, w, pi, tau_l, mu, kappa):
-    # Formal sector: monopolistic competition with constant markup.
+    # Formal Sector: Monopolistic Competition with constant Markup.
     L   = Y / Z      # Y = Z * L
     adj = mu / (mu-1) / (2 * kappa) * (1 + pi).apply(np.log) ** 2 * Y
     Div = (1 - tau_l) * (Y - w*L) - adj
@@ -26,7 +26,7 @@ def firm_formal(Y, Z, w, pi, tau_l, mu, kappa):
 
 @simple
 def firm_informal(w, N_I):
-    # Informal sector: perfectly competitive.
+    # Informal Sector: Perfectly Competitive.
     Y_I = w * N_I
     return Y_I
 
@@ -47,7 +47,17 @@ def union_ss(w, h_F, C_GHH, L, tau_l, mu_w, psi, varphi, eis):
     return wage_nkpc
 
 
-# 4. Dynamic Phillips Curves
+# 4. SS Calibration, by Direct Inversion
+@simple
+def calibrate_ss(Y, N_F, w, L, C_GHH, BF, r, B, Tr, tau_l, mu_w, eis, h_F, varphi):
+    # Invert Market Clearing in Closed Form.
+    Z_hat   = Y / N_F
+    psi_hat = (1 - tau_l) * w * L / mu_w / (h_F ** (1/varphi) * C_GHH ** (1/eis))
+    tau_hat = tau_l * Y - r * B - Tr * BF
+    return Z_hat, psi_hat, tau_hat
+
+
+# 5. Dynamic Phillips Curves
 @simple
 def phillips_curve(w, r, pi, h_F, Z, Y, L, C_GHH, tau_l, mu, mu_w,
                    kappa, kappa_w, eis, psi, varphi, beta_high, dbeta, omega_I):

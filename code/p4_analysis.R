@@ -13,6 +13,8 @@ library(PNADcIBGE)
 library(survey)
 library(readxl)
 
+set.seed(20260415)
+
 year       = 2025
 quarter    = FALSE     # TRUE to run quarter
 transition = FALSE     # TRUE to run every panel
@@ -20,7 +22,7 @@ transition = FALSE     # TRUE to run every panel
 
 # ---- Config ---------------------------------------------------------------
 mw         = 1518                 # Minimum Wage
-bf_line    = c(218, mw / 2, mw)       # Poverty Line and Regra de Protecao
+bf_line    = c(218, mw / 2, mw)   # Poverty Line and Regra de Protecao
 wedges     = seq(0, 8000, 200)
 S          = c("F", "I", "U")     # N = Outside Labor Force
 formal_idx = c("01", "03", "05", "07", "08")
@@ -34,26 +36,47 @@ deflator = list.files("data/pnad", "^deflator_PNADC.*\\.xls$", full.names = TRUE
   transmute(q = paste0(Ano, "Q", (m + 2) / 3), defl) %>% deframe()
 def_base = names(which.min(deflator))
 
+vs    = function(x)    unname(c(coef(x)[1], SE(x)[1]))    # Estimate and its Standard Error
+vs_by = function(x, s) unname(c(coef(x)[[s]], SE(x)[x$status == s]))
+
 # Calibration Statistics
-statistics = function(d) {
-  d$variables$status = with(d$variables, case_when(VD4009 %in% formal_idx ~ "F",
-                                                   VD4009 %in% inform_idx ~ "I",
-                                                   VD4002 == "2"          ~ "U",
-                                                   VD4001 == "2"          ~ "N",
-                                                   TRUE                   ~ NA_character_))
-  occ = subset(d, status %in% c("F", "I"))
+statistics = function(d, se = FALSE) {
+  z = function(x) as.numeric(ifelse(is.na(x), 0, x))
+  d = update(d, status = case_when(VD4009 %in% formal_idx ~ "F",
+                                   VD4009 %in% inform_idx ~ "I",
+                                   VD4002 == "2"          ~ "U",
+                                   VD4001 == "2"          ~ "N",
+                                   TRUE                   ~ NA_character_))
+  d = update(d, nF = z(status == "F"), nI = z(status == "I"),
+                nU = z(status == "U"), nN = z(status == "N"))
+  d = update(d, hF = z(VD4031) * nF,  hI = z(VD4031) * nI,  hI2 = z(VD4031)^2 * nI,
+                yF = z(VD4019) * nF,  yI = z(VD4019) * nI,
+                mhF = z(!is.na(VD4031)) * nF, mhI = z(!is.na(VD4031)) * nI,
+                myF = z(!is.na(VD4019)) * nF, myI = z(!is.na(VD4019)) * nI)
 
-  # Statistics by Formality
-  n = coef(svytotal(~factor(status), d, na.rm = TRUE))
-  names(n) = sub("factor\\(status\\)", "", names(n))
-  m   = svyby(~VD4031 + VD4019, ~status, occ, svymean, na.rm = TRUE)
-  v_h = svyby(~VD4031,          ~status, occ, svyvar,  na.rm = TRUE)
+  T = svytotal(~nF + nI + nU + nN + hF + hI + hI2 + yF + yI +
+                mhF + mhI + myF + myI, d)
+  m = lapply(list(F       = quote(nF / (nF + nI + nU)),
+                  I       = quote(nI / (nF + nI + nU)),
+                  U       = quote(nU / (nF + nI + nU)),
+                  LF      = quote(nF + nI + nU),
+                  Pop     = quote(nF + nI + nU + nN),
+                  h_F     = quote(hF / mhF),
+                  h_I     = quote(hI / mhI),
+                  y_F     = quote(yF / myF),
+                  y_I     = quote(yI / myI),
+                  xi      = quote((yI / myI) / (yF / myF)),
+                  h_ratio = quote((hI / mhI) / (hF / mhF)),
+                  h_I_sd  = quote(sqrt(hI2 / mhI - (hI / mhI)^2) / (hF / mhF))),
+             function(e) svycontrast(T, e))    # Delta Method
 
-  as.numeric(c(n[S] / sum(n[S]), sum(n[S]), sum(n), m$VD4031, m$VD4019,
-             m$VD4019[2] / m$VD4019[1], sqrt(coef(v_h))[2] / m$VD4031[1]))
+  v = setNames(sapply(m, coef), names(m))
+  if (!se) return(v)
+  rbind(est = v, se = setNames(sapply(m, SE), names(m)))
 }
 
-info = c("F", "I", "U", "LF", "Pop", "h_F", "h_I", "y_F", "y_I", "xi", "h_I_sd")
+info = c("F", "I", "U", "LF", "Pop", "h_F", "h_I",
+         "y_F", "y_I", "xi", "h_ratio", "h_I_sd")
 
 
 
@@ -99,7 +122,7 @@ df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                                    VD4002 == "2"          ~ "U",
                                    VD4001 == "2"          ~ "N", TRUE ~ NA_character_))
 
-dataset = data.frame(t(statistics(df))) %>% `colnames<-`(info)
+dataset = data.frame(statistics(df, se = TRUE))
 
 df$variables$id_dom = with(df$variables, paste0(UPA, V1008, V1014))
 df$variables$bf_hh  = ave(df$variables$bf, df$variables$id_dom,
@@ -110,25 +133,23 @@ df$variables$bf_hh  = ave(df$variables$bf, df$variables$id_dom,
 cap = as.numeric(coef(svyquantile(~wage, subset(df, wage > 0), 0.99, na.rm = TRUE)))
 dfp = subset(df, wage > 0)
 
-ln_par = function(d) c(coef(svymean(~I(log(wage)), d, na.rm = TRUE))[[1]],   # MLE for lognorm
-                       sqrt(coef(svyvar(~I(log(wage)), d, na.rm = TRUE))[[1]]))
-
 dens = function(d, g, f = ~wage, bw = 200)
   with(svysmooth(f, d, bandwidth = bw, xlim = c(0, cap))[[1]],
        tibble(group = g, wage = x, y = y))
 
-# Theta
-lp_F = ln_par(subset(dfp, status == "F" & wage <= cap))     # c(mu, sigma) of log wage
-lp_I = ln_par(subset(dfp, status == "I" & wage <= cap))
-dataset = cbind(dataset, t(c(mu_F = -lp_F[2]^2 / 2,                         # E[theta_F] = 1
-                             mu_I = -lp_I[2]^2 / 2 + (lp_I[1] - lp_F[1]),   # E[theta_I] = exp(d_mu)
-                             sd_F = lp_F[2], sd_I = lp_I[2],                # sd of log wage
-                             d_mu = lp_I[1] - lp_F[1])))
 
-wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F") %>%
-                        mutate(lognormal = dlnorm(wage, lp_F[1], lp_F[2])),
-                      dens(subset(dfp, status == "I"), "I") %>%
-                        mutate(lognormal = dlnorm(wage, lp_I[1], lp_I[2])))
+# Theta: Quantiles of log Wage (Net from E[y_F])
+qs = c(.10, .25, .50, .75, .90)
+lq = function(s) {
+  x = svyquantile(~I(log(wage)), subset(dfp, status == s), qs, na.rm = TRUE)
+  rbind(as.numeric(coef(x)) - log(dataset["est", "y_F"]), as.numeric(SE(x)))
+}
+qmat = cbind(lq("F"), lq("I"))     # Shift does not move the SE
+colnames(qmat) = paste0("q", 100 * qs, "_", rep(S[1:2], each = length(qs)))
+dataset = cbind(dataset, qmat)
+
+wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F"),
+                      dens(subset(dfp, status == "I"), "I"))
 
 
 
@@ -139,14 +160,15 @@ subs = list(Total = df,
             Informal = subset(df, status == "I"))
 
 bf_size     = coef(svytotal(~bf_hh, df, na.rm = TRUE))
-bf_sector   = coef(svyby(~bf_hh, ~status, df, svymean, na.rm = TRUE))
 bf_value    = coef(svymean(~V5002A2, subset(df, bf == 1), na.rm = TRUE))
-bf_share_lf = coef(svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE))[[1]]
-bf_value_lf = coef(svymean(~V5002A2, subset(df, bf == 1 & status %in% S), na.rm = TRUE))[[1]]
-dataset     = cbind(dataset, t(c(BF = bf_share_lf,
-                                 BF_I = bf_sector[["I"]],
-                                 BF_U = bf_sector[["U"]],
-                                 Tr_y = bf_value_lf / dataset$y_F)))
+bf_sector   = svyby(~bf_hh, ~status, df, svymean, na.rm = TRUE)
+bf_share_lf = svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE)
+bf_value_lf = svymean(~V5002A2, subset(df, bf == 1 & status %in% S), na.rm = TRUE)
+dataset     = cbind(dataset,
+                    BF   = vs(bf_share_lf),
+                    BF_I = vs_by(bf_sector, "I"),
+                    BF_U = vs_by(bf_sector, "U"),
+                    Tr_y = vs(bf_value_lf) / dataset["est", "y_F"])
 
 
 # Wage Distribution
@@ -193,7 +215,8 @@ bf_value_vis = fam$Value[fam$Year == year] / bf_size_vis / 12
 
 
 # ---------------------------------------------------------------------------
-# 5. Sector Transitions
+# 5. Matched Panel: Transitions and Wage Persistence
+## The panel follows a household over 5 quarterly visits
 classify = function(d, v) {
   vd4001 = d[[paste0("vd4001_", v)]]
   vd4002 = d[[paste0("vd4002_", v)]]
@@ -204,37 +227,125 @@ classify = function(d, v) {
             vd4001 == "2" ~ "N", TRUE ~ NA_character_)
 }
 
-pair_of = function(d, v)      # Consecutive visits v -> v+1, using origin weight
-  tibble(s0 = classify(d, v), s1 = classify(d, v+1),
-         w = d[[paste0("v1028_", v)]], y0 = d[[paste0("ano_", v)]])
+wage_of = function(d, v) suppressWarnings(as.numeric(d[[paste0("vd4019_", v)]]))
 
-# Pairwise: the panels with a visit in "year", or all of them if transition
+pair_of = function(d, v, h = 1)     # Visits v -> v+h, using the origin weight
+  tibble(s0 = classify(d, v),     s1 = classify(d, v + h),   # sector
+         x0 = wage_of(d, v),      x1 = wage_of(d, v + h),    # wage
+         w  = d[[paste0("v1028_", v)]], y0 = d[[paste0("ano_", v)]],
+         id = d$upa, hh = d$estrato) %>%          # PSU and stratum
+  filter(s0 %in% S, s1 %in% S, !is.na(w))
+
+
+# Stratified Cluster Bootstrap
+B    = 200
+mult = function(hh, id) {
+  u = !duplicated(id);  s = hh[u]
+  M = matrix(1, length(s), B + 1)
+  for (k in split(seq_along(s), s)) {
+    n = length(k)
+    if (n > 1) M[k, -1] = 1 + sqrt(n / (n - 1)) * (rmultinom(B, n, rep(1, n)) - 1)
+  }
+  M[match(id, id[u]), ]
+}
+
+
+# Weighted (co)moments of log Wage for Stayers
+lw_mom = function(p, h) {
+  p = filter(p, s0 == s1, x0 > 0, x1 > 0)
+  M = mult(p$hh, p$id)
+  map_dfr(S[1:2], function(s) {
+    k = p$s0 == s;  w = p$w[k];  a = log(p$x0[k]);  b = log(p$x1[k])
+    Z = cbind(n = w, sa = w * a, sb = w * b,
+              saa = w * a^2, sbb = w * b^2, sab = w * a * b)
+    as_tibble(crossprod(M[k, , drop = FALSE], Z)) %>%
+      mutate(h = h, s = s, r = row_number() - 1L, .before = 1)
+  })
+}
+
+
+# Attrition Tilt
+tilt = function(P, alpha, tol = 1e-14, maxit = 500) {
+  a = alpha / sum(alpha);  cj = rep(1, length(a))
+  for (it in 1:maxit) {
+    cn = a / as.vector((a / as.vector(P %*% cj)) %*% P)
+    cn = cn / cn[1]
+    if (max(abs(cn - cj)) < tol) { cj = cn; break }
+    cj = cn
+  }
+  P = sweep(P, 2, cj, "*")
+  structure(P / rowSums(P), c = cj, it = it)
+}
+
+long_P = function(P, y)             # matrix -> (y0, s0, s1, p), P is column-major
+  tibble(y0 = y, s0 = rep(S, times = length(S)),
+         s1 = rep(S, each = length(S)), p = as.vector(P))
+
+wide_P = function(d) d %>% pivot_wider(id_cols = s0, names_from = s1, values_from = p) %>%
+  column_to_rownames("s0") %>% as.matrix() %>% .[S, S]
+
+
+# Pairwise the Panels
 pids = if (transition) 2012:year else (year - 1):year
 csvs = sprintf("data/pnad/final/pnadc.microdados.painel.%d.csv",
                as.vector(outer(pids, 1:4, function(y, q) 10 * y + q)))
 csvs = csvs[file.exists(csvs)]
-cols = c(outer(c("vd4001", "vd4002", "vd4009", "v1028", "ano"), 1:5, paste, sep = "_"))
+cols = c("upa", "estrato",
+         outer(c("vd4001", "vd4002", "vd4009", "vd4019", "v1028", "ano"),
+               1:5, paste, sep = "_"))
 
-counts = map_dfr(csvs, function(f) {
-  d = read_csv(f, col_select = all_of(cols), show_col_types = FALSE)
-  map_dfr(1:4, ~pair_of(d, .x)) %>%
-    filter(s0 %in% S, s1 %in% S, !is.na(w)) %>%
-    count(y0, s0, s1, wt = w, name = "n")
+panel = map(csvs, function(f) {
+  d  = read_csv(f, col_select = all_of(cols), show_col_types = FALSE)
+  p1 = map_dfr(1:4, ~pair_of(d, .x))          # one quarter apart
+  p4 = pair_of(d, 1, 4)                       # one year apart
+  list(flow = count(p1, y0, s0, s1, wt = w, name = "n"),
+       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)))
 })
 
+
 # Transition rates by origin year
-trans = counts %>% group_by(y0, s0, s1) %>% summarise(n = sum(n), .groups = "drop") %>%
+trans = map_dfr(panel, "flow") %>%
+  group_by(y0, s0, s1) %>% summarise(n = sum(n), .groups = "drop") %>%
   complete(y0, s0 = S, s1 = S, fill = list(n = 0)) %>%
   group_by(y0, s0) %>% mutate(p = n / sum(n)) %>% ungroup()
 
-if (transition)
-  write.csv(trans, "data/final/pnad_transition_historical.csv", row.names = FALSE)
 
-# Calibration Matrix
-P = trans %>% filter(y0 == year) %>%
-  pivot_wider(id_cols = s0, names_from = s1, values_from = p) %>%
-  column_to_rownames("s0") %>% as.matrix()
-P = P[S, S]
+# Wage Persistence: Corr(log w_t, log w_{t+h}) among same-sector stayers.
+persist = map_dfr(panel, "wage") %>% group_by(r, h, s) %>%
+  summarise(across(n:sab, sum), .groups = "drop") %>%
+  transmute(r, h, s, rho = (sab / n - sa * sb / n^2) /
+                     sqrt((saa / n - (sa / n)^2) * (sbb / n - (sb / n)^2)))
+
+ac = function(h, s = "F") {
+  x = persist$rho[persist$h == h & persist$s == s]
+  c(x[1], sd(x[-1]))
+}
+dataset = cbind(dataset, ac1 = ac(1), ac4 = ac(4))
+
+
+# Calibration Matrix (tilt the flows with annual stocks)
+alpha = c(t(dataset["est", S]));  alpha = alpha / sum(alpha)
+P_raw = wide_P(filter(trans, y0 == year))
+P     = tilt(P_raw, alpha)
+cat(sprintf("Attrition tilt: c = [%s], %d it, max|dP| = %.4f\n",
+            paste(round(attr(P, "c"), 3), collapse = ", "),
+            attr(P, "it"), max(abs(P - P_raw))))
+
+# Historical Series
+if (transition) {
+  a_year = read.csv("data/final/pnad_historical.csv", check.names = FALSE) %>%
+    filter(Information %in% S) %>%
+    pivot_longer(-Information, names_to = "q", values_to = "v") %>%
+    mutate(y0 = as.integer(str_sub(q, 1, 4))) %>%
+    summarise(v = mean(v), .by = c(y0, Information)) %>%
+    pivot_wider(names_from = Information, values_from = v)
+
+  trans = map_dfr(sort(intersect(trans$y0, a_year$y0)), function(y)
+    long_P(tilt(wide_P(filter(trans, y0 == y)),
+                unlist(a_year[a_year$y0 == y, S])), y))
+  write.csv(trans, "data/final/pnad_transition_historical.csv", row.names = FALSE)
+}
+
 P_ss = Re(eigen(t(P))$vectors[, 1])
 P_ss = P_ss / sum(P_ss); names(P_ss) = S
 
@@ -288,14 +399,13 @@ save_tex = function(d, name, caption, label, rows = esc(rownames(d))) {
 
 
 # ---- Graphics -------------------------------------------------------------
-g = ggplot(wage_dist, aes(wage, y, colour = group)) +
+g = ggplot(wage_dist, aes(wage, 100 * y, colour = group)) +
   geom_line(linewidth = 1.2) + mytheme +
-  geom_line(aes(y = lognormal), linetype = "dashed", linewidth = 1.2) +
   geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
   scale_colour_manual(values = col_sector) +
   coord_cartesian(xlim = c(0, xmax)) +
-  labs(title = paste("PNAD", year, "- Wage Distribution vs Log-Normal"),
-       x = "Monthly Wage (R$)", y = "Density", colour = "")
+  labs(title = paste("PNAD", year, "- Wage Distribution by Sector"),
+       x = "Monthly Wage (R$)", y = "Density (%)", colour = "")
 save_fig(g, "wage_distribution")
 
 
@@ -385,13 +495,16 @@ write.csv(rbind(P, P_ss), "data/final/pnad_transition_matrix.csv")
 
 
 # Labor Market
+est = function(...) c(unlist(dataset["est", c(...)]), NA)
 print(data.frame(row.names   = c("Formal", "Informal", "Unemployed"),
-                 Share       = round(c(t(dataset[S])), 4),
-                 Hours       = round(c(dataset$h_F, dataset$h_I, NA), 1),
-                 Wage        = round(c(dataset$y_F, dataset$y_I, NA)),
-                 `Wage/y_F`  = round(c(1, dataset$xi, NA), 3),
-                 `theta_mu`  = round(c(dataset$mu_F, dataset$mu_I, NA), 3),
-                 `theta_sd`  = round(c(dataset$sd_F, dataset$sd_I, NA), 3),
+                 Share       = round(c(t(dataset["est", S])), 4),
+                 Hours       = round(est("h_F", "h_I"), 1),
+                 Wage        = round(est("y_F", "y_I")),
+                 `Wage/y_F`  = round(c(1, dataset["est", "xi"], NA), 3),
+                 `log q50`   = round(est("q50_F", "q50_I"), 3),
+                 `log IQR`   = round(est("q75_F", "q75_I") - est("q25_F", "q25_I"), 3),
+                 `rho 1q`    = round(c(ac(1, "F")[1], ac(1, "I")[1], NA), 3),
+                 `rho 1y`    = round(c(ac(4, "F")[1], ac(4, "I")[1], NA), 3),
                  check.names = FALSE))
 
 
@@ -409,9 +522,8 @@ save_tex(bf_size_tab, "bf_size",
 bf_cover_tab = data.frame(
   row.names = c("BF / Labor Force", "BF in Formal", "BF in Informal",
                 "BF in Unemployed", "BF in Non-Participating", "Tr/y_F"),
-  Coverage  = round(c(bf_share_lf, bf_sector[["F"]], bf_sector[["I"]],
-                      bf_sector[["U"]], bf_sector[["N"]],
-                      bf_value_lf / dataset$y_F), 3))
+  Coverage  = round(c(coef(bf_share_lf), coef(bf_sector)[c("F", "I", "U", "N")],
+                      coef(bf_value_lf) / dataset["est", "y_F"]), 3))
 print(bf_cover_tab)
 save_tex(bf_cover_tab, "bf_coverage",
          paste0("Bolsa Fam\\'ilia ", year, ": Coverage"), "tab:bf_coverage",
@@ -420,5 +532,7 @@ save_tex(bf_cover_tab, "bf_coverage",
 
 
 # Quarter-to-quarter Transitions
-print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(c(t(dataset[S])), 4)))
+print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(alpha, 4)))
+
+
 

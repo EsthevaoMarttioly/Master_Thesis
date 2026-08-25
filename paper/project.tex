@@ -231,8 +231,9 @@ e < e^* = \frac{\left( \psi^\varphi \bar y \right)^\frac{1}{1+\varphi}}{\theta w
 Such as \textcite{esteban2021labor} and \textcite{finamor2025labor},
 given a sector $s$, we assume that each worker faces an exogenous
 layoff probability $\delta_s$, and receives an offer from $s$ with
-probability $\pi_s$. The worker accepts the offer with the higher
-value, smoothed by additive idiosyncratic preference shocks explained later.
+probability $\pi_s$ if employed or $\pi_s^U$ if unemployed.
+The household accepts the offer with the higher value, smoothed by additive
+idiosyncratic preference shocks explained later.
 
 The Bellman Equation for each individual $i$ in sector $s\in\{F,I\}$ is
 \begin{align*}
@@ -242,11 +243,12 @@ The Bellman Equation for each individual $i$ in sector $s\in\{F,I\}$ is
     + \beta \E_t \!\bigg[ \delta_s V_{t+1}^U(.)
     + (1-\delta_s) \bigg( \\
     &\quad\qquad \pi_F (1-\pi_I) \max\!\left\{V_{t+1}^s(.,\theta), 
-            V_{t+1}^F(.,\theta')\right\} \\
+            \E_\theta V_{t+1}^F(.,\theta')\right\} \\
     &\quad\qquad + (1-\pi_F)\pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
-            V_{t+1}^I(.,\theta')\right\} \\
+            \E_\theta V_{t+1}^I(.,\theta')\right\} \\
     &\quad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
-            V_{t+1}^I(.,\theta'), V_{t+1}^F(.,\theta')\right\} \\
+            \E_\theta V_{t+1}^I(.,\theta'),
+            \E_\theta V_{t+1}^F(.,\theta')\right\} \\
     &\quad\qquad + (1-\pi_F)(1-\pi_I) V_{t+1}^s(.,\theta)
     \bigg) \bigg] \Bigg\} \\
     \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(s,e,\theta) + d_{i,t} + \tau_t \\
@@ -258,11 +260,11 @@ and for each unemployed worker is
     \frac{c^{1-\frac{1}{\gamma}}}{1-\frac{1}{\gamma}}
     + \beta \E_t \!\bigg[ (1-\pi_F)(1-\pi_I) V_{t+1}^U(.) \\
     &\quad\qquad + \pi_F (1-\pi_I) \max\!\left\{V_{t+1}^U(.),
-            V_{t+1}^F(.)\right\} \\
+            \E_\theta V_{t+1}^F(.)\right\} \\
     &\quad\qquad + (1-\pi_F)\pi_I \max\!\left\{V_{t+1}^U(.), 
-            V_{t+1}^I(.)\right\} \\
+            \E_\theta V_{t+1}^I(.)\right\} \\
     &\quad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^U(.), 
-            V_{t+1}^I(.), V_{t+1}^F(.)\right\}
+            \E_\theta V_{t+1}^I(.), \E_\theta V_{t+1}^F(.)\right\}
     \bigg] \Bigg\} \\
     \text{s.t.} \qquad &c+a' = (1+r_t) a + y_t(U) + d_{i,t} + \tau_t \\
     &a' \in [\underline a, \infty).
@@ -692,8 +694,8 @@ by $\sigma_S = \mSig$. % talvez setar \sigma_S para aproximar F -> F, I -> I, U 
 We estimate the distribution of $\theta$ by fitting a log-normal to the observed
 wage distribution via maximum likelihood, which yields $\sigma_F = \mSigmaF$ and
 $\sigma_I = \mSigmaI$. We normalize average formal productivity to
-$\E(\theta^F) = 1$, so that $\mu_F = \mMuF$. Finally, we set $\mu_I = \mMuI$ to
-match the observed cross-sector wage gap $\xi := \E(y^F) / \E(y^I) = \mDatXi$.
+$\E(\theta^F) = 1$. Finally, we set $\mu_I = \mMuI$ to match the observed
+cross-sector wage gap $\xi := \E(y^F) / \E(y^I) = \mDatXi$.
 
 The output is normalized $Y=\mY$ and we defined $\mu = \mMu$, which is standard in
 the HANK literature \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{

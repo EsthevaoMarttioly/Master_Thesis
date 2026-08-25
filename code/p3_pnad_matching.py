@@ -171,7 +171,7 @@ def load_year_panels(folder, year):
 # ---------------------------------------------------------------------------
 # Running
 if __name__ == "__main__":
-    run_all("data/pnad/", target_year=2026, redownload=False)    # run None for all
+    run_all("data/pnad/", target_year=2025, redownload=True)    # run None for all
     panels = load_year_panels("data/pnad/", 2025)
     df = load_panel("data/pnad/", 20251)
 

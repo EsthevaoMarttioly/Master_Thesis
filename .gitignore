@@ -28,6 +28,7 @@ data/pnad/pynad/
 data/pnad/metadados/
 data/pnad/originais/
 data/pnad/microdados/
+data/pnad/paineis/
 *.csv
 *.txt
 !data/pnad/input_PNADC_trimestral.txt

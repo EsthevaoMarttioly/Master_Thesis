@@ -9,11 +9,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
+from code.p5_calibration import (pnad, alpha, qs, gini_coefficient,
+                                 gini_from_lorenz, top_share, _wquantile)
+
 def rr():
     # Reload results.py into the global namespace (interactive use).
-    import importlib, code.p4_results
-    importlib.reload(code.p4_results)
-    globals().update({k: v for k, v in vars(code.p4_results).items()
+    import importlib, code.p7_results
+    importlib.reload(code.p7_results)
+    globals().update({k: v for k, v in vars(code.p7_results).items()
                       if not k.startswith('_')})
 
 
@@ -21,6 +24,8 @@ def rr():
 PAL = ('#1b325f', '#9cc4e4', '#e9f2f9',
        '#3a89c9', '#f26c4f', '#a8a3af')
 STATES = {'F': 'Formal', 'I': 'Informal', 'U': 'Unemployed'}
+DIGITS = str.maketrans(dict(zip('0123456789', ('Zero', 'One', 'Two', 'Three',
+          'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'))))
 COL1, COL2, COL3, COL4, COL5, GRAY = PAL
 
 LS = {0: '-', 1: '--', 2: ':', 3: '-.'}
@@ -87,9 +92,11 @@ def _panels(n):         # Flattened axes grid sized to hold n panels.
 
 def _save_or_show(fig, savepath):
     plt.tight_layout()
-    if savepath is not None:
+    if savepath is None:
+        plt.show()
+    else:
         fig.savefig(savepath, dpi=150, bbox_inches='tight')
-    plt.show()
+        plt.close(fig)
 
 
 def _tex_table(head, rows, caption, label, colspec, size=r'\small', savepath=None):
@@ -134,32 +141,13 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0,
     return fig, axes
 
 
-def gini_coefficient(values, weights=None):
-    # Weighted Gini of raw (value, mass) data.
-    idx = np.argsort(values)
-    values = values[idx]
-    weights = np.ones_like(values) if weights is None else weights[idx]
-    pop  = np.concatenate([[0], np.cumsum(weights) / np.sum(weights)])
-    wlth = np.concatenate([[0], np.cumsum(weights * values) / np.sum(weights * values)])
-    return 1.0 - np.sum((pop[1:] - pop[:-1]) * (wlth[1:] + wlth[:-1]))
-
-
-def gini_from_lorenz(pop, share):
-    return 1.0 - np.sum(np.diff(pop) * (share[1:] + share[:-1]))
-
-
-def _top_share(pop, share, top):
-    # Value share held by the richest `top` fraction.
-    return 1.0 - np.interp(1 - top, pop, share)
-
-
 
 # ---------------------------------------------------------------------------
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
 vars_ss = ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B', 'psi', 'w',
-           'Z', 'F', 'I', 'U', 'BF', 'L', 'Div', 'tau', 'asset_mkt',
+           'Z', 'BF', 'L', 'Div', 'tau', 'asset_mkt',
            'goods_mkt', 'labor_mkt', 'wage_nkpc']
 
 def print_ss_summary(ss, var_ss=vars_ss):
@@ -250,7 +238,7 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
         ax.set_ylabel('Consumption $c(s, \\bar{\\theta}, \\bar{e}, a)$')
         ax.set_title(f'Policy Functions - {beta_name}')
         ax.set_xlim(0, T_plot_a)
-        ax.set_ylim(0.5, 2.5)
+        ax.set_ylim(0.5, 3)
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)
@@ -262,11 +250,10 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
 # 3. Wealth and Income Distribution
 # ---------------------------------------------------------------------------
 
-def pnad_lorenz(calibration, n=2001):
+def pnad_lorenz(n=2001):
     # Lorenz Curve of Labor Earnings (PNAD).
     d = pd.read_csv('data/final/pnad_income_dist.csv')
-    lf = calibration['F_ss'] + calibration['I_ss']
-    shares = (calibration['F_ss'] / lf, calibration['I_ss'] / lf)
+    shares = alpha[:2] / alpha[:2].sum()          # F, I over the employed
     x = np.linspace(0, d.wage.max(), n)
     f = sum(s * np.interp(x, g.wage, g.y, left=0, right=0)
             for s, (_, g) in zip(shares, d.groupby('group')))
@@ -276,11 +263,11 @@ def pnad_lorenz(calibration, n=2001):
 
 def _bar_panel(ax, left, height, width, xlabel, title, vlines=(), xlim=None):
     # PDF Panel: Weighted Histogram + Labelled Vertical Markers.
-    ax.bar(left, height, width=width, color=COL1, alpha=0.7, align='edge')
+    ax.bar(left, 100 * height, width=width, color=COL1, alpha=0.7, align='edge')
     for xv, lab, col, ls in vlines:
         ax.axvline(xv, color=col, ls=ls, label=lab)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel('Mass of Households')
+    ax.set_ylabel('Households (%)')
     if xlim is not None:
         ax.set_xlim(0, xlim)
     ax.set_title(title)
@@ -298,8 +285,8 @@ def _lorenz_panel(ax, pop, share, emp, emp_label, kind):
     ax.plot(p, L, color=COL4, ls='--', lw=1.6,
             label=f'{emp_label}, Gini = {gini_from_lorenz(p, L):.2f}')
 
-    box = (f'Top 10% = {_top_share(pop, share, 0.10):.0%}\n'
-           f'Top 1%  = {_top_share(pop, share, 0.01):.0%}')
+    box = (f'Top 10% = {top_share(pop, share, 0.10):.0%}\n'
+           f'Top 1%  = {top_share(pop, share, 0.01):.0%}')
     ax.text(0.97, 0.03, box, transform=ax.transAxes, ha='right', va='bottom',
             fontsize=8, bbox=dict(boxstyle='round', fc=COL3, ec=COL3, alpha=0.6))
 
@@ -309,7 +296,44 @@ def _lorenz_panel(ax, pop, share, emp, emp_label, kind):
     ax.legend(frameon=False, loc='upper left')
 
 
-def plot_wealth_distribution(ss, calibration, n_bins=30, savepath=None):
+def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
+    # Model vs PNAD earnings density, by sector.
+    h = _hh(ss)
+    earn = float(ss['w']) * (h['n_f'] + h['n_i'])[:, 0]     # gross, a-invariant
+    mass = h['D'].sum(1)
+    blk  = earn.size // 3
+    ref  = np.average(earn[:blk], weights=mass[:blk])       # mean formal wage
+
+    d = pd.read_csv('data/final/pnad_income_dist.csv')
+    edges = np.linspace(-lim, lim, bins)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
+
+    for ax, s, sl, col in zip(axes, STATES, [slice(0, blk), slice(blk, 2*blk)],
+                              [COL1, COL4]):
+        ly = np.log(earn[sl] / ref)
+        mod, _ = np.histogram(ly, bins=edges, weights=mass[sl])
+        g   = d[(d.group == s) & (d.wage > 0)]
+        dat, _ = np.histogram(np.log(g.wage / pnad['y_F']), bins=edges,
+                              weights=g.y * np.gradient(g.wage))
+        c = 0.5 * (edges[:-1] + edges[1:])
+        ax.bar(c, 100 * mod / mod.sum(), width=np.diff(edges), color=col,
+               alpha=0.55, label='Model')
+        ax.plot(c, 100 * dat / dat.sum(), color='black', lw=1.6, ls='--', label='PNAD')
+        # Targeted Quantiles
+        ax.plot(_wquantile(ly, mass[sl], qs), np.zeros(len(qs)), '|', color=col,
+                ms=14, mew=2)
+        ax.plot([pnad[f'q{q}_{s}'] for q in qs], np.zeros(len(qs)), '|',
+                color='black', ms=14, mew=2)
+        ax.axvline(0, color=GRAY, lw=0.8)
+        ax.set_xlabel(r'$\log(y / \bar{y}^F)$')
+        ax.set_ylabel('Density (%)')
+        ax.set_title(f'{STATES[s]} Earnings')
+        ax.legend(frameon=False)
+
+    _save_or_show(fig, savepath)
+
+
+def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     # 2x2: Wealth and Income, each as a PDF and a Lorenz curve.
     h = _hh(ss)
     D, a_grid = h['D'], h['a_grid']
@@ -340,8 +364,8 @@ def plot_wealth_distribution(ss, calibration, n_bins=30, savepath=None):
                   'US SCF 2019 (Proxy)', 'Wealth')
 
     _bar_panel(axes[1, 0], edges[:-1], y_hist, np.diff(edges),
-               'Income $y$', 'Income Distribution (Near Constraint)', xlim=20)
-    _lorenz_panel(axes[1, 1], yL_pop, yL_share, pnad_lorenz(calibration),
+               'Income $y$', 'Income Distribution (Near Constraint)', xlim=10)
+    _lorenz_panel(axes[1, 1], yL_pop, yL_share, pnad_lorenz(),
                   'PNAD', 'Income')
 
     _save_or_show(fig, savepath)
@@ -425,7 +449,7 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
     keys = ['Informal Share', 'Unemployed Share', 'Wealth Gini', 'Welfare E[V]']
     series = {k: [] for k in keys}
     Tr0 = calibration['Tr']
-    Tr_grid = Tr0 * np.array([0, 0.5, 1, 2])
+    Tr_grid = Tr0 * np.array([0, 0.5, 1, 1.5, 2])
     reuse = [(0.0, ss_nobf), (Tr0, ss_base)]
     for Tr in Tr_grid:
         base = next((s for t, s in reuse if s is not None and np.isclose(Tr, t)), None)
@@ -435,7 +459,7 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7))
     for ax, k in zip(axes.flat, keys):
-        ax.plot(Tr_grid, series[k], marker='o', ms=4, color=COL1, lw=2.2)
+        ax.plot(Tr_grid, series[k], marker='o', ms=4, color=COL4, lw=2.2)
         ax.axvline(Tr0, color=GRAY, ls='--', lw=1)
         ax.set_xticks(Tr_grid, [f'{t:.2f}' for t in Tr_grid])
         ax.set_xlabel('BF Size $Tr$')
@@ -563,9 +587,9 @@ MACRO_FMT |= {f'{p}_{a}{b}': '.1%' for p in ('mod', 'dat') for a in STATES for b
 MACRO_FMT |= {f'dat_{s}': '.1%' for s in STATES}
 
 # Estimated from PNAD or calibrated inside the model: report 3 decimals.
-ROUND3 = ['delta_F', 'delta_I', 'mu_F', 'mu_I', 'sigma_F', 'sigma_I', 'sd_F',
-          'sd_I', 'pi_F', 'pi_I', 'psi', 'varphi', 'beta_high', 'beta_low',
-          'xi', 'd_mu', 'Z', 'tau']
+ROUND3 = ['delta_F', 'delta_I', 'mu_I', 'sigma_F', 'sigma_I', 'sd_e', 'h_ratio',
+          'pi_F', 'pi_I', 'pi_UF', 'pi_UI', 'psi', 'varphi', 'beta_high', 'beta_low',
+          'xi', 'Z', 'tau', *[f'q{q}_{s}' for s in STATES for q in qs]]
 MACRO_FMT |= {k: '.3f' for k in ROUND3}
 MACRO_FMT |= {f'dat_{k}': '.3f' for k in ROUND3}
 
@@ -587,7 +611,9 @@ def tex_macros(ss, calibration, savepath=None, prefix='m'):
     ctx |= dict(B_Y=ctx['B'] / ctx['Y'], Tr_w=ctx['Tr'] / ctx['w'],
                 beta_low=ctx['beta_high'] - ctx['dbeta'])
 
-    name = lambda k: prefix + ''.join(w[0].upper() + w[1:] for w in k.split('_'))
+    # A control sequence takes letters only, so LOG2_Y_F -> \mLOGTwoYF.
+    name = lambda k: (prefix + ''.join(w[0].upper() + w[1:]
+                                       for w in k.split('_'))).translate(DIGITS)
     val  = lambda k: format(ctx[k], MACRO_FMT.get(k, '.4g')).replace('%', r'\%')
 
     # Keys differing only in case ('I' vs 'i') map to one macro: keep the first.

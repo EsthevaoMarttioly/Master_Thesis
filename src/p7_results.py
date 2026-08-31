@@ -9,14 +9,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-from code.p5_calibration import (pnad, alpha, qs, gini_coefficient,
+from src.p5_calibration import (pnad, alpha, qs, gini_coefficient,
                                  gini_from_lorenz, top_share, _wquantile)
 
 def rr():
     # Reload results.py into the global namespace (interactive use).
-    import importlib, code.p7_results
-    importlib.reload(code.p7_results)
-    globals().update({k: v for k, v in vars(code.p7_results).items()
+    import importlib, src.p7_results
+    importlib.reload(src.p7_results)
+    globals().update({k: v for k, v in vars(src.p7_results).items()
                       if not k.startswith('_')})
 
 

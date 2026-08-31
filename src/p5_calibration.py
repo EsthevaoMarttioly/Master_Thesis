@@ -27,7 +27,7 @@ calibration = dict(
     # --- Discount Factor ---
     dbeta     = 0.15,    # SMM: beta_high - beta_low              -> Wealth
     omega_I   = 0.50,    # Share of Impatient Agents              -> HtM
-    q         = 0.1,     # Prob of Redrawing beta Type (Generation = 25y)
+    q         = 0.01,    # Prob of Redrawing beta Type (Generation = 25y = 100q)
 
     # --- Labor market ---
     delta_F = Pi_s[F, U],      # Job-Loss Probability from Formal
@@ -118,11 +118,11 @@ mom_se = {k: pnad_se[k] if k in pnad_se else 0.0 for k in mom_smm}
 # SMM Space:      name -> (lower, upper, transform)
 smm_space = {
     'mu_I'    : (-2.5,  0.0,   'lin'),     # log(theta_s) ~ N(mu_s, sigma_s^2)
-    'sigma_F' : ( 0.20, 1.50,  'log'),
-    'sigma_I' : ( 0.20, 1.80,  'log'),
-    'rho_e'   : ( 0.80, 0.995, 'logit'),   # log(e_{t+1}) = rho_e log(e_t) + epsilon_t
+    'sigma_F' : ( 0.05, 1.50,  'log'),
+    'sigma_I' : ( 0.05, 1.80,  'log'),
+    'rho_e'   : ( 0.80, 0.999, 'logit'),   # log(e_{t+1}) = rho_e log(e_t) + epsilon_t
     'sd_e'    : ( 0.10, 1.20,  'log'),     # epsilon_t ~ N(0, sd_e^2)
-    'dbeta'   : ( 0.00, 0.30,  'logit'),   # beta spread    -> top of the distribution
+    'dbeta'   : ( 0.00, 0.40,  'logit'),   # beta spread    -> top of the distribution
     'omega_I' : ( 0.05, 0.95,  'logit'),   # impatient mass -> bottom (HtM)
 }
 

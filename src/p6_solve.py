@@ -13,8 +13,8 @@ import pandas as pd
 from scipy.optimize import minimize, differential_evolution
 from sequence_jacobian.classes import SteadyStateDict
 
-from code.p1_household import make_egrid, make_bgrid, nS, nB, _HH_WARM
-from code.p5_calibration import *
+from src.p1_household import make_egrid, make_bgrid, nS, nB, _HH_WARM
+from src.p5_calibration import *
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0
     stuck = [f'{n}={v:.1e}>{t:.1e}' for n, v, t in
              (('|dPi|', diff, tol), ('|dpi|', dpi, stol), ('|A-B|', dA, atol * c['B']))
              if v >= t]
-    raise RuntimeError(f"Steady state stalled in {maxit} it: " + ", ".join(stuck))
+    raise RuntimeError(f"\nSteady state stalled in {maxit} it: " + ", ".join(stuck))
 
 
 # ---------------------------------------------------------------------------
@@ -345,15 +345,17 @@ def estimate(obj, p0=None, global_stage=True, popsize=8,
     else:
         x0 = _to_x(p0 or {k: calibration[k] for k in obj.space}, obj.space)
 
+    # The two stages score on different grids, so `best` restarts with the polish
     print("\n--- Stage 2: Local Polish (Full Grid) ---")
-    obj._cache.clear()
+    print("  coarse best:", " ".join(f"{k}={v:.3f}" for k, v in _to_p(x0, obj.space).items()))
+    obj._cache.clear(); obj._best = (np.inf, None)
     res = minimize(obj, x0, args=(False,), method='Nelder-Mead',
                    options=dict(maxiter=maxiter_l, xatol=1e-4, fatol=1e-8, adaptive=True))
 
     p_hat = _to_p(res.x, obj.space)
     g, mod, ss, cal = obj.gaps(p_hat, coarse=False)
     J = float(g @ obj.W @ g)
-    print(f"SMM done in {(time.time()-t0)/60:.1f}min   J = {J:.6e}   {obj.n} solves")
+    print(f"\nSMM done in {(time.time()-t0)/60:.1f}min   J = {J:.6e}   {obj.n} solves")
     return dict(params=p_hat, x=res.x, J=J, g=g, moments=mod,
                 ss=ss, calibration=cal, result=res)
 
@@ -406,7 +408,7 @@ def jtest(g, G, W, S, n_obs):
 
 # ---------------------------------------------------------------------------
 def report(res, path=None, label='tab:smm'):
-    from code.p7_results import _tex_table
+    from src.p7_results import _tex_table
     mod  = res['moments']
     name = lambda k: k if k in mom_smm else k + '*'
     tbl = pd.DataFrame([(name(k), mom_data[k], mod[k], mod[k] - mom_data[k]) for k in mom_data],
@@ -429,8 +431,8 @@ def report(res, path=None, label='tab:smm'):
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     from sequence_jacobian import create_model
-    from code.p1_household import hh
-    from code.p2_other_blocks import *
+    from src.p1_household import hh
+    from src.p2_other_blocks import *
 
     hank_ss = create_model([hh, firm_formal, firm_informal, nkpc_ss,
                             union_ss, monetary, fiscal, mkt_clearing, calibrate_ss])

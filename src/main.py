@@ -19,11 +19,11 @@ random.seed(20260415)
 
 
 # Import parameters
-from code.p1_household import hh
-from code.p2_other_blocks import *
-from code.p5_calibration import *
-from code.p6_solve import *
-from code.p7_results import *
+from src.p1_household import hh
+from src.p2_other_blocks import *
+from src.p5_calibration import *
+from src.p6_solve import *
+from src.p7_results import *
 
 
 # ---------------------------------------------------------------------------
@@ -142,5 +142,5 @@ cumulative_response_table(irfm_bf['insu'], irfm_bf['full'], shock='i',
 
 
 rr()
-from code.p7_results import *
+from src.p7_results import *
 

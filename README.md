@@ -16,12 +16,13 @@ All code is written with reproducibility and defensive programming in mind.
 ├── .venv                                # Package version lockfile
 ├── code/
 │   ├── main.py                          # Master script - runs everything
-│   ├── p1_household.py                  # Household's block; moments as hetoutputs
+│   ├── p1_household.py                  # Household's block
 │   ├── p2_other_blocks.py               # Firm, Fiscal, Monetary, and Mkt Clearing
 │   ├── p3_pnad_matching.py              # PNAD: Panel Matching
 │   ├── p4_analysis.R                    # PNAD: Calibration Data + attrition tilt
-│   ├── p5_calibration.py                # Parameters, Moments, and SMM
-│   └── p6_results.py                    # Graphics and Tables
+│   ├── p5_calibration.py                # Parameters
+│   └── p6_solve.py                      # Solve Steady State, Dynamics, and SMM
+│   └── p7_results.py                    # Graphics and Tables
 ├── data/
 │   ├── pnad/                            # PNAD Data
 │   ├── lorenz_nw_scf_2019.raw           # SCF Data for US Lorenz Curve
@@ -41,7 +42,7 @@ All code is written with reproducibility and defensive programming in mind.
 
 ## Computational Environment
 
-The analysis was conducted using Python version 3.14 and R version 4.6.0 (2026-06-09) on a Windows 11 system.
+The analysis was conducted using Python version 3.12.10 and R version 4.6.0 (2026-06-09) on a Windows 11 system.
 
 ## Running the project
 

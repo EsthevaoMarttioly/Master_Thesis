@@ -13,8 +13,8 @@ import pandas as pd
 from scipy.optimize import minimize, differential_evolution
 from sequence_jacobian.classes import SteadyStateDict
 
-from src.p1_household import make_egrid, make_bgrid, nS, nB, _HH_WARM
-from src.p5_calibration import *
+from code.p1_household import make_egrid, make_bgrid, nS, nB, _HH_WARM
+from code.p5_calibration import *
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +408,7 @@ def jtest(g, G, W, S, n_obs):
 
 # ---------------------------------------------------------------------------
 def report(res, path=None, label='tab:smm'):
-    from src.p7_results import _tex_table
+    from code.p7_results import _tex_table
     mod  = res['moments']
     name = lambda k: k if k in mom_smm else k + '*'
     tbl = pd.DataFrame([(name(k), mom_data[k], mod[k], mod[k] - mom_data[k]) for k in mom_data],
@@ -431,8 +431,8 @@ def report(res, path=None, label='tab:smm'):
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     from sequence_jacobian import create_model
-    from src.p1_household import hh
-    from src.p2_other_blocks import *
+    from code.p1_household import hh
+    from code.p2_other_blocks import *
 
     hank_ss = create_model([hh, firm_formal, firm_informal, nkpc_ss,
                             union_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
@@ -453,6 +453,6 @@ if __name__ == "__main__":
                        columns=obj.keys).round(3).to_string())
 
     # Estimation
-    res = estimate(obj)
-    report(res, "output/tables/smm.tex")
+    # res = estimate(obj)
+    # report(res, "output/tables/smm.tex")
 

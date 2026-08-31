@@ -9,14 +9,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-from src.p5_calibration import (pnad, alpha, qs, gini_coefficient,
+from code.p5_calibration import (pnad, alpha, qs, gini_coefficient,
                                  gini_from_lorenz, top_share, _wquantile)
 
 def rr():
     # Reload results.py into the global namespace (interactive use).
-    import importlib, src.p7_results
-    importlib.reload(src.p7_results)
-    globals().update({k: v for k, v in vars(src.p7_results).items()
+    import importlib, code.p7_results
+    importlib.reload(code.p7_results)
+    globals().update({k: v for k, v in vars(code.p7_results).items()
                       if not k.startswith('_')})
 
 
@@ -138,7 +138,6 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0,
     if suptitle:
         fig.suptitle(suptitle, fontsize=11)
     _save_or_show(fig, savepath)
-    return fig, axes
 
 
 
@@ -242,7 +241,6 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)
-    return fig, ax
 
 
 
@@ -369,7 +367,6 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
                   'PNAD', 'Income')
 
     _save_or_show(fig, savepath)
-    return fig, axes
 
 
 
@@ -440,7 +437,6 @@ def plot_descriptives(ss, ss_nobf, calibration, n_q=5, savepath=None):
     axes[1, 1].set_title('Who gains from Bolsa Familia')
 
     _save_or_show(fig, savepath)
-    return fig, axes
 
 
 # ---- Sensitivity Analysis -------------------------------------------------
@@ -451,9 +447,18 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
     Tr0 = calibration['Tr']
     Tr_grid = Tr0 * np.array([0, 0.5, 1, 1.5, 2])
     reuse = [(0.0, ss_nobf), (Tr0, ss_base)]
+    warm  = {}                    # continuation: neighbours on the grid are close
     for Tr in Tr_grid:
         base = next((s for t, s in reuse if s is not None and np.isclose(Tr, t)), None)
-        st = _ss_stats(base if base is not None else solve_fn({**calibration, 'Tr': Tr}))
+        if base is None:
+            try:
+                base = solve_fn({**calibration, **warm, 'Tr': Tr})
+            except RuntimeError as err:
+                print(f"  Tr={Tr:.3f} left as a gap.{err}")
+                for k in keys: series[k].append(np.nan)
+                continue
+        warm = {k: float(base[k]) for k in ('beta_high', 'Z', 'psi', 'tau')}
+        st = _ss_stats(base)
         for k in keys:
             series[k].append(st[k])
 
@@ -466,7 +471,6 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
         ax.set_title(k)
     fig.suptitle('Steady State vs BF Transfer', fontsize=11)
     _save_or_show(fig, savepath)
-    return fig, axes
 
 
 
@@ -495,7 +499,6 @@ def plot_impc(G_hh, h_ant=4, T_plot=20, key='C_GHH', savepath=None):
     ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)
-    return fig, ax
 
 
 def plot_irf(irf_dict, variables=('C', 'I', 'U', 'BF', 'pi', 'w'),
@@ -504,8 +507,8 @@ def plot_irf(irf_dict, variables=('C', 'I', 'U', 'BF', 'pi', 'w'),
         for i, (label, irf) in enumerate(irf_dict.items()):
             ax.plot(irf[v][:T_plot] * 100, color=CYCLE[i % len(CYCLE)],
                     ls=LS[i % 4], lw=2.2, label=label)
-    return _irf_panels(variables, T_plot, draw, legend_ax=0,
-                       suptitle=f'GE IRFs: {title}', xtick=5, savepath=savepath)
+    _irf_panels(variables, T_plot, draw, legend_ax=0,
+                suptitle=f'GE IRFs: {title}', xtick=5, savepath=savepath)
 
 
 def plot_irf_decomposition(irf_ins, irf_full, irf_pe=None,
@@ -522,7 +525,7 @@ def plot_irf_decomposition(irf_ins, irf_full, irf_pe=None,
         ax.plot(x, full, color=COLORS['full'], lw=2.2, label='Full Channel')
         ax.fill_between(x, ins, full, color=COLORS['full'], alpha=0.15,
                         label='Composition Channel')
-    return _irf_panels(variables, T_plot, draw, savepath=savepath)
+    _irf_panels(variables, T_plot, draw, savepath=savepath)
 
 
 def plot_irf_financing(irf_tax, irf_debt, variables=('C', 'Y', 'pi', 'w', 'r', 'B'),
@@ -542,8 +545,8 @@ def plot_irf_financing(irf_tax, irf_debt, variables=('C', 'Y', 'pi', 'w', 'r', '
                     ax.plot(x, irf['tau'][:T_plot] * 100, color=COL5,
                             ls=ls, lw=1.8, label=lab)
             ax.legend(frameon=False)
-    return _irf_panels(variables, T_plot, draw,
-                       titles={'B': r'Debt $B$ x Transfers $\tau$'}, savepath=savepath)
+    _irf_panels(variables, T_plot, draw,
+                titles={'B': r'Debt $B$ x Transfers $\tau$'}, savepath=savepath)
 
 
 

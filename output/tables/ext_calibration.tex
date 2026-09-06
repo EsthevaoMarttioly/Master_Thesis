@@ -10,23 +10,15 @@
 \midrule
 \multicolumn{4}{l}{\textit{Households and Labor Market}} \\[2pt]
 $\gamma$ & EIS & $\mEis$ & Standard in Literature \\
+$\varphi$ & Informal Frisch Elasticity & $\mVarphi$ & Standard in Literature \\
+$\psi$ & Disutility of Labor & $\mPsi$ & Normalization, $h_F = \mHF$ \\
+$\beta_H$ & Patient's Discount Factor & $\mBetaHigh$ & $A/Y = B/Y = \mDatBGdp$ \\
 $\delta_F$ & Job-Loss Probability to Formal & $\mDeltaF$ & PNAD-C Data \parencite{osorio2022montagem} \\
 $\delta_I$ & Job-Loss Probability to Informal & $\mDeltaI$ & PNAD-C Data \parencite{osorio2022montagem} \\
-$\sigma_S$ & Smoothness of Labor Decision & $\mSig$ & Arbitrary \\
-[6pt]
-
-\multicolumn{4}{l}{\textit{Productivity and Asset Grid}} \\[2pt]
-$(\underline{a}, \bar{a})$ & Log-Asset Grid & $(\mAmin, \mAmax)$ & No Borrowing \\
-$N_a$ & Number of Asset Grid & $\mNA$ & Accuracy near Constraint \\
-$\rho_e$ & Persistence of Log-Productivity & $\mRhoE$ & \textcite{kaplan2018monetary} \\
-$\sigma_e$ & Productivity Std. Dev. & $\mSdE$ & Arbitrary \\
-$\E[\theta^F]$ & Formal Average Productivity & $1.0$ & Normalization \\
-$\sigma_F$ & Formal Std. Dev. Productivity & $\mSigmaF$ & PNAD-C Data \\
-$\sigma_I$ & Informal Std. Dev. Productivity & $\mSigmaI$ & PNAD-C Data \\
 [6pt]
 
 \multicolumn{4}{l}{\textit{Firms}} \\[2pt]
-$Y$ & Aggregate Output & $\mY$ & Normalization \\
+$w$ & Average Wage & $\mW$ & Normalization, Reference \\
 $\mu, \mu_w$ & Price Markup & $\mMu$ & \textcite{basu1997returns} \\
 $\kappa$ & Price-NKPC Slope & $\mKappa$ & \textcite{hazell2022national} \\
 $\kappa_w$ & Wage-NKPC slope & $\mKappaW$ & Equal to $\kappa$ \\
@@ -34,10 +26,17 @@ $\kappa_w$ & Wage-NKPC slope & $\mKappaW$ & Equal to $\kappa$ \\
 
 \multicolumn{4}{l}{\textit{Government and Monetary Policy}} \\[2pt]
 $r^*$ & Neutral Real Interest Rate & $\mRstar$ & $4\%$ annual average \\
-$\phi$ & Taylor Rule Coefficient & $\mPhi$ & Standard \parencite{taylor1993follow} \\
-$\phi_B$ & Sensitivity to pay the Debt & $\mPhiB$ & Sufficient to $B$ converges \\
 $\tau_\ell$ & Labor Income Tax Rate & $\mTauL$ & Average Tax Payroll \\
-$T/w$ & Bolsa Família Transfer & $\mTr$ & CadÚnico, PNAD-C \\
+$\phi$ & Taylor Rule Coefficient & $\mPhi$ & Standard \parencite{taylor1993follow} \\
+$B/Y$ & Government Debt-to-GDP Ratio & $\mDatBGdp$ & Brazilian National Treasure\\
+$\phi_B$ & Sensitivity to Pay the Debt & $\mPhiB$ & $B$ converges within 10 years \\
+[6pt]
+
+\multicolumn{4}{l}{\textit{Bolsa Família}} \\[2pt]
+$BF \cdot T / W$ & Bolsa Família Spending (\%Wage Bill) & $\mDatBFW$ & CadÚnico, PNAD-C \\
+$\phi_F, \phi_I$ & Take-up at Zero Earnings & $\mDatPhiF, \mDatPhiI$ & PNAD-C \\
+$\bar y_F, \bar y_I$ & Half-Coverage Threshold & $\mYbarF, \mYbarI$ & PNAD-C \\
+$\sigma_F, \sigma_I$ & Smoothness of Eligibility & $\mDatSigF, \mDatSigI$ & PNAD-C \\
 \bottomrule
 \end{tabular}
 \end{table}

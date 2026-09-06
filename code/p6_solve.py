@@ -23,16 +23,14 @@ from code.p5_calibration import *
 def _softmax(Vals, sig):
     # Turn "pick the best option" into smooth probabilities (sig -> 0 = hard max).
     V = np.stack(Vals, 0)
-    if sig == 0:
-        return (V == V.max(0)).astype(float)
-    Probs = np.exp((V - V.max(0)) / sig)
+    Probs = np.exp((V - V.max(0)) / np.maximum(sig, 1e-10))
     return Probs / Probs.sum(0)
 
 
-def _status_probs(Vst, p, probF, probI):
+def _status_probs(Vst, Vaj, p, probF, probI):
     # Transition Matrix Pi_{s,theta} 3*nT x 3*nT for each (beta, e, a).
     nS, nT, nA = Vst.shape
-    sig = p['sig']
+    sig = p['sig'] * Vaj.reshape(nS*nT, nA)      # taste shock in consumption units
     piF = np.repeat([p['pi_F'], p['pi_F'], p['pi_UF']], nT)[:, None]
     piI = np.repeat([p['pi_I'], p['pi_I'], p['pi_UI']], nT)[:, None]
     delta = np.repeat([p['delta_F'], p['delta_I'], 0.0], nT)
@@ -65,19 +63,21 @@ def _status_probs(Vst, p, probF, probI):
     return P
 
 
-def build_Pi(V, D, p, Pi_b, Pi_e, probF, probI):
+def build_Pi(V, Va, D, p, Pi_b, Pi_e, probF, probI):
     # Assemble the full transition matrix:  s (x) theta (x) beta (x) e.
     # `V` is (nS, nT, nBeta, nE, nA):  the value of each sector at (beta,e,a).
     nT, nE, nA = p['nT'], Pi_e.shape[0], V.shape[1]
-    Vr = V.reshape(nS*nT, nB, nE, nA)
-    Dr = D.reshape(nS*nT, nB, nE, nA)
+    Vr  = V.reshape(nS*nT, nB, nE, nA)
+    Var = Va.reshape(nS*nT, nB, nE, nA)
+    Dr  = D.reshape(nS*nT, nB, nE, nA)
 
     Pstat = np.empty((nB, nE, nS*nT, nS*nT))    # Pstat[beta, e, from, to]
     flow  = np.zeros((nS*nT, nS*nT))            # mass flowing from -> to
 
     for _beta in range(nB):
         for _e in range(nE):
-            P = _status_probs(Vr[:, _beta, _e, :].reshape(nS, nT, nA), p, probF, probI)
+            P = _status_probs(Vr[:, _beta, _e, :].reshape(nS, nT, nA),
+                              Var[:, _beta, _e, :], p, probF, probI)
             w = Dr[:, _beta, _e, :]
             flow += np.einsum('mna,ma->mn', P, w)              # Weight by mass
             tot = w.sum(1, keepdims=True)
@@ -98,7 +98,7 @@ def build_Pi(V, D, p, Pi_b, Pi_e, probF, probI):
 # 2. Steady State
 # ---------------------------------------------------------------------------
 # Initial Guess
-unknowns = dict(beta_high = 0.98, Z = 2.0, psi = 0.2, tau = 0.1)
+unknowns = dict(beta_high = 0.98, psi = 0.2, L = 0.5, tau = 0.1, Tr = 0.2, B = 3.2)
 
 def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0,
              smax=0.3, tol=1e-8, stol=1e-3, atol=1e-6, maxit=400):
@@ -119,8 +119,8 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0
                          c['omega_I'], c['q'], nE, nT)
 
     # Initial guess for Pi.
-    diff, dpi, dA = 0.1, 0.0, 0.0; x0 = f0 = xb = fb = None
-    Pi, _ = build_Pi(np.zeros((nS*nT*nB*nE, nA)),
+    diff, dpi, dA, dbf = 0.1, 0.0, 0.0, 0.0; x0 = f0 = xb = fb = None
+    Pi, _ = build_Pi(np.zeros((nS*nT*nB*nE, nA)), np.ones((nS*nT*nB*nE, nA)),
                      np.ones((nS*nT*nB*nE, nA)), c, Pi_b, Pi_e, probF, probI)
 
     for it in range(maxit):
@@ -129,9 +129,10 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0
         ss = SteadyStateDict(c); ss.update(hank_block.steady_state(c))
 
         # Market Clearing: analytical forms + solver to asset_mkt (secant)
-        if 'Z_hat' in ss:
-            c['Z'], c['psi'] = float(ss['Z_hat']), float(ss['psi_hat'])
+        if 'L_hat' in ss:
+            c['L'], c['psi'], c['Tr'] = float(ss['L_hat']), float(ss['psi_hat']), float(ss['Tr_hat'])
             c['tau'] = c['tau_ss'] = float(ss['tau_hat'])
+            c['B']   = c['B_ss']   = float(ss['B_hat'])
             xn, fn = c['beta_high'], float(ss['asset_mkt'])  # A - B, dA/dbeta > 0
             if xb is not None and abs(fn - fb) > 1e-12:
                 g = (xn - xb) / (fn - fb)     # dbeta/dA > 0; if not, Pi moved A
@@ -140,7 +141,7 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0
             c['beta_high'] = float(np.clip(xn - np.clip(bgain*fn, -0.02, 0.02), 0.5, 0.999))
 
         hhi = ss.internals['household']
-        Pi_new, P_s = build_Pi(hhi['V'], hhi['D'], c, Pi_b, Pi_e, probF, probI)
+        Pi_new, P_s = build_Pi(hhi['V'], hhi['Va'], hhi['D'], c, Pi_b, Pi_e, probF, probI)
         diff = np.max(np.abs(Pi_new - Pi)); Pi = Pi_new
 
         # Calibrate the arrival rates (by sector flows)
@@ -158,13 +159,19 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0
                 xn = np.clip(x - np.clip(gain * f, -smax, smax),
                              np.log(1e-4), np.log(0.99))
                 for k, val in zip(pi_calib, np.exp(xn)): c[k] = float(val)
+            # Calibrate the BF Take-up
+            dbf = 0.0
+            for k, (agg, sh) in bf_calib.items():
+                r = mom_data[agg[:4]] / max(float(ss[agg]) / float(ss[sh]), 1e-12)
+                dbf = max(dbf, abs(np.log(r)))
+                c[k] = float(np.clip(c[k] * r, 1e-4, 1.0))
         # Iterate until converges
         if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.1e}  |dpi|={dpi:.1e}")
         if np.isfinite(hhi['Va']).all():
             _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
-        if diff < tol and dpi < stol and dA < atol * c['B']:
+        if diff < tol and dpi < stol and dbf < stol and dA < atol * c['B']:
             hhi['P'] = P_s                  # F/I/U Transition
-            for k in (*pi_calib, *unknowns, 'tau_ss', 'B_ss'): ss.toplevel[k] = c[k]
+            for k in (*pi_calib, *bf_calib, *unknowns, 'tau_ss', 'B_ss'): ss.toplevel[k] = c[k]
             tdiff = time.time() - start
             if verbose:
                 print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min),  " +
@@ -172,9 +179,9 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, gain=1.0
             return ss
     # Name the criterion that stalled, they fail for very different reasons
     stuck = [f'{n}={v:.1e}>{t:.1e}' for n, v, t in
-             (('|dPi|', diff, tol), ('|dpi|', dpi, stol), ('|A-B|', dA, atol * c['B']))
-             if v >= t]
-    raise RuntimeError(f"\nSteady state stalled in {maxit} it: " + ", ".join(stuck))
+             (('|dPi|', diff, tol), ('|dpi|', dpi, stol), ('|dbf|', dbf, stol),
+              ('|A-B|', dA, atol * c['B'])) if v >= t]
+    raise RuntimeError(f"\n     Steady state stalled in {maxit} it: " + ", ".join(stuck))
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +195,14 @@ def irf_partial(G, inp, dZ, var):
 def ar1(size, rho, T, delay=0):
     # AR(1) shock path, announced `delay` quarters in advance.
     dZ = size * rho ** np.arange(T)
+    return np.r_[np.zeros(delay), dZ[:T-delay]]
+
+
+def hike(pps, n, rho, T, delay=0):
+    # Copom cycle: `pps` a year each quarter for n quarters, then AR(1) decay.
+    dZ = np.zeros(T)
+    dZ[:n] = pps / 400 * np.arange(1, n + 1)      # annual bps -> quarterly rate
+    for t in range(n, T): dZ[t] = rho * dZ[t-1]
     return np.r_[np.zeros(delay), dZ[:T-delay]]
 
 
@@ -212,6 +227,7 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var,
     
     Pi_ss = ss['Pi']; dPi = np.zeros((T,) + Pi_ss.shape)
     V_ss  = ss.internals['household']['V']
+    Va_ss = ss.internals['household']['Va']
     D_ss  = ss.internals['household']['D']
 
     for it in range(maxit):
@@ -220,13 +236,14 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var,
                                           internals=['household'], verbose=False)
 
         # MOVING: Rebuild Pi_t from the period-t value/dist, iterate to consistency
-        V = V_ss[None] + td.internals['household']['V']   # Levels + Deviations
-        D = D_ss[None] + td.internals['household']['D']
-        Pi_new = np.stack([build_Pi(V[t], D[t], calib, Pi_b, Pi_e, probF, probI)[0]
+        V  = V_ss[None]  + td.internals['household']['V']   # Levels + Deviations
+        Va = Va_ss[None] + td.internals['household']['Va']
+        D  = D_ss[None]  + td.internals['household']['D']
+        Pi_new = np.stack([build_Pi(V[t], Va[t], D[t], calib, Pi_b, Pi_e, probF, probI)[0]
                            for t in range(T)])
         dPi_new = Pi_new - Pi_ss
         diff = np.max(np.abs(dPi_new - dPi)); dPi = dPi_new
-        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.2e}")
+        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={diff:.1e}")
         if diff < tol:
             tdiff = time.time() - start
             print(f"Dynamics solved in {tdiff:.1f}s ({tdiff/60:.1f}min).")
@@ -287,8 +304,9 @@ class SMM:
         self.cal0  = dict(calibration if calib is None else calib)
         self.space = space
         self.keys  = mom_smm
-        # Var(gap) = sampling + specification error (floor).
-        self.W = np.diag([1.0 / (se[k] ** 2 + floor ** 2) for k in mom_smm])
+        # Var(gap) = sampling + specification error (floor). W = S^-1, so it is efficient.
+        self.S = np.diag([se[k] ** 2 + floor ** 2 for k in mom_smm])
+        self.W = np.diag(1.0 / np.diag(self.S))
         self.coarse  = coarse or {}                 # e.g. {'nA': 60, 'nE': 7, 'nT': 3}
         self.logpath, self.every = logpath, every   # checkpoint, a run takes hours
         self.verbose, self.log, self.n = verbose, [], 0
@@ -297,8 +315,9 @@ class SMM:
     def gaps(self, p, coarse=True):
         # Run the model and get moments
         cal = {**self.cal0, **p, **(self.coarse if coarse else {})}
-        ss  = solve_ss(self.model, cal, flows=flows)
-        cal.update({k: float(ss[k]) for k in (*pi_calib, *unknowns)})
+        ss  = solve_ss(self.model, cal, flows=flows,      # a slow point is a bad point
+                       maxit=150 if coarse else 400)
+        cal.update({k: float(ss[k]) for k in (*pi_calib, *bf_calib, *unknowns)})
         mod = model_moments(ss)
         return np.array([mod[k] - mom_data[k] for k in self.keys]), mod, ss, cal
 
@@ -321,8 +340,7 @@ class SMM:
         if J < self._best[0]: self._best = (J, dict(p))
         if self.logpath and self.n % self.every == 0: self.history().to_csv(self.logpath)
         if self.verbose:
-            # The search is a population, not a descent: watch `best`, not `J`.
-            print(f"  [{self.n:4d}] J={J:9.3e} best={self._best[0]:9.3e}  " +
+            print(f"  [{self.n:4d}] J={J:9.1e} best={self._best[0]:9.1e}  " +
                   " ".join(f"{k}={v:6.3f}" for k, v in p.items() if k in self.space) +
                   f"  ({time.time()-t0:3.0f}s) {why}")
         return J
@@ -333,31 +351,33 @@ class SMM:
 
 
 # 3. Estimate Parameters
-def estimate(obj, p0=None, global_stage=True, popsize=8,
-             maxiter_g=25, maxiter_l=200, seed=20260415):
-    # Global search on the coarse grid, then a local polish on the full one.
+def estimate(obj, p0=None, global_stage=True, local_stage=True, polish=None,
+             popsize=8, maxiter_g=25, maxiter_l=200, seed=20260415):
+    # Global Search on obj.coarse, then a local polish on `polish` (None keeps it).
     t0 = time.time()
+    x0 = _to_x(p0 or {k: guess[k] for k in obj.space}, obj.space)
     if global_stage:
-        print("\n--- Stage 1: Global Search (Coarse Grid) ---")
+        print("\n--- Stage 1: Global Search ---")
         x0 = differential_evolution(obj, _bounds_x(obj.space), args=(True,),
                                     popsize=popsize, maxiter=maxiter_g, tol=1e-3,
                                     seed=seed, polish=False, init='sobol').x
-    else:
-        x0 = _to_x(p0 or {k: calibration[k] for k in obj.space}, obj.space)
+    if local_stage:
+        # The stages score on different grids, so `best` restarts with the polish
+        print("\n--- Stage 2: Local Polish ---")
+        print("  from:", " ".join(f"{k}={v:.3f}" for k, v in _to_p(x0, obj.space).items()))
+        if polish is not None: obj.coarse = polish
+        obj._cache.clear(); obj._best = (np.inf, None)
+        x0 = minimize(obj, x0, args=(True,), method='Nelder-Mead',
+                      options=dict(maxiter=maxiter_l, xatol=1e-4, fatol=1e-8, adaptive=True)).x
 
-    # The two stages score on different grids, so `best` restarts with the polish
-    print("\n--- Stage 2: Local Polish (Full Grid) ---")
-    print("  coarse best:", " ".join(f"{k}={v:.3f}" for k, v in _to_p(x0, obj.space).items()))
-    obj._cache.clear(); obj._best = (np.inf, None)
-    res = minimize(obj, x0, args=(False,), method='Nelder-Mead',
-                   options=dict(maxiter=maxiter_l, xatol=1e-4, fatol=1e-8, adaptive=True))
-
-    p_hat = _to_p(res.x, obj.space)
-    g, mod, ss, cal = obj.gaps(p_hat, coarse=False)
+    p_hat = _to_p(x0, obj.space)
+    g, mod, ss, cal = obj.gaps(p_hat, coarse=False)     # score on the full grid
     J = float(g @ obj.W @ g)
-    print(f"\nSMM done in {(time.time()-t0)/60:.1f}min   J = {J:.6e}   {obj.n} solves")
-    return dict(params=p_hat, x=res.x, J=J, g=g, moments=mod,
-                ss=ss, calibration=cal, result=res)
+    print(f"\nSMM done in {(time.time()-t0)/60:.0f}min ({(time.time()-t0)/3600:.1f}hrs)",
+             f"   J = {J:.4e}   {obj.n} solves")
+    pd.Series(p_hat, name='value').to_csv(smm_paths['l' if local_stage else 'g'],
+                                          index_label='param')
+    return dict(params=p_hat, x=x0, J=J, g=g, moments=mod, ss=ss, calibration=cal)
 
 
 # ---------------------------------------------------------------------------
@@ -368,11 +388,13 @@ def jacobian(obj, p_hat, step=0.02, coarse=False):
     x, ks = _to_x(p_hat, obj.space), list(obj.space)
     G = []
     for j in range(x.size):
+        t0 = time.time()
         xp, xm = x.copy(), x.copy(); xp[j] += step; xm[j] -= step
         gp, *_ = obj.gaps(_to_p(xp, obj.space), coarse)
         gm, *_ = obj.gaps(_to_p(xm, obj.space), coarse)
         dth = _to_p(xp, obj.space)[ks[j]] - _to_p(xm, obj.space)[ks[j]]
         G.append((gp - gm) / dth)
+        print(f"  [G] {j+1}/{x.size} {ks[j]:8s} d={dth:+.3f}  ({(time.time()-t0)/60:.1f}min)")
     return np.array(G).T
 
 
@@ -407,25 +429,36 @@ def jtest(g, G, W, S, n_obs):
 
 
 # ---------------------------------------------------------------------------
-def report(res, path=None, label='tab:smm'):
+def inference(res, obj, step=0.02, coarse=False, savepath=None, label='tab:smm_se'):
+    # Classical Minimum Distance: S is already Var(moment), so n_obs = 1.
     from code.p7_results import _tex_table
+    G  = jacobian(obj, res['params'], step=step, coarse=coarse)
+    se = std_errors(G, obj.W, obj.S, 1)[0]
+    stat, df, pval = jtest(res['g'], G, obj.W, obj.S, 1)
+
+    tbl = pd.DataFrame({'estimate': res['params'], 's.e.': dict(zip(obj.space, se))})
+    tbl['t'] = tbl['estimate'] / tbl['s.e.']
+    print(tbl.round(4).to_string())
+    print(f"Hansen J = {stat:.3f}   df = {df}   p = {pval:.3f}")
+
+    esc  = lambda k: k.replace('_', r'\_')
+    rows = [f'{esc(k)} & {r.estimate:.4f} & {r["s.e."]:.4f} & {r.t:.2f}'
+            for k, r in tbl.iterrows()]
+    rows += [r'\midrule', rf'Hansen $J$ & \multicolumn{{3}}{{c}}'
+             rf'{{{stat:.2f}  (df {df}, $p$ = {pval:.3f})}}']
+    _tex_table([r'Parameter & Estimate & S.E. & $t$'], rows,
+               'SMM Estimates and Over-identification Test', label, 'lccc', savepath=savepath)
+    return tbl, (stat, df, pval)
+
+
+def report(res):
     mod  = res['moments']
+    keys = [k for k in mom_data if k not in mom_fix]      # drop the by-construction ones
     name = lambda k: k if k in mom_smm else k + '*'
-    tbl = pd.DataFrame([(name(k), mom_data[k], mod[k], mod[k] - mom_data[k]) for k in mom_data],
+    tbl = pd.DataFrame([(name(k), mom_data[k], mod[k], mod[k] - mom_data[k]) for k in keys],
                        columns=['Moment', 'Data', 'Model', 'Gap']).set_index('Moment').round(4)
     print("=== Moments (* = Untargeted) ===\n", tbl.to_string())
 
-    # LaTeX: parameters, then targeted and untargeted moments
-    esc   = lambda k: k.replace('_', r'\_')
-    line  = lambda k: f'{esc(k)} & {mom_data[k]:.4f} & {mod[k]:.4f} & {mod[k]-mom_data[k]:.4f}'
-    panel = lambda t: [r'\midrule', rf'\multicolumn{{4}}{{l}}{{\textit{{{t}}}}} \\']
-    rows  = [rf'\multicolumn{{4}}{{l}}{{\textit{{Panel A: Parameters}}}} \\']
-    rows += [f'{esc(k)} & \\multicolumn{{3}}{{c}}{{{v:.4f}}}' for k, v in res['params'].items()]
-    rows += panel('Panel B: Targeted Moments')   + [line(k) for k in mom_smm]
-    rows += panel('Panel C: Untargeted Moments') + [line(k) for k in mom_data if k not in mom_smm]
-    return _tex_table(['Moment & Data & Model & Gap'], rows,
-                      f"SMM Calibration ($J = {res.get('J', float('nan')):.3f}$)",
-                      label, 'lccc', savepath=path) or tbl
 
 
 # ---------------------------------------------------------------------------
@@ -434,25 +467,32 @@ if __name__ == "__main__":
     from code.p1_household import hh
     from code.p2_other_blocks import *
 
-    hank_ss = create_model([hh, firm_formal, firm_informal, nkpc_ss,
+    hank_ss = create_model([hh, firm_formal, firm_informal, wages, nkpc_ss,
                             union_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
-    # First Run
-    p0  = {k: calibration[k] for k in smm_space}
-    ss0 = solve_ss(hank_ss, calibration, flows=flows, verbose=True)
-    tbl = report(dict(moments=model_moments(ss0), params=p0))
-    obj = SMM(hank_ss, coarse=dict(nA=60, nE=7, nT=3), verbose=True)
+    # 1. First Run
+    p0  = {k: guess[k] for k in smm_space}
+    obj = SMM(hank_ss, coarse=dict(nA=60, nE=9, nT=5), verbose=True)
 
-    # Identification
-    G = jacobian(obj, p0); s, cond, weak = identification(G, obj.W)
+    # 2. Identification and Sensitivity
+    G = jacobian(obj, p0, coarse=True); s, cond, weak = identification(G, obj.W)
     print(f"Condition Number {cond:.1f}\n", s.round(4).to_string(),
           "\n", weak.round(3).to_string())
-
-    # Sensitivity (Andrews-Gentzkow-Shapiro)
     print(pd.DataFrame(sensitivity(G, obj.W), index=list(smm_space),
                        columns=obj.keys).round(3).to_string())
 
-    # Estimation
-    # res = estimate(obj)
-    # report(res, "output/tables/smm.tex")
+    # 3. Global Search
+    # res = estimate(obj, local_stage=False)
+    # report(res)
+    # print(pd.DataFrame({'estimate': res['params'],
+    #                     'lower': {k: v[0] for k, v in smm_space.items()},
+    #                     'upper': {k: v[1] for k, v in smm_space.items()}}).round(4).to_string())
+
+    # 4. Polish (Mid Grid)
+    # res = estimate(obj, p0=res['params'], global_stage=False,
+    #                polish=dict(nA=100, nE=11, nT=5), maxiter_l=80)
+    # report(res)
+
+    # 5. Standard Errors and Over-identification
+    # inference(res, obj, savepath="output/tables/smm_se.tex")
 

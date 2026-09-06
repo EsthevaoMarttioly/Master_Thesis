@@ -24,6 +24,9 @@ u = lambda c, eis: np.log(np.maximum(c, 1e-12)) if eis == 1 else\
 v = lambda h, psi, varphi: psi * np.maximum(h, 1e-8) ** (1+1/varphi)/(1+1/varphi)
 
 expand = lambda x: np.repeat(x[:, None, :], nB, 1).reshape(-1)   # (nT, nE) -> state
+zeros  = lambda x, n: [np.zeros_like(x) for _ in range(n)]
+states = lambda x: [slice(k * x.shape[0] // nS, (k+1) * x.shape[0] // nS)
+                    for k in range(nS)]                 # F, I, U blocks
 
 
 # 1.2. Exogenous Transition States Grid
@@ -60,8 +63,8 @@ def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
 
 
 # 1.3. Labor Income Function
-def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT, thetaF,
-                 thetaI, y_bar, tau_l, psi, varphi, sig_y):
+def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT, thetaF, thetaI, tau_l, psi, varphi,
+                 phi_F, ybar_F, sig_F, phi_I, ybar_I, sig_I, p_U):
     # Dividend Income and Informal Hours
     div_i = np.tile(Div * e_grid, nS*nT*nB)
     tau_i = np.tile(tau, nS*nT*nB*nE)
@@ -72,14 +75,17 @@ def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT, thetaF,
     h_I = (w * e_I / np.maximum(psi, 1e-8)) ** (varphi)
     y_F = w * e_F * h_F                       # Gross Earnings
     y_I = w * e_I * h_I
-    elig = (y_I < y_bar).astype(float)        # Elegibility
-    # elig = 1 / (1 + np.exp((y_I - y_bar) / sig_y))
 
-    # Expand the income into beta grid.
-    y = np.r_[expand((1 - tau_l) * y_F),
-              expand(1/(1+varphi) * y_I + Tr * elig),
-              expand(np.full((nT, nE), Tr))] + div_i + tau_i
-    return y, y_F, y_I, h_I, e_F, e_I, elig
+    # BF Coverage: in units of E[y|F] = w * h_F
+    p_bf = lambda y, phi, ybar, sig: phi / (1 + (y / (ybar * w * h_F)) ** (1/sig))
+    p_F, p_I = p_bf(y_F, phi_F, ybar_F, sig_F), p_bf(y_I, phi_I, ybar_I, sig_I)
+    # elig = (y_I < y_bar).astype(float)      # Hard Threshold
+
+    # Expand the income into beta grid
+    y = np.r_[expand((1 - tau_l) * y_F - v(h_F, psi, varphi) + Tr * p_F),
+              expand(1/(1+varphi) * y_I + Tr * p_I),
+              expand(np.full((nT, nE), Tr * p_U))] + div_i + tau_i
+    return y, y_F, y_I, h_I, e_F, e_I, p_F, p_I
 
 
 # ---------------------------------------------------------------------------
@@ -96,55 +102,52 @@ def hh_init(a_grid, y, r, eis):
 
 
 @het(exogenous=['Pi'], policy='a', backward=['Va', 'V'], backward_init=hh_init)
-def household(Va_p, V_p, a_grid, y, h_F, r, beta, eis, psi, varphi):
+def household(Va_p, V_p, a_grid, y, r, beta, eis):
     c_nextgrid = (beta[:, None] * Va_p) ** (-eis)
     coh = (1 + r) * a_grid + y[:, None]
     a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
     a = np.maximum(a, a_grid[0])
-    c_ghh = coh - a
+    c_ghh = np.maximum(coh - a, 1e-8)     # a formal below his effort cost never takes it
     Va = (1 + r) * c_ghh ** (-1 / eis)
-    # Value Function
-    dis = np.zeros_like(c_ghh)
-    dis[:c_ghh.shape[0] // 3] = v(h_F, psi, varphi)
-    V = u(c_ghh, eis) - dis + beta[:, None] * V_p
+    V = u(c_ghh, eis) + beta[:, None] * V_p
     return Va, V, a, c_ghh
 
 
 # ---------------------------------------------------------------------------
 # 3. Hetoutputs
-def sector_shares(c_ghh, e_F, e_I, h_F, h_I, elig, psi, varphi):
-    block = c_ghh.shape[0] // nS     # nT * nBeta * nE
-    f, n_f = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
-    i, n_i = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
-    u, bf  = np.zeros_like(c_ghh), np.zeros_like(c_ghh)
-    
+def sector_shares(c_ghh, e_F, e_I, h_F, h_I, p_F, p_I, p_U, psi, varphi):
+    sF, sI, sU = states(c_ghh)
+    f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf = zeros(c_ghh, 9)
+
     # Sector Indicator, F=0, I=1, U=2
-    f[:block]        = 1.0
-    i[block:2*block] = 1.0
-    u[2*block:]      = 1.0
-    bf[2*block:]     = 1.0
+    f[sF], i[sI], u[sU] = 1.0, 1.0, 1.0
 
     # Labor Supply = theta * e * h
-    n_f[:block]        = expand(e_F * h_F)[:, None]
-    n_i[block:2*block] = expand(e_I * h_I)[:, None]
-    bf[block:2*block]  = expand(elig)[:, None]
+    n_f[sF] = expand(e_F * h_F)[:, None]
+    n_i[sI] = expand(e_I * h_I)[:, None]
 
-    # Informal Consumption (readjusted)
+    # Bolsa Familia: Probability of Receiving
+    bf_f_lf[sF] = expand(p_F)[:, None]
+    bf_i_lf[sI] = expand(p_I)[:, None]
+    bf_u_lf[sU] = p_U
+    bf = bf_f_lf + bf_i_lf + bf_u_lf
+
+    # Consumption, net of the GHH effort cost
     c = c_ghh.copy()
-    c[block:2*block] += expand(v(h_I, psi, varphi))[:, None]
+    c[sF] += v(h_F, psi, varphi)
+    c[sI] += expand(v(h_I, psi, varphi))[:, None]
 
-    return c, f, i, u, n_f, n_i, bf
+    return c, f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf
 
 
 def labor_moments(c_ghh, y_F, y_I, h_I):
     # Moments for Calibration.
-    block = c_ghh.shape[0] // nS
-    h_i = np.zeros_like(c_ghh)          # Informal Hours
-    log_y_f, log_y_i = (np.zeros_like(c_ghh) for _ in range(2))
+    sF, sI, _ = states(c_ghh)
+    h_i, log_y_f, log_y_i = zeros(c_ghh, 3)
 
-    h_i[block:2*block]     = expand(h_I)[:, None]
-    log_y_f[:block]        = expand(np.log(y_F))[:, None]
-    log_y_i[block:2*block] = expand(np.log(y_I))[:, None]
+    h_i[sI]     = expand(h_I)[:, None]
+    log_y_f[sF] = expand(np.log(y_F))[:, None]
+    log_y_i[sI] = expand(np.log(y_I))[:, None]
 
     return h_i, log_y_f, log_y_i
 

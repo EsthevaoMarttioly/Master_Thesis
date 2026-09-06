@@ -9,18 +9,19 @@
 & \textbf{Description} & \textbf{Value} & \textbf{Target} & \textbf{Model} & \textbf{Data} & \textbf{Source} \\
 \midrule
 \multicolumn{4}{l}{\textit{Households}} \\[2pt]
-$\psi$ & Disutility of Labor & $\mPsi$ & $h_F$ & $\mHF$ & $1.0$ & Normalization \\
-$\varphi$ & Frisch Elasticity & $\mVarphi$ & X & X & X & PNAD-C Data \\
-$\beta_H$ & Patient's Discount Factor & $\mBetaHigh$ & $B/Y$ & $\mB$ & $3.2$ & Tesouro Nacional \\
-$\delta_\beta$ & Difference: $\beta_H - \beta_L$ & $\mDbeta$ & X & X & X & Arbitrary \\
-$\omega_I$ & Share of Impatient Agents & $\mOmegaI$ & X & X & X & Arbitrary \\
+$\beta_L$ & Impatient's Discount Factor & $\mBetaLow$ & Top 10\% & $\mModTopOneZero$ & $\mDatTopOneZero$ & WID World \\
+$\omega_I$ & Share of Impatient Agents & $\mOmegaI$ & HtM Share & $\mModHtm$ & $\mDatHtm$ & Standard \\
+$\sigma_S$ & Smoothness of Tastes & $\mSig$ & $\Delta_{IF}$ & $\mModDwIF$ & $\mDatDwIF$ & PNAD-C Data \\
 [6pt]
 
 \multicolumn{4}{l}{\textit{Labor Market}} \\[2pt]
-$\pi_F$ & Formal Offer Probability & $\mPiF$ & $F$ & $\mF$ & $\mDatF$ & PNAD-C Data \\
-$\pi_I$ & Informal Offer Probability & $\mPiI$ & $I$ & $\mI$ & $\mDatI$ & PNAD-C Data \\
-$\mu_I$ & Informal Average Productivity & $\mMuI$ & $\xi$ & X & \mDatXi & PNAD-C Data \\
-$\bar y$ & Bolsa Família Threshold & $\mYBar$ & $BF$ & $\mBF$ & $\mDatBF$ & CadÚnico \\
+$\pi_F, \pi_F^U$ & Formal Offer Probability & $\mPiF, \mPiUF$ & $F$ & $\mF$ & $\mDatF$ & PNAD-C Data \\
+$\pi_I, \pi_I^U$ & Informal Offer Probability & $\mPiI, \mPiUI$ & $I$ & $\mI$ & $\mDatI$ & PNAD-C Data \\
+$\rho_e$ & Persistence of Productivity & $\mRhoE$ & $\rho_1^y$ & $\mModAcOne$ & $\mDatAcOne$ & PNAD-C Data \\
+$\sigma_e$ & Productivity Std. Dev. & $\mSdE$ & $q_{90}$ & $\mModQNineZeroF$ & $\mDatQNineZeroF$ & PNAD-C Data \\
+$\mu_I$ & Informal Average Productivity & $\mMuI$ & $q_{50}^I$ & $\mModQFiveZeroI$ & $\mDatQFiveZeroI$ & PNAD-C Data \\
+$\sigma_F$ & Formal Std. Dev. Produc. & $\mSigmaF$ & $q_{75}^F$ & $\mModQSevenFiveF$ & $\mDatQSevenFiveF$ & PNAD-C Data \\
+$\sigma_I$ & Informal Std. Dev. Produc. & $\mSigmaI$ & $q_{75}^I$ & $\mModQSevenFiveI$ & $\mDatQSevenFiveI$ & PNAD-C Data \\
 \bottomrule
 \end{tabular}
 \end{table}

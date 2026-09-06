@@ -9,8 +9,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-from code.p5_calibration import (pnad, alpha, qs, gini_coefficient,
-                                 gini_from_lorenz, top_share, _wquantile)
+from code.p5_calibration import (pnad, alpha, qs, mom_data, model_moments,
+                                 gini_coefficient, gini_from_lorenz, top_share, _wquantile)
 
 def rr():
     # Reload results.py into the global namespace (interactive use).
@@ -145,9 +145,8 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0,
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
-vars_ss = ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'B', 'psi', 'w',
-           'Z', 'BF', 'L', 'Div', 'tau', 'asset_mkt',
-           'goods_mkt', 'labor_mkt', 'wage_nkpc']
+vars_ss = ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'psi', 'BF', 'L', 'F',
+           'Div', 'tau', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc']
 
 def print_ss_summary(ss, var_ss=vars_ss):
     print("\n" + "=" * 55)
@@ -157,6 +156,10 @@ def print_ss_summary(ss, var_ss=vars_ss):
         print(f"  {k:12s} = {ss[k]:.4f}")
         if k == 'beta_high':
             print(f"  {'beta_low':12s} = {ss['beta_high'] - ss['dbeta']:.4f}")
+        if k == 'BF':
+            print(f"  {'BF_F':12s} = {ss['BF_F_LF'] / ss['F']:.4f}")
+            print(f"  {'BF_I':12s} = {ss['BF_I_LF'] / ss['I']:.4f}")
+            print(f"  {'BF_U':12s} = {ss['BF_U_LF'] / ss['U']:.4f}")
     print("=" * 55)
 
 
@@ -237,7 +240,7 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
         ax.set_ylabel('Consumption $c(s, \\bar{\\theta}, \\bar{e}, a)$')
         ax.set_title(f'Policy Functions - {beta_name}')
         ax.set_xlim(0, T_plot_a)
-        ax.set_ylim(0.5, 3)
+        ax.set_ylim(0, 3)
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)
@@ -441,10 +444,11 @@ def plot_descriptives(ss, ss_nobf, calibration, n_q=5, savepath=None):
 
 # ---- Sensitivity Analysis -------------------------------------------------
 def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=None):
-    # Re-solve the Steady State over Tr in {0, .5, 1, 1.5, 2} x Tr0
+    # Re-solve the Steady State over BF_w in {0, .5, 1, 1.5, 2} x BF_w0.
+    # Sweep the ratio, not Tr: calibrate_ss inverts Tr out of it every iteration.
     keys = ['Informal Share', 'Unemployed Share', 'Wealth Gini', 'Welfare E[V]']
     series = {k: [] for k in keys}
-    Tr0 = calibration['Tr']
+    Tr0 = calibration['BF_w']
     Tr_grid = Tr0 * np.array([0, 0.5, 1, 1.5, 2])
     reuse = [(0.0, ss_nobf), (Tr0, ss_base)]
     warm  = {}                    # continuation: neighbours on the grid are close
@@ -452,12 +456,12 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
         base = next((s for t, s in reuse if s is not None and np.isclose(Tr, t)), None)
         if base is None:
             try:
-                base = solve_fn({**calibration, **warm, 'Tr': Tr})
+                base = solve_fn({**calibration, **warm, 'BF_w': Tr})
             except RuntimeError as err:
-                print(f"  Tr={Tr:.3f} left as a gap.{err}")
+                print(f"  BF_w={Tr:.4f} left as a gap.{err}")
                 for k in keys: series[k].append(np.nan)
                 continue
-        warm = {k: float(base[k]) for k in ('beta_high', 'Z', 'psi', 'tau')}
+        warm = {k: float(base[k]) for k in ('beta_high', 'L', 'psi', 'tau', 'B')}
         st = _ss_stats(base)
         for k in keys:
             series[k].append(st[k])
@@ -466,8 +470,8 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
     for ax, k in zip(axes.flat, keys):
         ax.plot(Tr_grid, series[k], marker='o', ms=4, color=COL4, lw=2.2)
         ax.axvline(Tr0, color=GRAY, ls='--', lw=1)
-        ax.set_xticks(Tr_grid, [f'{t:.2f}' for t in Tr_grid])
-        ax.set_xlabel('BF Size $Tr$')
+        ax.set_xticks(Tr_grid, [f'{t:.3f}' for t in Tr_grid])
+        ax.set_xlabel('BF Spending / Wage Bill')
         ax.set_title(k)
     fig.suptitle('Steady State vs BF Transfer', fontsize=11)
     _save_or_show(fig, savepath)
@@ -534,16 +538,16 @@ def plot_irf_financing(irf_tax, irf_debt, variables=('C', 'Y', 'pi', 'w', 'r', '
     def draw(ax, v):
         if v in irf_tax:
             ax.plot(x, irf_tax[v][:T_plot] * 100, color=COLORS['ins'],
-                    lw=1.8, label='Tax-Financed')
+                    lw=2.2, label='Tax-Financed')
         if v in irf_debt:
             ax.plot(x, irf_debt[v][:T_plot] * 100, color=COLORS['full'],
-                    lw=1.8, ls='--', label='Debt-Financed')
+                    lw=2.2, ls='--', label='Debt-Financed')
         if v == 'B':         # overlay tau on the same axis
             for irf, ls, lab in [(irf_tax, '-', r'$\tau$ (Tax)'),
                                  (irf_debt, '--', r'$\tau$ (Debt)')]:
                 if 'tau' in irf:
                     ax.plot(x, irf['tau'][:T_plot] * 100, color=COL5,
-                            ls=ls, lw=1.8, label=lab)
+                            ls=ls, lw=2.2, label=lab)
             ax.legend(frameon=False)
     _irf_panels(variables, T_plot, draw,
                 titles={'B': r'Debt $B$ x Transfers $\tau$'}, savepath=savepath)
@@ -585,20 +589,18 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 # 9. Calibration
 # ---------------------------------------------------------------------------
 
-MACRO_FMT = {k: '.1%' for k in ['F', 'I', 'U', 'BF', 'rstar']}
+# Macro formats. The default is 3 decimals; these are the exceptions.
+PCT = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'B_gdp', 'Tr_yF',
+       'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI']
+ONE = ['h_F', 'h_I', 'w', 'Y']                                    # normalizations, hours
+TWO = ['phi_F', 'phi_I', 'ybar_F', 'ybar_I', 'sig_F', 'sig_I']    # BF coverage
+BIG = ['LF', 'Pop', 'y_F', 'y_I']                                 # people and R$
+
+MACRO_FMT  = ({k: '.1%' for k in PCT} | {k: '.1f' for k in ONE}
+              | {k: '.2f' for k in TWO} | {k: '.4g' for k in BIG})
+MACRO_FMT |= {f'{p}_{k}': v for p in ('mod', 'dat')                  # data and model twins
+              for k, v in tuple(MACRO_FMT.items())}
 MACRO_FMT |= {f'{p}_{a}{b}': '.1%' for p in ('mod', 'dat') for a in STATES for b in STATES}
-MACRO_FMT |= {f'dat_{s}': '.1%' for s in STATES}
-
-# Estimated from PNAD or calibrated inside the model: report 3 decimals.
-ROUND3 = ['delta_F', 'delta_I', 'mu_I', 'sigma_F', 'sigma_I', 'sd_e', 'h_ratio',
-          'pi_F', 'pi_I', 'pi_UF', 'pi_UI', 'psi', 'varphi', 'beta_high', 'beta_low',
-          'xi', 'Z', 'tau', *[f'q{q}_{s}' for s in STATES for q in qs]]
-MACRO_FMT |= {k: '.3f' for k in ROUND3}
-MACRO_FMT |= {f'dat_{k}': '.3f' for k in ROUND3}
-
-# Normalizations print as 1.0, not 1; mean hours as one decimal.
-MACRO_FMT |= {k: '.1f' for k in ['h_F', 'Y', 'dat_h_F', 'dat_h_I']}
-
 
 def tex_macros(ss, calibration, savepath=None, prefix='m'):
     # Return the \newcommand macros when savepath is None; otherwise write them.
@@ -611,13 +613,16 @@ def tex_macros(ss, calibration, savepath=None, prefix='m'):
     ctx |= {f'dat_{a}{b}': d.loc[a, b] for a in STATES for b in STATES}
     ctx |= {f'dat_{k}': float(v) for k, v in     # PNAD cross-section: F, I, U, xi, ...
             pd.read_csv('data/final/pnad_calibration.csv').loc[0].items()}
-    ctx |= dict(B_Y=ctx['B'] / ctx['Y'], Tr_w=ctx['Tr'] / ctx['w'],
+    ctx |= {f'dat_{k}': float(v) for k, v in mom_data.items()}       # targets, incl. WID
+    ctx |= {f'mod_{k}': float(v) for k, v in model_moments(ss).items()}
+    ctx |= dict(B_gdp=ctx['B'] / (4 * (ctx['Y'] + ctx['Y_I'])), BF_w=ctx['Tr'] * ctx['BF'] / ctx['wage_bill'],
+                Tr_yF=ctx['Tr'] * ctx['F'] / (ctx['w'] * ctx['N_F']),
                 beta_low=ctx['beta_high'] - ctx['dbeta'])
 
     # A control sequence takes letters only, so LOG2_Y_F -> \mLOGTwoYF.
     name = lambda k: (prefix + ''.join(w[0].upper() + w[1:]
                                        for w in k.split('_'))).translate(DIGITS)
-    val  = lambda k: format(ctx[k], MACRO_FMT.get(k, '.4g')).replace('%', r'\%')
+    val  = lambda k: format(ctx[k], MACRO_FMT.get(k, '.3f')).replace('%', r'\%')
 
     # Keys differing only in case ('I' vs 'i') map to one macro: keep the first.
     seen, rows = {}, []

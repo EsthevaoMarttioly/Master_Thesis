@@ -28,8 +28,8 @@ from code.p7_results import *
 
 # ---------------------------------------------------------------------------
 # Steady State
-hank_ss = create_model([hh, firm_formal, firm_informal, nkpc_ss, union_ss,
-                        monetary, fiscal, mkt_clearing, calibrate_ss])
+hank_ss = create_model([hh, firm_formal, firm_informal, wages, nkpc_ss,
+                        union_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
 ss = solve_ss(hank_ss, calibration, flows, verbose=True)
 calibration.update({k: float(ss[k]) for k in (*pi_calib, *unknowns, 'tau_ss', 'B_ss')})
@@ -47,20 +47,20 @@ plot_wealth_distribution(ss, savepath='output/figures/wealth_distribution.png')
 plot_income_distribution(ss, savepath='output/figures/income_distribution.png')
 
 
-# No-BF Counterfactuals
-ss_nobf = solve_ss(hank_ss, {**calibration, 'Tr': 0.0, 'y_bar': 0}, verbose=True)
+# No-BF Counterfactuals   -   Change with Dynamics
+ss_nobf = solve_ss(hank_ss, {**calibration, 'BF_w': 0.0}, verbose=True)
 
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, calibration, savepath='output/figures/bf_descript.png')
 
-plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal), calibration,
-              ss, ss_nobf, savepath='output/figures/bf_sweep.png')
+# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal), calibration,
+#               ss, ss_nobf, savepath='output/figures/bf_sweep.png')
 
 
 
 # ---------------------------------------------------------------------------
 # Dynamics
-hank = create_model([hh, firm_formal, firm_informal,
+hank = create_model([hh, firm_formal, firm_informal, wages,
                      phillips_curve, monetary, fiscal, mkt_clearing])
 
 dyn      = hank.steady_state(ss)
@@ -76,15 +76,15 @@ print("Steady State reached in dynamics DAG.")
 # ---------------------------------------------------------------------------
 # Equilibrium Jacobians
 T = 100
-unknowns_dyn  = ['B', 'Y', 'pi', 'w', 'tau']
-targets_dyn   = ['debt_rule', 'goods_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']
+unknowns_dyn  = ['B', 'h_F', 'L', 'pi', 'w', 'tau']   # r cleaning asset market?
+targets_dyn   = ['debt_rule', 'goods_mkt', 'labor_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']   # asset or labor market
 variables     = ['B', 'C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i', 'tau']
 
 
 # IRFs
-dTr     = ar1( 0.01,   0.40, T)             # Tr: AR(1), rho = 0.4, size = 1%
-di      = ar1(-0.0025, 0.60, T)             # i:  25bps expansionist, rho = 0.6
-dTr_ant = ar1( 0.01,   0.40, T, delay=4)    # Antecipated Shock
+dTr     = ar1( 0.01,    0.40, T)             # Tr: AR(1), rho = 0.4, size = 1%
+di      = hike(-0.5, 4, 0.85, T)             # i:  Copom cycle, -50bps/quarter for 1y
+dTr_ant = ar1( 0.01,    0.40, T, delay=4)    # Antecipated Shock
 
 
 ## Build IRFs
@@ -141,6 +141,5 @@ cumulative_response_table(irfm_bf['insu'], irfm_bf['full'], shock='i',
                           label='tab:monetary_cumulative')
 
 
-rr()
-from code.p7_results import *
+rr(); from code.p7_results import *
 

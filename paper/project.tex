@@ -172,7 +172,8 @@ $\E[e_{i,t}] = 1$, and discount factor heterogeneity
 $\beta_i\in\{ \beta_L, \beta_H \}$, and we fix $\omega_I$
 impatient households. They can work in the formal or informal sector,
 or be unemployed $s\in\{F,I,U\}$. Each sector has a specific productivity
-$\theta^s_{i,t}$ which their wage depends on, re-drawn on each new offer.
+$\theta^s_{i,t}$ which their wage depends on, re-drawn on each new offer,
+with $\E\!\left[\exp\{\theta^F_{i,t}\}\right] = 1.0$.
 
 Formal workers earn labor income
 $(1-\tau_{\ell}) \theta_{i,t}^F w_t e_{i,t} h_{i,t}$, while informal workers
@@ -384,7 +385,7 @@ inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ given by
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi} \cdot \tilde C_t^{1/\gamma}
-- \frac{(1-\tau_\ell) w_t L_t}{\mu_w}  \right]
+- \frac{(1-\tau_\ell) w_t L_t}{\mu_w h_t}  \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 
@@ -425,6 +426,14 @@ elasticity $\phi_B$,
 \[
 \tau_t = \bar \tau - \phi_B \cdot (B_{t-1} - \bar B).
 \]
+
+Or, in another words, using \textcite{auclert2025fiscal} notation, the debt
+persistency is defined by
+\[
+dB_t = (1+r_t) dB_{t-1} + d\tau_t = (1 + r - \phi_B) dB_{t-1} = \rho_B dB_{t-1},
+\]
+where $\rho_B$ is the debt persistency, which we calibrate so that debt is paid off
+on average within 10 year, so $\rho_B = 0.975$ and $\phi_B = \mPhiB$.
 
 This situation leads to larger multipliers and great inequality
 \parencite{auclert2023trickling}. In the presence of nominal rigidity and non-
@@ -475,8 +484,14 @@ Some general macroeconomic measures were also used, such as the Government Debt
 (in the Brazilian National Treasure), the interest rates, and the inflation,
 available in the \textit{Índice Brasileiro de Geografia e Estatística} (IBGE).
 The Gini coefficient of wealth was obtained from the 2025 Global Wealth Report,
-from UBS. \textit{Bolsa Família} data is available in \textit{Cadastro Único}
-(CadÚnico), in VIS Data, a platform with several statistics about the benefit.
+from UBS, and the Wealth Inequality Statistics were obtained from the 2024 Wealth
+Inequality Database\footnote{
+    Available in \href{https://wid.world/world/}{WID World}.}.
+\textit{Bolsa Família} data is available in \textit{Cadastro Único}
+(CadÚnico), in VIS Data\footnote{
+    Available in \href{https://aplicacoes.cidadania.gov.br/vis/data3/data-explorer.php}{VIS DATA 3}
+    and \href{https://paineis.mds.gov.br/public/extensions/observatorio-do-cadastro-unico/index.html}{Cadastro Único}.},
+a platform with several statistics about the benefit.
 
 Additionally, Annual PNAD-C has information about whether a individual
 is beneficiary of the benefit. We identify each household and consider every
@@ -536,7 +551,7 @@ students, to keep the empirical states aligned with the model's.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{wage_distribution.png}
-    \caption{Wage Distribution for each Sector (vs MLE-estimated Log-Normal)}
+    \caption{Wage Distribution for each Sector}
     \label{fig:wage_distribution}
 \end{figure}
 
@@ -645,21 +660,26 @@ those very choices generate along the transition \parencite{auclert2021using}.
 \input{int_calibration.tex}
 
 Each model period stands for one quarter and the computational time horizon is
-100 quarters (or 25 years). We solve the steady-state equilibrium computationally
-by Brent's method, internally calibrating parameters to clear the asset market,
-the labor market, the government budget constraint, and the Phillips curves.
-The external calibration is shown in table \ref{tab:ext_calibration} and
-the endogenous calibration is in \ref{tab:int_calibration}.
-The goods market was left untargeted to verify the Walras' Law.
+100 quarters (or 25 years). We externally calibrate $\beta_H$ to balance the
+asset market and $\pi_F$, $\pi_I$, $\pi_{UF}$, $\pi_{UI}$ to match the
+sectoral probabilities. Also, we internally calibrate parameters using the
+Simulated Method of Moments (SMM) by a Global Search on a coarse grid, followed
+by a local polish using the Nelder-Mead algorithm. The external calibration is
+shown in table \ref{tab:ext_calibration} and the endogenous calibration is
+in \ref{tab:int_calibration}.
 
 The idiosyncratic productivity follows a log-normal $AR(1)$ process,
 $\ln e' = \rho_e \ln e + \varepsilon^e$, with $\varepsilon^e \sim N(0,\sigma^2_e)$.
 This is approximated by a finite Markov chain with $N_e = \mNE$ grid points
-\parencite{rouwenhorst1995asset}. We also assume a log-spaced grid for assets
-$\ln a \in [\ln \underline a, \ln \bar a]$ with $N_a = \mNA$ points,
+\parencite{rouwenhorst1995asset}. We internally calibrate $\rho_e$ and $\sigma_e$
+to match the autocorrelation of wages in PNAD-C
+$\rho_1^y := \text{Corr}(\ln y_t, \ln y_{t-1})$ and the observed wage distribution.
+
+We also assume a log-spaced grid for assets
+$\ln a \in [\ln \underline a, \ln \bar a] = [\mAmin, \mAmax]$ with $N_a = \mNA$ points, 
 and a log-normal sector productivity grid $\ln \theta^s \sim N(\mu_s, \sigma_s^2)$,
-that is discretized by a Gauss-Hermite quadrature with $N_\theta = \mNT$ nodes
-\parencite{meghir2015wages}.
+that is discretized by a Gauss-Hermite quadrature with $N_\theta = \mNT$
+nodes \parencite{meghir2015wages}.
 
 Each household has a $q = \mQ$ probability of drawing a new discount factor
 $(\beta_L, \beta_H)$, corresponding to an average type duration of 25 years,
@@ -671,53 +691,67 @@ In the household preferences, elasticity of intertemporal substitution is standa
 in literature $\gamma=\mEis$\footnote{
     EIS $\gamma=\mEis$ is consistent with micro estimates surveyed by
     \textcite{valickova2015financial}.}.
-The disutility of labor $\psi = \mPsi$ is internally calibrated to normalize
-formal hours $h_F = \mHF$.
+The disutility of labor $\psi = \mPsi$ is calibrated to normalize formal
+hours $h_F = \mHF$.
 % At last, $\varphi = \mVarphi$ is chosen to approximate
 % informal worked hours to PNAD-C Data, in average (model = $0.891$, data = $0.867$)
 % and in standard error (model = $0.35$, data = $0.34$).
-The patient's discount factor $\beta_H = \mBetaHigh$ balances the asset market.
-We will use $\delta_\beta = \mDbeta$ and $\omega_I = \mOmegaI$ to approximate
-the Wealth Gini Coefficient.
+Finally, the preference shock smoothing parameter is set to $\sigma_S = \mSig$,
+so as to match the income growth of workers switching between the formal and informal
+sectors, $\Delta_{FI} = \E[\Delta\ln y_{t+1} | F \to I] = \mDatDwFI$ and
+$\Delta_{IF} = \E[\Delta\ln y_{t+1} | I \to F] = \mDatDwIF$.
+
+The patient's discount factor $\beta_H = \mBetaHigh$, balances the asset market.
+We estimate the impatient's discount factor, $\beta_L = \mBetaLow$, and the share
+of impatient households, $\omega_I = \mOmegaI$, to match the Top 10\% Share of Wealth
+($\mDatTopOneZero$, from World Inequality Database) and the share of Hand-to-Mouth
+households ($\mDatHtm$)\footnote{
+    HtM share consistent with the estimates of \textcite{costa2025fiscal} and
+    \textcite{galveasuncertain}.},
+letting the Wealth Gini Coeeficient ($\mDatGini$, from UBI Global Report) and th
+Top 1\% Share of Wealth ($\mDatTopOne$) untargeted.
 
 The layoff probabilities are equal to the transition probabilities in PNAD-C,
 $\delta_F = \P[\text{F}\to\text{U}] = \mDeltaF$ and
 $\delta_I = \P[\text{I}\to\text{U}] = \mDeltaI$. Further, the job offer
 probabilities are calibrated to match sector sizes $s\in\{F,I,U\}$ in
-equilibrium, as shown in Table \ref{tab:transitions}. The other transition
-probabilities were left untargeted. The taste preferences smoothness is governed
-by $\sigma_S = \mSig$. % talvez setar \sigma_S para aproximar F -> F, I -> I, U -> U
-% muitos desempregados ficam no desemprego, talvez não deixar \sigma para ele
+equilibrium, as shown in Table \ref{tab:transitions}. The taste preferences
+smoothness is governed by $\sigma_S = \mSig$.
 
 \input{transition_table.tex}
 
-We estimate the distribution of $\theta$ by fitting a log-normal to the observed
-wage distribution via maximum likelihood, which yields $\sigma_F = \mSigmaF$ and
-$\sigma_I = \mSigmaI$. We normalize average formal productivity to
-$\E(\theta^F) = 1$. Finally, we set $\mu_I = \mMuI$ to match the observed
-cross-sector wage gap $\xi := \E(y^F) / \E(y^I) = \mDatXi$.
+We internally calibrate moments of $\theta$ to match five quantiles
+$\{0.10, 0.25, 0.50, 0.75, 0.90\}$ of the observed wage distribution for
+formal and informal workers, with respect to $\E(y^F)$, which yields
+$\mu_I = \mMuI$, $\sigma_F = \mSigmaF$, and $\sigma_I = \mSigmaI$,
+after normalizing $\E(\theta^F) = 1.0$.
 
-The output is normalized $Y=\mY$ and we defined $\mu = \mMu$, which is standard in
+The average wage is normalized $w=\mW$, so that we can reference the model as a
+percentage of the Wage Bill. That was prefered rather than normalizing
+the GDP, because there is no capital in this model, therefore the wage if a better
+measure of the economy's size. We defined $\mu = \mMu$, which is standard in
 the HANK literature \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{
     Markup $\mu=\mMu$ is also consistent with the estimates of
-    \textcite{basu1997returns}.}, and $\kappa = \kappa_w = \mKappa$,
-consistent with \textcite{hazell2022national} estimates.
+    \textcite{basu1997returns}.},
+and $\kappa = \kappa_w = \mKappa$, consistent with \textcite{hazell2022national} estimates.
 
 Taylor Rule is pretty standard, with $\phi=\mPhi$ and $r^* = \mRstar$, consistent
 with a $4\%$ annual real interest rate for Brazilian economy
-\parencite{dos2024natural}. The Government debt is set to $80\%$ of yearly GDP,
-consistent with Brazilian National Treasure data. Wage tax is an average of
-all contributions levied on the payroll, $\tau_\ell = \mTauL$.
+\parencite{dos2024natural}. The Government debt is set to $\mDatBGdp$ of yearly
+GDP, consistent with Brazilian National Treasure data. Also, we set
+$\phi_B = \mPhiB$ so that the average time to pay off the debt is 10 years,
+as in \textcite{auclert2025fiscal}. Wage tax is an average of all contributions
+levied on the payroll, $\tau_\ell = \mTauL$.
 
-The \textit{Bolsa Família} statistics were obtained from the Cadastro
-Único\footnote{
-    Available in \href{https://aplicacoes.cidadania.gov.br/vis/data3/data-explorer.php}{VIS DATA 3}
-    and \href{https://paineis.mds.gov.br/public/extensions/observatorio-do-cadastro-unico/index.html}{Cadastro Único}.},
-where we calibrated the $T/w$ ratio in steady-state to be equal to the data
-from the Brazilian economy, with $T = \text{R\$ }670$ and $w = \text{R\$ }\mDatYF$.
-We also calibrated the \textit{Bolsa Família} threshold $\bar y = \mYBar$ to
-match the size of the program $BF = \mDatBF$, considering only households in
-the labor force.
+We calibrated the \textit{Bolsa Família} transfer size $T = \mTr$ to match the
+\textit{Bolsa Família} expenditure as a percentage of the Wage Bill,
+$\text{BF} \cdot T / W$ from Brazilian economy. In order to keep the internal
+consistency of the model, we consider $T$ as the average transfer received only
+by indivuals in labor force, disconsidering children and elderly. On the other
+hand, we calibrated the benefit's eligibility parameters to match PNAD-C data
+(Figure \ref{fig:bf_coverage_by_wage}), with a Weighted Non-Linear Least
+Square (Weighted NLS) estimation.
+
 
 %---------------------------------------------------
 %	RESULTS
@@ -739,6 +773,14 @@ the labor force.
     \includegraphics[width=1\linewidth]{wealth_distribution.png}
     \caption{Wealth Distribution}
     \label{fig:wealth_distribution}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{income_distribution.png}
+    \caption{Income Distribution}
+    \label{fig:income_distribution}
 \end{figure}
 
 
@@ -978,11 +1020,11 @@ V_t^w = \max_{\hat W_t} \int \left[
 
 Using the same algebra as the price Phillips curve, assuming that the union
 allocates the same amount of hours in each worker $h_{i,t} = h_t$, and using
-$\int_F e_{i,t} d\Lambda = L_t$, it is possible to find that
+$\int_F e_{i,t} d\Lambda = L_t / h_t$, it is possible to find that
 \[
 \theta_w (\pi_t^w - \bar \Pi^w) \pi_t^w
 = \varepsilon_w \left[ \frac{v'(h_t)}{u'(\tilde C_t)}
-- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) w_t L_t \right]
+- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) \frac{w_t L_t}{h_t} \right]
 + \bar \beta \theta_w (\pi_{t+1}^w - \bar \Pi^w) \pi_{t+1}^w \frac{h_{t+1}}{h_t},
 \]
 which we can linearize around the steady state $\pi_t^w = \bar \Pi^w$ and take
@@ -990,7 +1032,7 @@ $h_{t+1} = h_t$, since there is no population nor technological growth. Thus,
 \[
 \ln (1+\pi_t^w)
 = \frac{\varepsilon_w}{\theta_w} \left[ \frac{v'(h_t)}{u'(\tilde C_t)}
-- (1-\tau_\ell) w_t L_t \frac{\varepsilon_w-1}{\varepsilon_w} \right]
+- (1-\tau_\ell) \frac{w_t L_t}{h_t} \frac{\varepsilon_w-1}{\varepsilon_w} \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 
@@ -999,7 +1041,7 @@ $\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips curve is
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi} \cdot \tilde C_t^{1/\gamma}
-- \frac{(1-\tau_\ell) w_t L_t}{\mu_w}  \right]
+- \frac{(1-\tau_\ell) w_t L_t}{\mu_w h_t}  \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 

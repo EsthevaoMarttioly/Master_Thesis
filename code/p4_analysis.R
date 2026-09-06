@@ -123,10 +123,13 @@ df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                                    VD4001 == "2"          ~ "N", TRUE ~ NA_character_))
 
 dataset = data.frame(statistics(df, se = TRUE))
+wage_yr = 12 * coef(svytotal(~wage, df, na.rm = TRUE))[[1]]   # Total Wage Bill
 
 df$variables$id_dom = with(df$variables, paste0(UPA, V1008, V1014))
 df$variables$bf_hh  = ave(df$variables$bf, df$variables$id_dom,
                           FUN = function(x) as.integer(any(x == 1, na.rm = TRUE)))
+df$variables$lf_n   = ave(as.integer(df$variables$status %in% S),
+                          df$variables$id_dom, FUN = sum)
 
 
 # Wage Distribution
@@ -159,24 +162,63 @@ subs = list(Total = df,
             Formal = subset(df, status == "F"),
             Informal = subset(df, status == "I"))
 
-bf_size     = coef(svytotal(~bf_hh, df, na.rm = TRUE))
-bf_value    = coef(svymean(~V5002A2, subset(df, bf == 1), na.rm = TRUE))
-bf_sector   = svyby(~bf_hh, ~status, df, svymean, na.rm = TRUE)
-bf_share_lf = svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE)
-bf_value_lf = svymean(~V5002A2, subset(df, bf == 1 & status %in% S), na.rm = TRUE)
-dataset     = cbind(dataset,
-                    BF   = vs(bf_share_lf),
-                    BF_I = vs_by(bf_sector, "I"),
-                    BF_U = vs_by(bf_sector, "U"),
-                    Tr_y = vs(bf_value_lf) / dataset["est", "y_F"])
+bf_size     = coef(svytotal(~bf_hh, df, na.rm = TRUE))                     # Total BF Households
+bf_value    = coef(svymean(~V5002A2, subset(df, bf == 1), na.rm = TRUE))   # Average BF Payment
+bf_sector   = svyby(~bf_hh, ~status, df, svymean, na.rm = TRUE)            # Coverage by Sector
+
+
+# Household-level
+df_hh      = subset(df, !duplicated(id_dom))
+bf_size_hh = coef(svytotal(~bf_hh, df_hh, na.rm = TRUE))
+pphh       = bf_size / bf_size_hh
+
+
+# Labor Force Members
+bf_share_lf = svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE)              # Coverage (%)
+bf_lf       = coef(svytotal(~bf_hh, subset(df, status %in% S), na.rm = TRUE))[[1]]  # Covered (Total)
+bf_value_lf = svymean(~V5002A2, subset(df, bf == 1 & status %in% S), na.rm = TRUE)  # Value
+
+df = update(df, tr_i = ifelse(bf_hh == 1 & status %in% S, bf_value_lf / lf_n, 0))
+tr_lf  = coef(svytotal(~tr_i, df, na.rm = TRUE))[[1]]     # Total Spending (Labor Force)
+tr_ind = tr_lf / bf_lf                                    # Transfer per Labor Force
+
+dataset = cbind(dataset,
+                BF   = vs(bf_share_lf),
+                BF_F = vs_by(bf_sector, "F"),                   # P(BF | s)
+                BF_I = vs_by(bf_sector, "I"),
+                BF_U = vs_by(bf_sector, "U"),
+                BF_w  = c(12 * tr_lf / wage_yr, 0),             # Spending / Wage Bill
+                Tr_yF = c(tr_ind / dataset["est", "y_F"], 0))   # Transfer / E[y_F]
 
 
 # Wage Distribution
 cov_dist = imap_dfr(subs, ~dens(.x, .y, bf_hh ~ wage))
 cov_wage = imap_dfr(subs, ~as_tibble(svyby(~bf_hh, ~wbin, .x, svymean, na.rm = TRUE)) %>%
-  transmute(group = .y, wage = wedges, y = bf_hh)) %>% drop_na()
+  transmute(group = .y, wage = wedges, y = bf_hh, se = se)) %>% drop_na()
 cov_wage$group = factor(cov_wage$group, levels = names(subs))
 cov_dist$group = factor(cov_dist$group, levels = names(subs))
+
+
+# Coverage Function
+cov_fit = function(s) {
+  d = filter(cov_wage, group == s, wage > 0, se > 0)
+  f = nls(y ~ phi / (1 + (wage / ybar)^(1/sig)), d, weights = 1 / d$se^2,
+          start = list(phi = 0.5, ybar = mw, sig = 0.6), algorithm = "port",
+          lower = c(0, 100, 0.05), upper = c(1, 8000, 5))
+  rbind(est = coef(f), se = coef(summary(f))[, 2])
+}
+p_F = cov_fit("Formal")
+p_I = cov_fit("Informal")
+
+p_of  = function(p, y) p["est", "phi"] / (1 + (y / p["est", "ybar"])^(1 / p["est", "sig"]))
+cov_pred = bind_rows(tibble(group = "Formal",   wage = wedges, y = p_of(p_F, wedges)),
+                     tibble(group = "Informal", wage = wedges, y = p_of(p_I, wedges)))
+cov_pred$group = factor(cov_pred$group, levels = names(subs))
+
+p_F[, "ybar"] = p_F[, "ybar"] / dataset["est", "y_F"]   # Threshold in units of E[y_F]
+p_I[, "ybar"] = p_I[, "ybar"] / dataset["est", "y_F"]
+dataset = cbind(dataset, `colnames<-`(p_F, paste0(colnames(p_F), "_F")),
+                         `colnames<-`(p_I, paste0(colnames(p_I), "_I")))
 
 bf_wage_dist = bind_rows(dens(subset(dfp, bf_hh == 1), "Receives BF"),
                          dens(subset(dfp, bf_hh == 0), "No BF"))
@@ -188,12 +230,6 @@ df$variables$hh_pc = ave(df$variables$wage, df$variables$id_dom, FUN = sum) /
 
 wage_pc_dist = bind_rows(dens(subset(df, bf_hh == 1 & status == "F"), "F", ~hh_pc, 40),
                          dens(subset(df, bf_hh == 1 & status == "I"), "I", ~hh_pc, 40))
-
-
-# Household-level
-df_hh      = subset(df, !duplicated(id_dom))
-bf_size_hh = coef(svytotal(~bf_hh, df_hh, na.rm = TRUE))
-pphh       = bf_size / bf_size_hh
 
 
 
@@ -211,6 +247,14 @@ bf_size_vis  = fam$HH[fam$Year == year]              # BF Households
 bf_ind_vis   = ind$Ind[ind$Year == year]             # BF Individuals
 pphh_vis     = sum((1:8) * siz) / sum(siz)           # People per HH (8 = 8+)
 bf_value_vis = fam$Value[fam$Year == year] / bf_size_vis / 12
+
+
+# BCB/SGS: Gross Government Debt (%GDP)
+sgs = function(id) as.numeric(tail(jsonlite::fromJSON(sprintf(
+  "https://api.bcb.gov.br/dados/serie/bcdata.sgs.%d/dados?formato=json&dataInicial=01/01/%d&dataFinal=31/12/%d",
+  id, year, year)), 1)$valor)
+
+dataset = cbind(dataset, B_gdp = c(sgs(13762) / 100, 0))    # Debt / GDP (annual)
 
 
 
@@ -264,6 +308,19 @@ lw_mom = function(p, h) {
 }
 
 
+# Weighted log Wage Gain of the F <-> I Switchers
+sw_mom = function(p, h) {
+  p = filter(p, s0 != s1, s0 %in% S[1:2], s1 %in% S[1:2], x0 > 0, x1 > 0)
+  M = mult(p$hh, p$id)
+  map_dfr(c("FI", "IF"), function(j) {
+    k = p$s0 == str_sub(j, 1, 1) & p$s1 == str_sub(j, 2, 2)
+    w = p$w[k];  d = log(p$x1[k]) - log(p$x0[k])
+    as_tibble(crossprod(M[k, , drop = FALSE], cbind(n = w, sd = w * d))) %>%
+      mutate(h = h, j = j, r = row_number() - 1L, .before = 1)
+  })
+}
+
+
 # Attrition Tilt
 tilt = function(P, alpha, tol = 1e-14, maxit = 500) {
   a = alpha / sum(alpha);  cj = rep(1, length(a))
@@ -299,7 +356,8 @@ panel = map(csvs, function(f) {
   p1 = map_dfr(1:4, ~pair_of(d, .x))          # one quarter apart
   p4 = pair_of(d, 1, 4)                       # one year apart
   list(flow = count(p1, y0, s0, s1, wt = w, name = "n"),
-       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)))
+       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)),
+       swch = sw_mom(p1, 1))
 })
 
 
@@ -321,6 +379,15 @@ ac = function(h, s = "F") {
   c(x[1], sd(x[-1]))
 }
 dataset = cbind(dataset, ac1 = ac(1), ac4 = ac(4))
+
+
+# Wage Gain of Switchers
+switch = map_dfr(panel, "swch") %>% group_by(r, j) %>%
+  summarise(across(n:sd, sum), .groups = "drop") %>%
+  transmute(r, j, dw = sd / n)
+
+dw = function(j) { x = switch$dw[switch$j == j];  c(x[1], sd(x[-1])) }
+dataset = cbind(dataset, dw_FI = dw("FI"), dw_IF = dw("IF"))
 
 
 # Calibration Matrix (tilt the flows with annual stocks)
@@ -436,6 +503,7 @@ save_fig(g, "bf_eligibility")
 g = ggplot(cov_wage, aes(wage, 100 * y)) +
   geom_col(fill = pal[2], alpha = 0.5) +
   geom_line(data = cov_dist, colour = pal[1], linewidth = 1.2) + mytheme +
+  geom_line(data = cov_pred, colour = pal[5], linewidth = 1.0, linetype = "dashed") +
   geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
   facet_wrap(~group) +
   coord_cartesian(xlim = c(0, xmax)) +
@@ -519,16 +587,20 @@ print(bf_size_tab)
 save_tex(bf_size_tab, "bf_size",
          paste0("Bolsa Fam\\'ilia ", year, ": Statistics"), "tab:bf_size")
 
+
+# Bolsa Familia: Coverage and Transfer Size
 bf_cover_tab = data.frame(
   row.names = c("BF / Labor Force", "BF in Formal", "BF in Informal",
-                "BF in Unemployed", "BF in Non-Participating", "Tr/y_F"),
-  Coverage  = round(c(coef(bf_share_lf), coef(bf_sector)[c("F", "I", "U", "N")],
-                      coef(bf_value_lf) / dataset["est", "y_F"]), 3))
+                "BF in Unemployed", "BF in Non-Participating",
+                "Spending (Labor Force) / Wage Bill", "Tr / y_F"),
+  `%` = round(100 * c(coef(bf_share_lf), coef(bf_sector)[c("F", "I", "U", "N")],
+                      dataset["est", "BF_w"], dataset["est", "Tr_yF"]), 1),
+  check.names = FALSE)
 print(bf_cover_tab)
 save_tex(bf_cover_tab, "bf_coverage",
          paste0("Bolsa Fam\\'ilia ", year, ": Coverage"), "tab:bf_coverage",
          rows = replace(esc(rownames(bf_cover_tab)),
-                        rownames(bf_cover_tab) == "Tr/y_F", "$T / \\E(y^F)$"))
+                        rownames(bf_cover_tab) == "Tr / y_F", "$T / \\E(y^F)$"))
 
 
 # Quarter-to-quarter Transitions

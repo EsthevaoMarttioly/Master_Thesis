@@ -9,6 +9,7 @@
 # ---- Packages -------------------------------------------------------------
 import numpy as np
 import random
+from scipy.stats import norm
 from sequence_jacobian import het, interpolate, grids
 
 random.seed(20260415)
@@ -31,10 +32,11 @@ states = lambda x: [slice(k * x.shape[0] // nS, (k+1) * x.shape[0] // nS)
 
 # 1.2. Exogenous Transition States Grid
 def discretize_normal(mu, sigma, n):
-    # theta_s ~ N(mu_s, sigma_s^2) as Gauss-Hermite quadrature with nT nodes.
-    z, w = np.polynomial.hermite.hermgauss(n)
-    theta = mu + np.sqrt(2) * sigma * z
-    prob  = w / np.sqrt(np.pi)
+    # theta_s ~ N(mu_s, sigma_s^2) as Equiprobable Bins.
+    z = norm.ppf(np.arange(n + 1) / n)
+    s = n * (norm.pdf(z[:-1]) - norm.pdf(z[1:]))
+    theta = mu + sigma * s / np.sqrt(np.mean(s ** 2))
+    prob  = np.full(n, 1.0 / n)
     return theta, prob
 
 
@@ -81,11 +83,17 @@ def labor_income(w, h_F, Div, Tr, tau, e_grid, nE, nT, thetaF, thetaI, tau_l, ps
     p_F, p_I = p_bf(y_F, phi_F, ybar_F, sig_F), p_bf(y_I, phi_I, ybar_I, sig_I)
     # elig = (y_I < y_bar).astype(float)      # Hard Threshold
 
+    # Formal: Quit if the Effort Cost is too high
+    y_F_w = (1 - tau_l) * y_F - v(h_F, psi, varphi) + Tr * p_F
+    work  = 1 / (1 + np.exp(-np.clip((y_F_w - Tr * p_U)
+                                    / (0.02 * w * h_F), -50, 50)))   # smooth: a step chatters
+    y_F_n = work * y_F_w + (1 - work) * Tr * p_U
+
     # Expand the income into beta grid
-    y = np.r_[expand((1 - tau_l) * y_F - v(h_F, psi, varphi) + Tr * p_F),
+    y = np.r_[expand(y_F_n),
               expand(1/(1+varphi) * y_I + Tr * p_I),
               expand(np.full((nT, nE), Tr * p_U))] + div_i + tau_i
-    return y, y_F, y_I, h_I, e_F, e_I, p_F, p_I
+    return y, y_F, y_I, h_I, e_F, e_I, p_F, p_I, work
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +114,7 @@ def household(Va_p, V_p, a_grid, y, r, beta, eis):
     c_nextgrid = (beta[:, None] * Va_p) ** (-eis)
     coh = (1 + r) * a_grid + y[:, None]
     a = interpolate.interpolate_y(c_nextgrid + a_grid, coh, a_grid)
-    a = np.maximum(a, a_grid[0])
+    a = np.clip(a, a_grid[0], a_grid[-1])
     c_ghh = np.maximum(coh - a, 1e-8)     # a formal below his effort cost never takes it
     Va = (1 + r) * c_ghh ** (-1 / eis)
     V = u(c_ghh, eis) + beta[:, None] * V_p
@@ -115,41 +123,42 @@ def household(Va_p, V_p, a_grid, y, r, beta, eis):
 
 # ---------------------------------------------------------------------------
 # 3. Hetoutputs
-def sector_shares(c_ghh, e_F, e_I, h_F, h_I, p_F, p_I, p_U, psi, varphi):
+def sector_shares(c_ghh, e_F, e_I, h_F, h_I, p_F, p_I, p_U, psi, varphi, work):
     sF, sI, sU = states(c_ghh)
     f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf = zeros(c_ghh, 9)
 
     # Sector Indicator, F=0, I=1, U=2
     f[sF], i[sI], u[sU] = 1.0, 1.0, 1.0
 
-    # Labor Supply = theta * e * h
-    n_f[sF] = expand(e_F * h_F)[:, None]
+    # Labor Supply = theta * e * h, zero for the quitters
+    n_f[sF] = expand(e_F * h_F * work)[:, None]
     n_i[sI] = expand(e_I * h_I)[:, None]
 
     # Bolsa Familia: Probability of Receiving
-    bf_f_lf[sF] = expand(p_F)[:, None]
+    bf_f_lf[sF] = expand(p_F * work + p_U * (1 - work))[:, None]
     bf_i_lf[sI] = expand(p_I)[:, None]
     bf_u_lf[sU] = p_U
     bf = bf_f_lf + bf_i_lf + bf_u_lf
 
     # Consumption, net of the GHH effort cost
     c = c_ghh.copy()
-    c[sF] += v(h_F, psi, varphi)
+    c[sF] += expand(v(h_F, psi, varphi) * work)[:, None]
     c[sI] += expand(v(h_I, psi, varphi))[:, None]
 
     return c, f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf
 
 
-def labor_moments(c_ghh, y_F, y_I, h_I):
+def labor_moments(c_ghh, y_F, y_I, h_I, work):
     # Moments for Calibration.
     sF, sI, _ = states(c_ghh)
-    h_i, log_y_f, log_y_i = zeros(c_ghh, 3)
+    h_i, log_y_f, log_y_i, w_f = zeros(c_ghh, 4)
 
     h_i[sI]     = expand(h_I)[:, None]
     log_y_f[sF] = expand(np.log(y_F))[:, None]
     log_y_i[sI] = expand(np.log(y_I))[:, None]
+    w_f[sF]     = expand(work)[:, None]      # Formals that do supply hours
 
-    return h_i, log_y_f, log_y_i
+    return h_i, log_y_f, log_y_i, w_f
 
 
 # ---------------------------------------------------------------------------

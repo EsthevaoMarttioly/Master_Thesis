@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
+from code.p1_household import expand
 from code.p5_calibration import (pnad, alpha, qs, mom_data, model_moments,
                                  gini_coefficient, gini_from_lorenz, top_share, _wquantile)
 
@@ -88,6 +89,16 @@ def _panels(n):         # Flattened axes grid sized to hold n panels.
     nrows = 2 if n > ncols else 1
     fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
     return fig, np.array(axes).flatten()
+
+
+def _kde(x, w, grid, bw=None):
+    # Gaussian smooth of a discrete (value, mass) distribution.
+    w = w / w.sum()
+    if bw is None:
+        sd = np.sqrt(w @ (x - w @ x) ** 2)
+        bw = 1.06 * sd * (w @ w) ** 0.2          # Silverman, on the effective n
+    z = (grid[:, None] - x[None, :]) / bw
+    return np.exp(-0.5 * z ** 2) @ w / (bw * np.sqrt(2 * np.pi))
 
 
 def _save_or_show(fig, savepath):
@@ -240,7 +251,7 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
         ax.set_ylabel('Consumption $c(s, \\bar{\\theta}, \\bar{e}, a)$')
         ax.set_title(f'Policy Functions - {beta_name}')
         ax.set_xlim(0, T_plot_a)
-        ax.set_ylim(0, 3)
+        ax.set_ylim(0, 4)
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)
@@ -300,31 +311,30 @@ def _lorenz_panel(ax, pop, share, emp, emp_label, kind):
 def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
     # Model vs PNAD earnings density, by sector.
     h = _hh(ss)
-    earn = float(ss['w']) * (h['n_f'] + h['n_i'])[:, 0]     # gross, a-invariant
+    ly_s = (h['log_y_f'] + h['log_y_i'])[:, 0]              # gross, a-invariant
     mass = h['D'].sum(1)
-    blk  = earn.size // 3
-    ref  = np.average(earn[:blk], weights=mass[:blk])       # mean formal wage
+    blk  = ly_s.size // 3
+    mass[:blk] = mass[:blk] * expand(h['work'])             # a quitter reports no wage
+    ref  = np.log(mass[:blk] @ np.exp(ly_s[:blk]) / mass[:blk].sum())
 
     d = pd.read_csv('data/final/pnad_income_dist.csv')
     edges = np.linspace(-lim, lim, bins)
+    grid  = np.linspace(-lim, lim, 400)
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
 
     for ax, s, sl, col in zip(axes, STATES, [slice(0, blk), slice(blk, 2*blk)],
                               [COL1, COL4]):
-        ly = np.log(earn[sl] / ref)
-        mod, _ = np.histogram(ly, bins=edges, weights=mass[sl])
+        ly  = ly_s[sl] - ref
+        mod = _kde(ly, mass[sl], grid)                  # the states are atoms
         g   = d[(d.group == s) & (d.wage > 0)]
         dat, _ = np.histogram(np.log(g.wage / pnad['y_F']), bins=edges,
                               weights=g.y * np.gradient(g.wage))
-        c = 0.5 * (edges[:-1] + edges[1:])
-        ax.bar(c, 100 * mod / mod.sum(), width=np.diff(edges), color=col,
-               alpha=0.55, label='Model')
-        ax.plot(c, 100 * dat / dat.sum(), color='black', lw=1.6, ls='--', label='PNAD')
+        c, bw = 0.5 * (edges[:-1] + edges[1:]), edges[1] - edges[0]
+        ax.fill_between(grid, 100 * mod, color=col, alpha=0.35, label='Model')
+        ax.plot(grid, 100 * mod, color=col, lw=1.6)
+        ax.plot(c, 100 * dat / dat.sum() / bw, color='black', lw=1.6, ls='--', label='PNAD')
         # Targeted Quantiles
-        ax.plot(_wquantile(ly, mass[sl], qs), np.zeros(len(qs)), '|', color=col,
-                ms=14, mew=2)
-        ax.plot([pnad[f'q{q}_{s}'] for q in qs], np.zeros(len(qs)), '|',
-                color='black', ms=14, mew=2)
+        ax.plot([pnad[f'q{q}_{s}'] for q in qs], np.zeros(len(qs)), '|', color=col, ms=14, mew=2)
         ax.axvline(0, color=GRAY, lw=0.8)
         ax.set_xlabel(r'$\log(y / \bar{y}^F)$')
         ax.set_ylabel('Density (%)')
@@ -384,18 +394,18 @@ def _by_state(D, x, block):
     return [(D[seg(i)] * xi(i)).sum() / D[seg(i)].sum() for i in range(3)]
 
 
-def _welfare_gains(ss_bf, ss_nobf, calibration):
+def _welfare_gains(ss_bf, ss_nobf):
     # E[V] gain from BF for [Impatient, Patient, Formal, Informal, Unemployed].
     def ev(ss):
         h = _hh(ss)
-        D, V = _reshape_hh(h['D'], calibration), _reshape_hh(h['V'], calibration)
+        D, V = _reshape_hh(h['D'], ss), _reshape_hh(h['V'], ss)
         pat = [(D[:, :, b] * V[:, :, b]).sum() / D[:, :, b].sum() for b in (0, 1)]
         sec = [(D[s] * V[s]).sum() / D[s].sum() for s in (0, 1, 2)]
         return np.array(pat + sec)
     return ev(ss_bf) - ev(ss_nobf)
 
 
-def plot_descriptives(ss, ss_nobf, calibration, n_q=5, savepath=None):
+def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
     # Consumption and Wealth by State, Formality by Wealth, Welfare gain by Group.
     h = _hh(ss)
     D, c, a_grid = h['D'], h['c'], h['a_grid']
@@ -432,12 +442,15 @@ def plot_descriptives(ss, ss_nobf, calibration, n_q=5, savepath=None):
     axes[1, 0].legend(frameon=False)
 
     # Welfare gain from BF by patience type and by sector
-    axes[1, 1].bar(['Impatient', 'Patient'] + list(STATES.values()),
-                   _welfare_gains(ss, ss_nobf, calibration),
-                   color=[GRAY, GRAY] + [COLORS[s] for s in STATES])
-    axes[1, 1].axhline(0, color='k', linewidth=0.8)
-    axes[1, 1].set_ylabel('Welfare Gain $\\Delta E[V]$')
-    axes[1, 1].set_title('Who gains from Bolsa Familia')
+    if ss_nobf is None:
+        axes[1, 1].axis('off')
+    else:
+        axes[1, 1].bar(['Impatient', 'Patient'] + list(STATES.values()),
+                       _welfare_gains(ss, ss_nobf),
+                       color=[GRAY, GRAY] + [COLORS[s] for s in STATES])
+        axes[1, 1].axhline(0, color='k', linewidth=0.8)
+        axes[1, 1].set_ylabel('Welfare Gain $\\Delta E[V]$')
+        axes[1, 1].set_title('Who gains from Bolsa Familia')
 
     _save_or_show(fig, savepath)
 
@@ -590,11 +603,13 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 # ---------------------------------------------------------------------------
 
 # Macro formats. The default is 3 decimals; these are the exceptions.
-PCT = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'B_gdp', 'Tr_yF',
-       'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI']
-ONE = ['h_F', 'h_I', 'w', 'Y']                                    # normalizations, hours
-TWO = ['phi_F', 'phi_I', 'ybar_F', 'ybar_I', 'sig_F', 'sig_I']    # BF coverage
-BIG = ['LF', 'Pop', 'y_F', 'y_I']                                 # people and R$
+PCT  = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'B_gdp', 'Tr_yF',
+        'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI', 'tau_l']
+ZERO = ['amin', 'amax', 'nT', 'nE', 'nA']
+ONE  = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'q']
+TWO  = ['phi_F', 'phi_I', 'ybar_F', 'ybar_I',
+        'sig_F', 'sig_I', 'kappa', 'kappa_w', 'mu', 'mu_w']
+BIG  = ['LF', 'Pop', 'y_F', 'y_I']                                 # people and R$
 
 MACRO_FMT  = ({k: '.1%' for k in PCT} | {k: '.1f' for k in ONE}
               | {k: '.2f' for k in TWO} | {k: '.4g' for k in BIG})

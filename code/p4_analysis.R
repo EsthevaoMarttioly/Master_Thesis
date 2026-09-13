@@ -116,6 +116,7 @@ df = get_pnadc(year = year, interview = 1, deflator = FALSE, labels = FALSE,
 
 df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                 wage   = ifelse(is.na(as.numeric(VD4019)), 0, as.numeric(VD4019)),
+                hours  = ifelse(is.na(as.numeric(VD4031)), 0, as.numeric(VD4031)),
                 wbin = cut(wage, c(wedges, Inf), include.lowest = TRUE),
                 status = case_when(VD4009 %in% formal_idx ~ "F",
                                    VD4009 %in% inform_idx ~ "I",
@@ -153,6 +154,15 @@ dataset = cbind(dataset, qmat)
 
 wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F"),
                       dens(subset(dfp, status == "I"), "I"))
+
+
+# Frisch: log h = varphi/(1+varphi) log y, so varphi = b / (1 - b). Formal is the placebo.
+frisch = function(s) {
+  f = svyglm(I(log(hours)) ~ I(log(wage)), subset(dfp, status == s & hours > 0))
+  b = c(coef(f)[[2]], SE(f)[[2]])
+  c(b[1] / (1 - b[1]), b[2] / (1 - b[1])^2)      # Delta Method
+}
+dataset = cbind(dataset, varphi = frisch("I"), varphi_F = frisch("F"))
 
 
 
@@ -605,6 +615,12 @@ save_tex(bf_cover_tab, "bf_coverage",
 
 # Quarter-to-quarter Transitions
 print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(alpha, 4)))
+
+
+# Frisch Elasticity
+cat(sprintf("Frisch: varphi_I = %.3f (%.3f)   varphi_F = %.3f (%.3f, placebo)\n",
+            dataset["est", "varphi"],   dataset["se", "varphi"],
+            dataset["est", "varphi_F"], dataset["se", "varphi_F"]))
 
 
 

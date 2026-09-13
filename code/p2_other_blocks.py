@@ -47,8 +47,8 @@ def nkpc_ss(w, mu, tau):
 
 # 3. SS Union's Wage Setting
 @simple
-def union_ss(w, h_F, C_GHH, L, tau_l, mu_w, psi, varphi, eis):
-    wage_nkpc = psi * h_F ** (1/varphi) * C_GHH**(1/eis) - (1 - tau_l) * w * L / h_F / mu_w
+def union_ss(w, h_F, C_GHH, L, F, tau_l, mu_w, psi, varphi, eis):
+    wage_nkpc = psi * h_F ** (1/varphi) * C_GHH**(1/eis) - (1 - tau_l) * w * L / (h_F * F * mu_w)
     return wage_nkpc
 
 
@@ -58,7 +58,7 @@ def calibrate_ss(Y, Y_I, N_F, N_I, F, w, L, C_GHH, BF, BF_w, B_gdp,
                  r, tau_l, mu_w, eis, h_F, varphi):
     # Invert Market Clearing in Closed Form. Ratios are per Wage Bill.
     L_hat   = N_F                            # Labor Market
-    psi_hat = (1 - tau_l) * w * L / h_F / mu_w / (h_F ** (1/varphi) * C_GHH ** (1/eis))
+    psi_hat = (1 - tau_l) * w * L / (h_F * F * mu_w) / (h_F ** (1/varphi) * C_GHH ** (1/eis))
     Tr_hat  = BF_w * w * (N_F + N_I) / BF    # BF Payment / Wage Bill
     B_hat   = B_gdp * (Y + Y_I)              # Debt / GDP
     tau_hat = tau_l * Y - r * B_hat - Tr_hat * BF
@@ -67,7 +67,7 @@ def calibrate_ss(Y, Y_I, N_F, N_I, F, w, L, C_GHH, BF, BF_w, B_gdp,
 
 # 5. Dynamic Phillips Curves
 @simple
-def phillips_curve(w, r, pi, h_F, Z, Y, L, C_GHH, tau_l, mu, mu_w,
+def phillips_curve(w, r, pi, h_F, Z, Y, L, F, C_GHH, tau_l, mu, mu_w,
                    kappa, kappa_w, eis, psi, varphi, beta_high, dbeta, omega_I):
     beta_avg = beta_high - dbeta * omega_I
 
@@ -79,7 +79,7 @@ def phillips_curve(w, r, pi, h_F, Z, Y, L, C_GHH, tau_l, mu, mu_w,
     # Wage Phillips Curve
     pi_w = (1 + pi) * w / w(-1) - 1
     wage_nkpc = (kappa_w * (psi * h_F ** (1/varphi) * C_GHH**(1/eis)\
-                             - (1 - tau_l) * w * L / h_F / mu_w)
+                             - (1 - tau_l) * w * L / h_F / F / mu_w)
                  + beta_avg * (1 + pi_w(+1)).apply(np.log)
                  - (1 + pi_w).apply(np.log))
     return nkpc, wage_nkpc

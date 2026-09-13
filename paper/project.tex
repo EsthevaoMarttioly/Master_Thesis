@@ -385,9 +385,11 @@ inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ given by
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi} \cdot \tilde C_t^{1/\gamma}
-- \frac{(1-\tau_\ell) w_t L_t}{\mu_w h_t}  \right]
+- \frac{(1-\tau_\ell) w_t L_t}{\mu_w h_t F_t}  \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
+where $L_t / (h_t F_t) = \E(e_{i,t} | F)$, since the union's members are the formal
+workers only.
 
 The Phillips Curve calculations for price and wage are found in the Appendix.
 
@@ -676,10 +678,10 @@ to match the autocorrelation of wages in PNAD-C
 $\rho_1^y := \text{Corr}(\ln y_t, \ln y_{t-1})$ and the observed wage distribution.
 
 We also assume a log-spaced grid for assets
-$\ln a \in [\ln \underline a, \ln \bar a] = [\mAmin, \mAmax]$ with $N_a = \mNA$ points, 
-and a log-normal sector productivity grid $\ln \theta^s \sim N(\mu_s, \sigma_s^2)$,
-that is discretized by a Gauss-Hermite quadrature with $N_\theta = \mNT$
-nodes \parencite{meghir2015wages}.
+$\ln a \in [\ln \underline a, \ln \bar a] = [\mAmin, \mAmax]$ with $N_a = \mNA$
+points, sufficient to cover the top distribution, and a log-normal sector
+productivity grid $\ln \theta^s \sim N(\mu_s, \sigma_s^2)$, that is discretized
+by Equiprobable Bins with $N_\theta = \mNT$ nodes \parencite{meghir2015wages}.
 
 Each household has a $q = \mQ$ probability of drawing a new discount factor
 $(\beta_L, \beta_H)$, corresponding to an average type duration of 25 years,
@@ -732,16 +734,18 @@ the GDP, because there is no capital in this model, therefore the wage if a bett
 measure of the economy's size. We defined $\mu = \mMu$, which is standard in
 the HANK literature \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{
     Markup $\mu=\mMu$ is also consistent with the estimates of
-    \textcite{basu1997returns}.},
-and $\kappa = \kappa_w = \mKappa$, consistent with \textcite{hazell2022national} estimates.
+    \textcite{basu1997returns} for US. \textcite{de2021quantifying} show that
+    the Brazilian markup is similar to the US.},
+and $\kappa = \kappa_w = \mKappa$, similar to \textcite{kaplan2018monetary}
+and consistent with an average duration of 4 quarters for readjustment.
 
 Taylor Rule is pretty standard, with $\phi=\mPhi$ and $r^* = \mRstar$, consistent
-with a $4\%$ annual real interest rate for Brazilian economy
+with a $5\%$ annual real interest rate for Brazilian economy
 \parencite{dos2024natural}. The Government debt is set to $\mDatBGdp$ of yearly
 GDP, consistent with Brazilian National Treasure data. Also, we set
-$\phi_B = \mPhiB$ so that the average time to pay off the debt is 10 years,
-as in \textcite{auclert2025fiscal}. Wage tax is an average of all contributions
-levied on the payroll, $\tau_\ell = \mTauL$.
+$\phi_B = \mPhiB$ so that the half-live of the debt is 5 years, slower than
+\textcite{auclert2025fiscal} and consistent with \textcite{campos2019alert}.
+Wage tax is based on the average formal worker contribution, $\tau_\ell = \mTauL$.
 
 We calibrated the \textit{Bolsa Família} transfer size $T = \mTr$ to match the
 \textit{Bolsa Família} expenditure as a percentage of the Wage Bill,
@@ -869,8 +873,8 @@ Square (Weighted NLS) estimation.
 
 Lastly, in order to verify whether this results are representatives and robust,
 we intent to do some robustness tests changing some calibration parameters,
-such as $\gamma$, $\mu$, and $\kappa_w$. This parameters might have minor
-implications in the results, but it is expected that the model continues
+such as $\gamma$, $r^*$ (4\% and 6\%), and $\phi$ (2.0). This parameters might
+have minor implications in the results, but it is expected that the model continues
 to have the same results.
 
 Also, we intent to perform other dividend specifications instead of
@@ -1020,28 +1024,32 @@ V_t^w = \max_{\hat W_t} \int \left[
 
 Using the same algebra as the price Phillips curve, assuming that the union
 allocates the same amount of hours in each worker $h_{i,t} = h_t$, and using
-$\int_F e_{i,t} d\Lambda = L_t / h_t$, it is possible to find that
+$\int_F e_{i,t} d\Lambda = L_t / h_t$ and $\int_F d\Lambda = F_t$, it is possible
+to find that
 \[
 \theta_w (\pi_t^w - \bar \Pi^w) \pi_t^w
-= \varepsilon_w \left[ \frac{v'(h_t)}{u'(\tilde C_t)}
-- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) \frac{w_t L_t}{h_t} \right]
+= \varepsilon_w \left[ \frac{F_t h_t}{L_t} \frac{v'(h_t)}{u'(\tilde C_t)}
+- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) w_t \right]
 + \bar \beta \theta_w (\pi_{t+1}^w - \bar \Pi^w) \pi_{t+1}^w \frac{h_{t+1}}{h_t},
 \]
-which we can linearize around the steady state $\pi_t^w = \bar \Pi^w$ and take
-$h_{t+1} = h_t$, since there is no population nor technological growth. Thus,
+where $L_t/(h_t F_t) = \E(e_{i,t} | F)$. We can linearize around the steady
+state $\pi_t^w = \bar \Pi^w$ and take $h_{t+1} = h_t$, since there is no population
+nor technological growth. Thus,
 \[
 \ln (1+\pi_t^w)
-= \frac{\varepsilon_w}{\theta_w} \left[ \frac{v'(h_t)}{u'(\tilde C_t)}
-- (1-\tau_\ell) \frac{w_t L_t}{h_t} \frac{\varepsilon_w-1}{\varepsilon_w} \right]
+= \frac{\varepsilon_w}{\theta_w} \frac{F_t h_t}{L_t}
+\left[ \frac{v'(h_t)}{u'(\tilde C_t)}
+- (1-\tau_\ell) \frac{w_t L_t}{h_t F_t} \frac{\varepsilon_w-1}{\varepsilon_w} \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 
-Therefore, defining $\kappa_w = \varepsilon_w/\theta_w$ and
-$\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips curve is
+Therefore, defining $\kappa_w = (\varepsilon_w/\theta_w) \cdot F h / L$ at the
+steady state and $\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips
+curve is
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi} \cdot \tilde C_t^{1/\gamma}
-- \frac{(1-\tau_\ell) w_t L_t}{\mu_w h_t}  \right]
+- \frac{(1-\tau_\ell) w_t L_t}{\mu_w h_t F_t}  \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 

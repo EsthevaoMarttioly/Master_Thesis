@@ -54,15 +54,17 @@ def union_ss(w, h_F, C_GHH, L, F, tau_l, mu_w, psi, varphi, eis):
 
 # 4. SS Calibration
 @simple
-def calibrate_ss(Y, Y_I, N_F, N_I, F, w, L, C_GHH, BF, BF_w, B_gdp,
-                 r, tau_l, mu_w, eis, h_F, varphi):
+def calibrate_ss(Y, Y_I, N_F, N_I, F, w, L, C_GHH, BF, BF_w, B_gdp, B,
+                 r, tau_l, mu_w, eis, h_F, psi, varphi):
     # Invert Market Clearing in Closed Form. Ratios are per Wage Bill.
     L_hat   = N_F                            # Labor Market
-    psi_hat = (1 - tau_l) * w * L / (h_F * F * mu_w) / (h_F ** (1/varphi) * C_GHH ** (1/eis))
+    mrp     = (1 - tau_l) * w * L / (F * mu_w * C_GHH ** (1/eis))   # Union FOC, per member
+    psi_hat = mrp / h_F ** (1 + 1/varphi)    # Calibration: hours normalized, psi backed out
+    h_F_hat = (mrp / psi) ** (varphi/(1+varphi))   # Counterfactual: psi fixed, hours adjust
     Tr_hat  = BF_w * w * (N_F + N_I) / BF    # BF Payment / Wage Bill
     B_hat   = B_gdp * (Y + Y_I)              # Debt / GDP
-    tau_hat = tau_l * Y - r * B_hat - Tr_hat * BF
-    return L_hat, psi_hat, tau_hat, Tr_hat, B_hat
+    tau_hat = tau_l * Y - r * B - Tr_hat * BF   # on the B held: = B_hat once calibrated
+    return L_hat, psi_hat, h_F_hat, tau_hat, Tr_hat, B_hat
 
 
 # 5. Dynamic Phillips Curves

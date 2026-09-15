@@ -48,14 +48,14 @@ plot_income_distribution(ss, savepath='output/figures/income_distribution.png')
 plot_descriptives(ss, savepath='output/figures/bf_descript.png')
 
 
-# No-BF Counterfactuals   -   Change with Dynamics
-ss_nobf = solve_ss(hank_ss, {**calibration, 'BF_w': 0.0}, verbose=True)
+# No-BF Counterfactuals
+ss_nobf = solve_ss(hank_ss, {**calibration, 'BF_w': 0.0}, counterfactual=True, verbose=True)
 
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, savepath='output/figures/bf_descript.png')
 
-# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal), calibration,
-#               ss, ss_nobf, savepath='output/figures/bf_sweep.png')
+# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, counterfactual=True),
+#               calibration, ss, ss_nobf, savepath='output/figures/bf_sweep.png')
 
 
 
@@ -101,12 +101,6 @@ irf_pe    = irf_partial(G_hh, 'Tr', dTr, variables)
 irfm_pe   = irf_partial(G_hh, 'r',  di,  variables)
 
 
-# Permanent Removal: start at the BF distribution, travel to the No-BF Steady State
-irf_kill  = permanent(hank, dyn_nobf, dyn, unknowns_dyn, targets_dyn, calibration,
-                      variables, T=300, moving=False, tol=1e-5, verbose=True)
-
-
-
 # ---------------------------------------------------------------------------
 # Dynamics - Partial Jacobians
 plot_impc(G_hh, savepath='output/figures/impc.png')
@@ -124,11 +118,6 @@ plot_irf_decomposition(irfm_bf['insu'], irfm_bf['full'], irfm_pe,
 plot_irf({'With BF (Total)': irfm_bf['full'], 'Without BF': irfm_nobf,
           'With BF (Insurance)': irfm_bf['insu']},
           title='Monetary Policy Shock (i)', savepath='output/figures/irfm_bf_vs_nobf.png')
-
-
-plot_irf({'Permanent Removal': rebase(irf_kill, dyn_nobf, dyn)}, T_plot=120,
-         title='Permanent Removal of Bolsa Familia',
-         savepath='output/figures/irf_nobf_permanent.png')
 
 
 # Dynamics - Cumulative Response

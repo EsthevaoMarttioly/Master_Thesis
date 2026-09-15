@@ -183,18 +183,25 @@ non-financial income,
 \[
     y_t(s,e,\theta) = \begin{cases}
         (1-\tau_\ell) \theta^F w_t h_t e, &\text{if formal;} \\
-        \theta^I w_t h_t e
-            + T_t \cdot \mathbbm{1}[\text{eligible}],
-            \quad &\text{if informal;} \\
-        T_t, &\text{if unemployed}.
+        \theta^I w_t h_t e, \quad &\text{if informal;} \\
+        0, &\text{if unemployed}.
     \end{cases}
 \]
 
-We assume that formal wages are observable by the government, so that
-only informal workers and unemployed may be eligible to receive
-\textit{Bolsa Família} (BF). We assume that informal households are
-eligible if $y_{i,t}(I,e,\theta) < \bar y$ and that the total number of
-beneficiaries is $\text{BF}_t$.
+We assume that each individual may be eligible to receive
+\textit{Bolsa Família} (BF), depending on their sector and wage. We
+model the probability of receipt based on the data, in such a way that
+unemployed workers receive with a fixed probability, while informal and
+formal workers receive BF with a probability that decreases as income rises,
+\[
+\P[i\text{ is eligible}|s,y] = \frac{\phi_s}{1 + (y/\bar y_s)^{1/\sigma_s}},
+\]
+where $\phi_s$ is the take-up at zero earnings, $\bar y_s$ is the half-coverage
+threshold, and $\sigma_s$ is the smoothness of eligibility, for each $s\in\{F,I\}$.
+For any income level, an informal worker is more likely to receive the benefit,
+$\phi_I > \phi_F$. The total number of beneficiaries is $\text{BF}_t$ and the
+individual benefit is
+$T_{i,t}(s,y) = T_t \cdot \mathbbm{1}_{i,t}\{\text{eligible}\}(s,y)$.
 
 Households save into liquid assets $a_{i,t}$ with ex-ante real
 return $1+r_t = (1+i_{t-1})/(1+\pi_t)$, where $i_t$ represents the
@@ -207,7 +214,7 @@ $d_{i,t} = d_t \cdot e_{i,t}$\footnote{
     specifications.}.
 Their budget constraint at time $t$ reads:
 \[
-c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + y_{i,t}(s,e,\theta) + d_{i,t} + \tau_t.
+c_{i,t} + a_{i,t} = (1+r_t) a_{i,t-1} + y_{i,t}(s,e,\theta) + T_{i,t}(s,y) + d_{i,t} + \tau_t.
 \]
 
 Incomplete markets impose a borrowing constraint $a_{i,t} \geq \underline{a}$.
@@ -219,14 +226,6 @@ While, informal ones choose hours to maximize their utility, thus, for each $i$,
 \psi \left( h \right)^{1/\varphi} = \theta w e
 \quad \Leftrightarrow \quad h^I(e)
 = \left[ \frac{\theta w e}{\psi} \right]^\varphi.
-\]
-
-This generates a productivity cutoff for informal workers of
-\[
-\theta w e \left( \frac{\theta w e}{\psi}
-\right)^\varphi < \bar y
-\quad \Leftrightarrow \quad
-e < e^* = \frac{\left( \psi^\varphi \bar y \right)^\frac{1}{1+\varphi}}{\theta w}.
 \]
 
 Such as \textcite{esteban2021labor} and \textcite{finamor2025labor},

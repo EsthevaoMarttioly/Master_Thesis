@@ -361,7 +361,7 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     yL_pop  = np.concatenate([[0], cy])
     yL_share = np.concatenate([[0], np.cumsum(ms * ys) / np.sum(ms * ys)])
 
-    edges = np.linspace(y.min(), y.max(), 231)
+    edges = np.linspace(y.min(), y.max(), 101)
     y_hist, _ = np.histogram(y, bins=edges, weights=m)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -395,14 +395,17 @@ def _by_state(D, x, block):
 
 
 def _welfare_gains(ss_bf, ss_nobf):
-    # E[V] gain from BF for [Impatient, Patient, Formal, Informal, Unemployed].
+    # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed].
+    # V is homogeneous of degree 1-1/eis in c, so the ratio nets out the 1/(1-beta)
+    # scale: raw dE[V] is not comparable across patience types.
+    g = 1 - 1 / float(ss_bf['eis'])
     def ev(ss):
         h = _hh(ss)
         D, V = _reshape_hh(h['D'], ss), _reshape_hh(h['V'], ss)
         pat = [(D[:, :, b] * V[:, :, b]).sum() / D[:, :, b].sum() for b in (0, 1)]
         sec = [(D[s] * V[s]).sum() / D[s].sum() for s in (0, 1, 2)]
         return np.array(pat + sec)
-    return ev(ss_bf) - ev(ss_nobf)
+    return (ev(ss_bf) / ev(ss_nobf)) ** (1 / g) - 1
 
 
 def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
@@ -426,14 +429,18 @@ def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
     # Formality and unemployment by wealth quantile
     cum_left = np.concatenate([[0.0], np.cumsum(D.sum(0))[:-1]])
     qidx = np.minimum((cum_left * n_q).astype(int), n_q - 1)
-    shares = np.full((3, n_q), np.nan)
+    shares, bf_q = np.full((3, n_q), np.nan), np.full(n_q, np.nan)
     for q in range(n_q):
-        mass = np.array([D[i * block:(i + 1) * block, qidx == q].sum() for i in range(3)])
+        sel  = qidx == q
+        mass = np.array([D[i * block:(i + 1) * block, sel].sum() for i in range(3)])
         if mass.sum() > 0:
             shares[:, q] = mass / mass.sum()
+            bf_q[q] = (D[:, sel] * h['bf'][:, sel]).sum() / mass.sum()
     x = np.arange(n_q)
     for i, (key, lab) in enumerate(STATES.items()):
         axes[1, 0].bar(x + (i - 1) * 0.2, shares[i], width=0.2, color=COLORS[key], label=lab)
+    axes[1, 0].plot(x, bf_q, color='black', lw=1.8, ls='--', marker='o', ms=5,
+                    label='Receives BF')
     axes[1, 0].set_xticks(x)
     axes[1, 0].set_xticklabels([f'Q{i+1}' for i in range(n_q)])
     axes[1, 0].set_xlabel('Wealth Quantile')
@@ -449,7 +456,7 @@ def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
                        _welfare_gains(ss, ss_nobf),
                        color=[GRAY, GRAY] + [COLORS[s] for s in STATES])
         axes[1, 1].axhline(0, color='k', linewidth=0.8)
-        axes[1, 1].set_ylabel('Welfare Gain $\\Delta E[V]$')
+        axes[1, 1].set_ylabel('Welfare Gain (CEV)')
         axes[1, 1].set_title('Who gains from Bolsa Familia')
 
     _save_or_show(fig, savepath)
@@ -611,7 +618,7 @@ TWO  = ['phi_F', 'phi_I', 'ybar_F', 'ybar_I',
         'sig_F', 'sig_I', 'kappa', 'kappa_w', 'mu', 'mu_w']
 BIG  = ['LF', 'Pop', 'y_F', 'y_I']                                 # people and R$
 
-MACRO_FMT  = ({k: '.1%' for k in PCT} | {k: '.1f' for k in ONE}
+MACRO_FMT  = ({k: '.1%' for k in PCT} | {k: '.1f' for k in ONE} | {k: '.0f' for k in ZERO}
               | {k: '.2f' for k in TWO} | {k: '.4g' for k in BIG})
 MACRO_FMT |= {f'{p}_{k}': v for p in ('mod', 'dat')                  # data and model twins
               for k, v in tuple(MACRO_FMT.items())}

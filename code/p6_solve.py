@@ -24,6 +24,7 @@ from code.p5_calibration import *
 # 1. Endogenous Sector Transition
 # ---------------------------------------------------------------------------
 CH = 7        # Channels: cF0 cF1 cI0 cI1 cB0 cB1 cB2
+PI_INT = {'household': ['V', 'Va', 'D', 'work']}    # all Pi needs, a T-path each
 
 
 def _softmax(Vals, sig):
@@ -152,11 +153,15 @@ def build_Pi(V, Va, D, p, Pi_b, Pi_e, probF, probI, work):
 # Initial Guess
 unknowns = dict(beta_high = 0.98, psi = 0.7, L = 0.7, tau = 0.1, Tr = 0.2, B = 4.0)
 
-def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, burn=5,
-             tol=1e-6, stol=1e-3, atol=1e-6, maxit=400, bmaxit=5000):
-    # Solve the Steady-State by iterating the value function and the transition matrix.
-    # The household solve is the only expensive step: markets clear in closed form,
-    # the six arrival rates invert exactly, and only beta_high needs a secant on A = B.
+def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
+             bgain=0.005, burn=5, tol=1e-6, stol=1e-3, atol=1e-6, maxit=400, bmaxit=5000):
+    """
+    Solve the Steady-State by iterating the value function and the transition matrix.
+    --- The household solve is the only expensive step:
+    --- Markets Clear in closed form, The six arrival rates invert exactly,
+    --- and only beta_high needs a secant on A = B.
+    `counterfactual`: debt clears A = B (not beta) and hours clear the union FOC (not psi).
+    """
     start = time.time()
     # Import Grids
     c = {**unknowns, **calib}
@@ -185,15 +190,21 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, burn=5,
 
         # Market Clearing: Analytical Forms + Secant on beta_high to asset_mkt
         if 'L_hat' in ss:
-            c['L'], c['psi'], c['Tr'] = float(ss['L_hat']), float(ss['psi_hat']), float(ss['Tr_hat'])
+            c['L'], c['Tr'] = float(ss['L_hat']), float(ss['Tr_hat'])
             c['tau'] = c['tau_ss'] = float(ss['tau_hat'])
-            c['B']   = c['B_ss']   = float(ss['B_hat'])
-            xn, fn = c['beta_high'], float(ss['asset_mkt'])  # A - B, dA/dbeta > 0
-            if xb is not None and abs(fn - fb) > 1e-12:
-                g = (xn - xb) / (fn - fb)     # dbeta/dA > 0; if not, Pi moved A
-                if g > 0: bgain = float(np.clip(g, 1e-4, 0.05))
-            xb, fb, dA = xn, fn, abs(fn)
-            c['beta_high'] = float(np.clip(xn - np.clip(bgain*fn, -0.02, 0.02), 0.5, 0.999))
+            dA = abs(float(ss['asset_mkt']))                  # A - B
+            if counterfactual:
+                c['h_F'] = float(ss['h_F_hat'])               # psi is structural: hours adjust
+                c['B'] = c['B_ss'] = float(ss['A'])           # debt absorbs the savings
+            else:
+                c['psi'] = float(ss['psi_hat'])               # hours normalized: psi backed out
+                c['B'] = c['B_ss'] = float(ss['B_hat'])       # debt pinned to B / GDP
+                xn, fn = c['beta_high'], float(ss['asset_mkt'])  # dA/dbeta > 0
+                if xb is not None and abs(fn - fb) > 1e-12:
+                    g = (xn - xb) / (fn - fb)     # dbeta/dA > 0; if not, Pi moved A
+                    if g > 0: bgain = float(np.clip(g, 1e-4, 0.05))
+                xb, fb = xn, fn
+                c['beta_high'] = float(np.clip(xn - np.clip(bgain*fn, -0.02, 0.02), 0.5, 0.999))
 
         # Acceptance, then the rates that make it hit the flow targets exactly
         C = _choice(hhi['V'], hhi['Va'], c['sig'], nT, nE, probF, probI)
@@ -216,12 +227,13 @@ def solve_ss(hank_block, calib, flows=None, verbose=False, bgain=0.005, burn=5,
                       for i, t in zip(pi_calib.values(), flows.values()))
 
         # Iterate until converges
-        if verbose: print(f"[Pi loop] it {it:3d}  |dPi|={dPi:.1e}  |dpi|={dpi:.1e}")
+        if verbose: print(f"[Pi loop] it {it:3d}    |dPi|={dPi:.1e}")
         if np.isfinite(hhi['Va']).all():
             _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
         if dPi < tol and dpi < stol and dbf < stol and dA < atol * c['B']:
             hhi['P'] = P_s                  # F/I/U Transition
-            for k in (*pi_calib, *bf_calib, *unknowns, 'tau_ss', 'B_ss'): ss.toplevel[k] = c[k]
+            for k in (*pi_calib, *bf_calib, *unknowns, 'h_F', 'tau_ss', 'B_ss'):
+                ss.toplevel[k] = c[k]
             tdiff = time.time() - start
             if verbose:
                 print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min),  " +
@@ -267,12 +279,12 @@ def _dyn_jacobian(hank, ss, unknowns, targets, inp, T, cache):
 
 
 def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
-              ss_initial=None, damp=1.0, tol=1e-6, maxit=50, verbose=False, jac=None):
+              damp=1.0, tol=1e-6, maxit=100, verbose=False, jac=None):
     # `shock` is the exogenous input name ('Tr', 'rstar', ...); `dZ` its path.
     # One Newton loop with Pi rebuilt inside it: nesting a full nonlinear solve
     # within the Pi loop costs the product of both iteration counts.
     start, T = time.time(), len(dZ)
-    inp = {} if shock is None else {shock: dZ}
+    inp = {shock: dZ}
     if moving: inp['Pi'] = np.zeros((T,) + ss['Pi'].shape)   # Pi path is endogenous
     Js, HU = _dyn_jacobian(hank, ss, unknowns, targets, inp, T,
                            {} if jac is None else jac)
@@ -292,8 +304,7 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
     for it in range(maxit):
         # One Newton step on the unknowns, given the current Pi path
         td  = hank.impulse_nonlinear(ss, ImpulseDict({**inp, **U}), [*var, *targets],
-                                     internals=['household'] if moving else {},
-                                     Js=Js, ss_initial=ss_initial)
+                                     internals=PI_INT if moving else {}, Js=Js)
         err = float(np.max([np.max(np.abs(td[k])) for k in targets]))
         if not np.isfinite(err):
             raise RuntimeError(f"\n     Dynamics blew up at it {it}: lower `damp`")
@@ -317,18 +328,6 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
             return {v: td[v] for v in var}
     raise RuntimeError(f"\n     Dynamics stalled in {maxit} it: "
                        f"|err|={err:.1e}>{tol:.1e}, |dPi|={dpi:.1e}>{tol:.1e}")
-
-
-def permanent(hank, ss_new, ss_old, unknowns, targets, calib, var,
-              T=300, damp=0.5, maxit=100, **kw):
-    # Counterfactual: start from `ss_old` and let the economy travel to `ss_new`.
-    return solve_dyn(hank, ss_new, None, np.zeros(T), unknowns, targets, calib, var,
-                     ss_initial=ss_old, damp=damp, maxit=maxit, **kw)
-
-
-def rebase(irf, ss_new, ss_old):
-    # Re-express a Permanent Transition as a deviation from the OLD steady state.
-    return {k: float(ss_new[k]) - float(ss_old[k]) + v for k, v in irf.items()}
 
 
 def irf_builder(hank, ss, calib, unknowns, targets, var):
@@ -587,12 +586,12 @@ if __name__ == "__main__":
                        columns=obj.keys).round(3).to_string())
 
     # 3. Global Search
-    res = estimate(obj, local_stage=False, popsize=2)
-    report(res)
+    # res = estimate(obj, local_stage=False, popsize=2)
+    # report(res)
 
     # 4. Polish (Mid Grid)
-    # res = load_res('g')       # Load Global Search
-    res = estimate(obj, p0=p0, global_stage=False, polish=dict(nA=150, nE=11))
+    res = load_res('g')       # Load Global Search
+    res = estimate(obj, p0=res['params'], global_stage=False, polish=dict(nA=150, nE=11))
     report(res)
 
     # 5. Identification and Inference

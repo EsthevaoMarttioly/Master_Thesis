@@ -24,32 +24,32 @@ F, I, U = 0, 1, 2
 calibration = dict(
     # --- Household Preferences ---
     eis    = 0.5,                 # EIS = gamma = 0.5 (CRRA sigma = 2)
-    varphi = 0.2,      # Frisch Elasticity
+    varphi = 0.2,                 # Frisch Elasticity
     h_F    = 1.0,                 # Normalized: Formal Worked Hours
 
     # --- Discount Factor ---
-    dbeta     = 0.18,    # SMM: beta_high - beta_low           -> Wealth
+    dbeta     = 0.16,    # SMM: beta_high - beta_low           -> Wealth
     omega_I   = 0.50,    # SMM: Share of Impatient Agents      -> HtM
     q         = 0.01,    # Prob of Redrawing beta Type (Generation = 25y = 100q)
 
     # --- Labor market ---
     delta_F = Pi_s[F, U],   # Calibrated: Job Loss from Formal
-    delta_I = Pi_s[I, U],   # Calibrated: Job Loss from Informal
-    pi_F    = 0.30,         # Calibrated: Formal Offer Prob   | Employed
-    pi_I    = 0.50,         # Calibrated: Informal Offer Prob | Employed
+    delta_I = Pi_s[I, U],   # Job Loss from Informal
+    pi_F    = 0.20,         # Calibrated: Formal Offer Prob   | Employed
+    pi_I    = 0.40,         # Calibrated: Informal Offer Prob | Employed
     pi_UF   = 0.30,         # Calibrated: Formal Offer Prob   | Unemployed
     pi_UI   = 0.60,         # Calibrated: Informal Offer Prob | Unemployed
-    sig     = 0.50,         # SMM: Smoothness of Tastes       -> xxx
+    sig     = 0.5,          # SMM: Smoothness of Tastes       -> xxx
 
     # --- Sector Productivities ---
-    mu_I    = -0.60,       # SMM: Informal Productivity    -> Median Wage Gap (q50)
+    mu_I    = -0.4,       # SMM: Informal Productivity    -> Median Wage Gap (q50)
     sigma_F = 0.40,        # SMM: Formal Volatility        -> Formal Wage Spread (q25, q75, q90)
-    sigma_I = 0.60,        # SMM: Informal Volatility      -> Informal Wage Spread (q10, q25, q75, q90)
+    sigma_I = 0.40,        # SMM: Informal Volatility      -> Informal Wage Spread (q10, q25, q75, q90)
     nT      = 7,
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,         # SMM: Persistence of Productivity     -> Persistence of Income
-    sd_e  = 0.60,          # SMM: Sd of Persistent Productivity   -> Wage Spread (q10, q25, q75, q90)
+    sd_e  = 0.70,          # SMM: Sd of Persistent Productivity   -> Wage Spread (q10, q25, q75, q90)
     nE    = 15,
     amin  = 0.0,
     amax  = 500.0,

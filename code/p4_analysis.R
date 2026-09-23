@@ -40,7 +40,7 @@ vs    = function(x)    unname(c(coef(x)[1], SE(x)[1]))    # Estimate and its Sta
 vs_by = function(x, s) unname(c(coef(x)[[s]], SE(x)[x$status == s]))
 
 # Calibration Statistics
-statistics = function(d, se = FALSE) {
+statistics = function(d, se = FALSE, wmin = 0) {
   z = function(x) as.numeric(ifelse(is.na(x), 0, x))
   d = update(d, status = case_when(VD4009 %in% formal_idx ~ "F",
                                    VD4009 %in% inform_idx ~ "I",
@@ -49,9 +49,10 @@ statistics = function(d, se = FALSE) {
                                    TRUE                   ~ NA_character_))
   d = update(d, nF = z(status == "F"), nI = z(status == "I"),
                 nU = z(status == "U"), nN = z(status == "N"))
-  d = update(d, hF = z(VD4031) * nF,  hI = z(VD4031) * nI,  hI2 = z(VD4031)^2 * nI,
+  d = update(d, wF = nF * z(VD4019 >= wmin))                # Formal hours: w >= minimum wage
+  d = update(d, hF = z(VD4031) * wF,  hI = z(VD4031) * nI,  hI2 = z(VD4031)^2 * nI,
                 yF = z(VD4019) * nF,  yI = z(VD4019) * nI,
-                mhF = z(!is.na(VD4031)) * nF, mhI = z(!is.na(VD4031)) * nI,
+                mhF = z(!is.na(VD4031)) * wF, mhI = z(!is.na(VD4031)) * nI,
                 myF = z(!is.na(VD4019)) * nF, myI = z(!is.na(VD4019)) * nI)
 
   T = svytotal(~nF + nI + nU + nN + hF + hI + hI2 + yF + yI +
@@ -123,7 +124,7 @@ df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                                    VD4002 == "2"          ~ "U",
                                    VD4001 == "2"          ~ "N", TRUE ~ NA_character_))
 
-dataset = data.frame(statistics(df, se = TRUE))
+dataset = data.frame(statistics(df, se = TRUE, wmin = mw))
 wage_yr = 12 * coef(svytotal(~wage, df, na.rm = TRUE))[[1]]   # Total Wage Bill
 
 df$variables$id_dom = with(df$variables, paste0(UPA, V1008, V1014))
@@ -132,7 +133,7 @@ df$variables$bf_hh  = ave(df$variables$bf, df$variables$id_dom,
 df$variables$lf_n   = ave(as.integer(df$variables$status %in% S),
                           df$variables$id_dom, FUN = sum)
 
-
+as.numeric(coef(svyquantile(~wage, subset(df, wage > 0, status == "F"), 0.35, na.rm = TRUE)))
 # Wage Distribution
 cap = as.numeric(coef(svyquantile(~wage, subset(df, wage > 0), 0.99, na.rm = TRUE)))
 dfp = subset(df, wage > 0)
@@ -156,15 +157,6 @@ wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F"),
                       dens(subset(dfp, status == "I"), "I"))
 
 
-# Frisch: log h = varphi/(1+varphi) log y, so varphi = b / (1 - b). Formal is the placebo.
-frisch = function(s) {
-  f = svyglm(I(log(hours)) ~ I(log(wage)), subset(dfp, status == s & hours > 0))
-  b = c(coef(f)[[2]], SE(f)[[2]])
-  c(b[1] / (1 - b[1]), b[2] / (1 - b[1])^2)      # Delta Method
-}
-dataset = cbind(dataset, varphi = frisch("I"), varphi_F = frisch("F"))
-
-
 
 # ---------------------------------------------------------------------------
 # 3. Bolsa Familia (PNAD)
@@ -186,11 +178,10 @@ pphh       = bf_size / bf_size_hh
 # Labor Force Members
 bf_share_lf = svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE)              # Coverage (%)
 bf_lf       = coef(svytotal(~bf_hh, subset(df, status %in% S), na.rm = TRUE))[[1]]  # Covered (Total)
-bf_value_lf = svymean(~V5002A2, subset(df, bf == 1 & status %in% S), na.rm = TRUE)  # Value
-
-df = update(df, tr_i = ifelse(bf_hh == 1 & status %in% S, bf_value_lf / lf_n, 0))
+df = update(df, tr_i = ifelse(bf_hh == 1 & status %in% S, bf_value / lf_n, 0))
 tr_lf  = coef(svytotal(~tr_i, df, na.rm = TRUE))[[1]]     # Total Spending (Labor Force)
 tr_ind = tr_lf / bf_lf                                    # Transfer per Labor Force
+y35    = svyquantile(~wage, subset(df, status %in% S), 0.35, na.rm = TRUE)   # Labor Income
 
 dataset = cbind(dataset,
                 BF   = vs(bf_share_lf),
@@ -198,7 +189,9 @@ dataset = cbind(dataset,
                 BF_I = vs_by(bf_sector, "I"),
                 BF_U = vs_by(bf_sector, "U"),
                 BF_w  = c(12 * tr_lf / wage_yr, 0),             # Spending / Wage Bill
-                Tr_yF = c(tr_ind / dataset["est", "y_F"], 0))   # Transfer / E[y_F]
+                Tr_yF = c(tr_ind / dataset["est", "y_F"], 0),   # Transfer / E[y_F]
+                ybar  = c(bf_line[1] * pphh / dataset["est", "y_F"], 0),    # R$218 x BF HH Size / E[y_F]
+                y35   = c(coef(y35), SE(y35)) / dataset["est", "y_F"])      # 35th Percentile / E[y_F]
 
 
 # Wage Distribution
@@ -208,27 +201,6 @@ cov_wage = imap_dfr(subs, ~as_tibble(svyby(~bf_hh, ~wbin, .x, svymean, na.rm = T
 cov_wage$group = factor(cov_wage$group, levels = names(subs))
 cov_dist$group = factor(cov_dist$group, levels = names(subs))
 
-
-# Coverage Function
-cov_fit = function(s) {
-  d = filter(cov_wage, group == s, wage > 0, se > 0)
-  f = nls(y ~ phi / (1 + (wage / ybar)^(1/sig)), d, weights = 1 / d$se^2,
-          start = list(phi = 0.5, ybar = mw, sig = 0.6), algorithm = "port",
-          lower = c(0, 100, 0.05), upper = c(1, 8000, 5))
-  rbind(est = coef(f), se = coef(summary(f))[, 2])
-}
-p_F = cov_fit("Formal")
-p_I = cov_fit("Informal")
-
-p_of  = function(p, y) p["est", "phi"] / (1 + (y / p["est", "ybar"])^(1 / p["est", "sig"]))
-cov_pred = bind_rows(tibble(group = "Formal",   wage = wedges, y = p_of(p_F, wedges)),
-                     tibble(group = "Informal", wage = wedges, y = p_of(p_I, wedges)))
-cov_pred$group = factor(cov_pred$group, levels = names(subs))
-
-p_F[, "ybar"] = p_F[, "ybar"] / dataset["est", "y_F"]   # Threshold in units of E[y_F]
-p_I[, "ybar"] = p_I[, "ybar"] / dataset["est", "y_F"]
-dataset = cbind(dataset, `colnames<-`(p_F, paste0(colnames(p_F), "_F")),
-                         `colnames<-`(p_I, paste0(colnames(p_I), "_I")))
 
 bf_wage_dist = bind_rows(dens(subset(dfp, bf_hh == 1), "Receives BF"),
                          dens(subset(dfp, bf_hh == 0), "No BF"))
@@ -318,19 +290,6 @@ lw_mom = function(p, h) {
 }
 
 
-# Weighted log Wage Gain of the F <-> I Switchers
-sw_mom = function(p, h) {
-  p = filter(p, s0 != s1, s0 %in% S[1:2], s1 %in% S[1:2], x0 > 0, x1 > 0)
-  M = mult(p$hh, p$id)
-  map_dfr(c("FI", "IF"), function(j) {
-    k = p$s0 == str_sub(j, 1, 1) & p$s1 == str_sub(j, 2, 2)
-    w = p$w[k];  d = log(p$x1[k]) - log(p$x0[k])
-    as_tibble(crossprod(M[k, , drop = FALSE], cbind(n = w, sd = w * d))) %>%
-      mutate(h = h, j = j, r = row_number() - 1L, .before = 1)
-  })
-}
-
-
 # Attrition Tilt
 tilt = function(P, alpha, tol = 1e-14, maxit = 500) {
   a = alpha / sum(alpha);  cj = rep(1, length(a))
@@ -366,8 +325,7 @@ panel = map(csvs, function(f) {
   p1 = map_dfr(1:4, ~pair_of(d, .x))          # one quarter apart
   p4 = pair_of(d, 1, 4)                       # one year apart
   list(flow = count(p1, y0, s0, s1, wt = w, name = "n"),
-       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)),
-       swch = sw_mom(p1, 1))
+       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)))
 })
 
 
@@ -389,15 +347,6 @@ ac = function(h, s = "F") {
   c(x[1], sd(x[-1]))
 }
 dataset = cbind(dataset, ac1 = ac(1), ac4 = ac(4))
-
-
-# Wage Gain of Switchers
-switch = map_dfr(panel, "swch") %>% group_by(r, j) %>%
-  summarise(across(n:sd, sum), .groups = "drop") %>%
-  transmute(r, j, dw = sd / n)
-
-dw = function(j) { x = switch$dw[switch$j == j];  c(x[1], sd(x[-1])) }
-dataset = cbind(dataset, dw_FI = dw("FI"), dw_IF = dw("IF"))
 
 
 # Calibration Matrix (tilt the flows with annual stocks)
@@ -486,6 +435,24 @@ g = ggplot(wage_dist, aes(wage, 100 * y, colour = group)) +
 save_fig(g, "wage_distribution")
 
 
+# Hours against Earnings
+sel = with(dfp$variables, status %in% S[1:2] & hours > 0 & wage <= cap)
+sc  = cbind(dfp$variables[sel, c("wage", "hours", "status")], wgt = weights(dfp)[sel])
+sc  = sc[sample(nrow(sc), min(8e3, nrow(sc)), prob = sc$wgt), ]
+
+g = ggplot(sc, aes(wage, hours, colour = status)) +
+  geom_point(alpha = 0.10, size = 0.7) +
+  geom_smooth(method = "loess", span = 0.6, se = FALSE, linewidth = 1.3) + mytheme +
+  geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
+  scale_x_log10() + scale_colour_manual(values = col_sector, name = NULL,
+                                        labels = c(F = "Formal", I = "Informal")) +
+  labs(title = "Hours and Earnings by Sector",
+       subtitle = "Weighted sample; loess by sector. Dashed line: minimum wage",
+       x = paste0("Monthly Wage (R$ of ", def_base, ", log scale)"),
+       y = "Usual Weekly Hours")
+save_fig(g, "hours_wage")
+
+
 g = ggplot(bf_wage_dist, aes(wage, 100 * y, colour = group, fill = group)) +
   geom_area(alpha = 0.25, position = "identity") +
   geom_line(linewidth = 1) + mytheme +
@@ -513,7 +480,6 @@ save_fig(g, "bf_eligibility")
 g = ggplot(cov_wage, aes(wage, 100 * y)) +
   geom_col(fill = pal[2], alpha = 0.5) +
   geom_line(data = cov_dist, colour = pal[1], linewidth = 1.2) + mytheme +
-  geom_line(data = cov_pred, colour = pal[5], linewidth = 1.0, linetype = "dashed") +
   geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
   facet_wrap(~group) +
   coord_cartesian(xlim = c(0, xmax)) +
@@ -602,25 +568,20 @@ save_tex(bf_size_tab, "bf_size",
 bf_cover_tab = data.frame(
   row.names = c("BF / Labor Force", "BF in Formal", "BF in Informal",
                 "BF in Unemployed", "BF in Non-Participating",
-                "Spending (Labor Force) / Wage Bill", "Tr / y_F"),
+                "Spending (Labor Force) / Wage Bill", "Tr / y_F", "ybar / y_F"),
   `%` = round(100 * c(coef(bf_share_lf), coef(bf_sector)[c("F", "I", "U", "N")],
-                      dataset["est", "BF_w"], dataset["est", "Tr_yF"]), 1),
+                      dataset["est", "BF_w"], dataset["est", "Tr_yF"], dataset["est", "ybar"]), 1),
   check.names = FALSE)
 print(bf_cover_tab)
 save_tex(bf_cover_tab, "bf_coverage",
          paste0("Bolsa Fam\\'ilia ", year, ": Coverage"), "tab:bf_coverage",
          rows = replace(esc(rownames(bf_cover_tab)),
-                        rownames(bf_cover_tab) == "Tr / y_F", "$T / \\E(y^F)$"))
+                        rownames(bf_cover_tab) %in% c("Tr / y_F", "ybar / y_F"),
+                        c("$T / \\E(y^F)$", "$\\bar y / \\E(y^F)$")))
 
 
 # Quarter-to-quarter Transitions
 print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(alpha, 4)))
-
-
-# Frisch Elasticity
-cat(sprintf("Frisch: varphi_I = %.3f (%.3f)   varphi_F = %.3f (%.3f, placebo)\n",
-            dataset["est", "varphi"],   dataset["se", "varphi"],
-            dataset["est", "varphi_F"], dataset["se", "varphi_F"]))
 
 
 

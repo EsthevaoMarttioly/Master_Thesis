@@ -19,7 +19,7 @@ random.seed(20260415)
 
 
 # Import parameters
-from code.p1_household import hh
+from code.p1_household import hh, hh_ss
 from code.p2_other_blocks import *
 from code.p5_calibration import *
 from code.p6_solve import *
@@ -28,11 +28,11 @@ from code.p7_results import *
 
 # ---------------------------------------------------------------------------
 # Steady State
-hank_ss = create_model([hh, firm_formal, firm_informal, wages, nkpc_ss,
-                        union_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
+hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
+                        equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
 ss = solve_ss(hank_ss, calibration, flows, verbose=True)
-calibration.update({k: float(ss[k]) for k in (*pi_calib, *unknowns, 'tau_ss', 'B_ss')})
+calibration.update({k: float(ss[k]) for k in [*update, *['Pi', 'Qb']]})
 
 
 # Steady State Diagnostics
@@ -49,7 +49,8 @@ plot_descriptives(ss, savepath='output/figures/bf_descript.png')
 
 
 # No-BF Counterfactuals
-ss_nobf = solve_ss(hank_ss, {**calibration, 'BF_w': 0.0}, counterfactual=True, verbose=True)
+ss_nobf = solve_ss(hank_ss, {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0},
+                   counterfactual=True, verbose=True)
 
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, savepath='output/figures/bf_descript.png')
@@ -61,8 +62,8 @@ plot_descriptives(ss, ss_nobf, savepath='output/figures/bf_descript.png')
 
 # ---------------------------------------------------------------------------
 # Dynamics
-hank = create_model([hh, firm_formal, firm_informal, wages,
-                     phillips_curve, monetary, fiscal, mkt_clearing])
+hank = create_model([hh.remap({'r': 'ra'}), firm_formal, firm_informal,
+                     phillips_curve, arbitrage, finance, monetary, fiscal, mkt_clearing])
 
 dyn      = hank.steady_state(ss)
 dyn_nobf = hank.steady_state(ss_nobf)
@@ -83,14 +84,15 @@ dTr_ant = ar1( 0.01,    0.40, T, delay=4)    # Antecipated Shock
 
 
 ## Market Clearing Targets
-unknowns_dyn = ['B', 'L', 'h_F', 'pi', 'w', 'tau']
-targets_dyn  = ['debt_rule', 'asset_mkt', 'labor_mkt', 'nkpc', 'wage_nkpc', 'gov_budget']
+unknowns_dyn = ['B', 'L', 'h_F', 'pi', 'w', 'tau', 'p_e']
+targets_dyn  = ['debt_rule', 'asset_mkt', 'labor_mkt',
+                'nkpc', 'wage_nkpc', 'gov_budget', 'equity']
 variables    = ['B', 'C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i', 'tau']
 
 
 ## IRFs: Fiscal (Tr) and Monetary (i) Shocks
 build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, variables)
-build_nobf = irf_builder(hank, dyn_nobf, {**calibration, 'Tr': 0.0},
+build_nobf = irf_builder(hank, dyn_nobf, {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0},
                          unknowns_dyn, targets_dyn, variables)
 
 G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)

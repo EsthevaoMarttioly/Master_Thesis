@@ -9,9 +9,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-from code.p1_household import expand
-from code.p5_calibration import (pnad, alpha, qs, mom_data, model_moments,
-                                 gini_coefficient, gini_from_lorenz, top_share, _wquantile)
+from code.p1_household import nF
+from code.p5_calibration import *
 
 def rr():
     # Reload results.py into the global namespace (interactive use).
@@ -75,7 +74,7 @@ LABELS = {
 }
 
 _hh = lambda ss: ss.internals['household']
-_reshape_hh = lambda arr, calib: arr.reshape(3, calib['nT'], 2, calib['nE'], -1)
+_reshape_hh = lambda arr, calib: arr.reshape(3, nF * calib['nT'], 2, calib['nE'], -1)
 
 plt.rcParams.update({'font.size'        : 10,
                      'axes.spines.top'  : False,
@@ -156,8 +155,8 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0,
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
-vars_ss = ['Y', 'Y_I', 'C_GHH', 'C', 'beta_high', 'A', 'psi', 'BF', 'L', 'F',
-           'Div', 'tau', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc']
+vars_ss = ['Y', 'Y_I', 'C', 'F', 'L', 'psi', 'beta_high', 'A', 'B', 'p_e',
+           'Div', 'tau', 'BF', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc']
 
 def print_ss_summary(ss, var_ss=vars_ss):
     print("\n" + "=" * 55)
@@ -314,7 +313,6 @@ def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
     ly_s = (h['log_y_f'] + h['log_y_i'])[:, 0]              # gross, a-invariant
     mass = h['D'].sum(1)
     blk  = ly_s.size // 3
-    mass[:blk] = mass[:blk] * expand(h['work'])             # a quitter reports no wage
     ref  = np.log(mass[:blk] @ np.exp(ly_s[:blk]) / mass[:blk].sum())
 
     d = pd.read_csv('data/final/pnad_income_dist.csv')
@@ -353,9 +351,9 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     aL_pop  = np.concatenate([[0], np.cumsum(a_dist)])
     aL_share = np.concatenate([[0], np.cumsum(a_dist * a_grid) / np.sum(a_dist * a_grid)])
 
-    y = h['y']
-    y = y[:, 0] if y.ndim == 2 else np.asarray(y)       # labor income per state
-    m = D.sum(1)
+    # Earnings + Transfers, as in PNAD
+    y = (h['y'][:, None] + h['we'][:, None] * h['h']).ravel()
+    m = D.ravel()
     o = np.argsort(y); ys, ms = y[o], m[o]
     cy = np.cumsum(ms) / ms.sum()
     yL_pop  = np.concatenate([[0], cy])
@@ -366,10 +364,15 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
-    _bar_panel(axes[0, 0], a_grid[:n_bins], a_dist[:n_bins],
-               np.diff(np.append(a_grid[:n_bins], a_grid[n_bins])),
+    # HtM: liquid wealth under a month of mean formal earnings
+    thr = float(ss['N_F']) / float(ss['F']) / 3
+    htm = float(a_dist[a_grid <= thr].sum())
+    n_b = max(int(np.searchsorted(a_grid, 2.5 * thr)) + 1, n_bins)
+    _bar_panel(axes[0, 0], a_grid[:n_b], a_dist[:n_b],
+               np.diff(np.append(a_grid[:n_b], a_grid[n_b])),
                'Assets $a$', 'Wealth Distribution (Near Constraint)',
-               vlines=[(a_grid[1], f'HtM = {a_dist[0]:.1%}', COL1, '--')])
+               vlines=[(a_grid[1], f'At Constraint = {a_dist[0]:.1%}', COL1, '--'),
+                       (thr, f'HtM = {htm:.1%}', COL4, '--')])
     _lorenz_panel(axes[0, 1], aL_pop, aL_share,
                   np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=','),
                   'US SCF 2019 (Proxy)', 'Wealth')
@@ -465,7 +468,7 @@ def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
 # ---- Sensitivity Analysis -------------------------------------------------
 def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=None):
     # Re-solve the Steady State over BF_w in {0, .5, 1, 1.5, 2} x BF_w0.
-    # Sweep the ratio, not Tr: calibrate_ss inverts Tr out of it every iteration.
+    # Sweep the ratio: calibrate_ss inverts Tr out of it every iteration.
     keys = ['Informal Share', 'Unemployed Share', 'Wealth Gini', 'Welfare E[V]']
     series = {k: [] for k in keys}
     Tr0 = calibration['BF_w']
@@ -476,7 +479,8 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
         base = next((s for t, s in reuse if s is not None and np.isclose(Tr, t)), None)
         if base is None:
             try:
-                base = solve_fn({**calibration, **warm, 'BF_w': Tr})
+                base = solve_fn({**calibration, **warm, 'BF_w': Tr,
+                                 'Pi': ss_base['Pi'], 'Qb': ss_base['Qb']})
             except RuntimeError as err:
                 print(f"  BF_w={Tr:.4f} left as a gap.{err}")
                 for k in keys: series[k].append(np.nan)
@@ -502,7 +506,7 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
 # 5. PE iMPC and GE IRFs
 # ---------------------------------------------------------------------------
 
-def plot_impc(G_hh, h_ant=4, T_plot=20, key='C_GHH', savepath=None):
+def plot_impc(G_hh, h_ant=4, T_plot=20, key='C', savepath=None):
     # Intertemporal MPC: consumption path, holding prices (r, w, Div) fixed.
     M   = G_hh[key]['Tr']
     m   = M[:T_plot, 0]
@@ -613,9 +617,9 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 PCT  = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'B_gdp', 'Tr_yF',
         'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI', 'tau_l']
 ZERO = ['amin', 'amax', 'nT', 'nE', 'nA']
-ONE  = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'q']
-TWO  = ['phi_F', 'phi_I', 'ybar_F', 'ybar_I',
-        'sig_F', 'sig_I', 'kappa', 'kappa_w', 'mu', 'mu_w']
+ONE  = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'varphi', 'q', 'dat_mpc']
+TWO  = ['lambda_BF', 'ybar', 'sig_BF', 'y35', 'rho_F', 'rho_I', 'kappa', 'kappa_w',
+        'mu', 'mu_w', 'dat_gini']
 BIG  = ['LF', 'Pop', 'y_F', 'y_I']                                 # people and R$
 
 MACRO_FMT  = ({k: '.1%' for k in PCT} | {k: '.1f' for k in ONE} | {k: '.0f' for k in ZERO}
@@ -637,7 +641,7 @@ def tex_macros(ss, calibration, savepath=None, prefix='m'):
             pd.read_csv('data/final/pnad_calibration.csv').loc[0].items()}
     ctx |= {f'dat_{k}': float(v) for k, v in mom_data.items()}       # targets, incl. WID
     ctx |= {f'mod_{k}': float(v) for k, v in model_moments(ss).items()}
-    ctx |= dict(B_gdp=ctx['B'] / (4 * (ctx['Y'] + ctx['Y_I'])), BF_w=ctx['Tr'] * ctx['BF'] / ctx['wage_bill'],
+    ctx |= dict(B_gdp=ctx['B'] / (4 * (ctx['Y'] + ctx['Y_I'])), BF_w=ctx['mod_BF_w'],
                 Tr_yF=ctx['Tr'] * ctx['F'] / (ctx['w'] * ctx['N_F']),
                 beta_low=ctx['beta_high'] - ctx['dbeta'])
 

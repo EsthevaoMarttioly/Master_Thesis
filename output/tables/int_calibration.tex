@@ -9,19 +9,27 @@
 & \textbf{Description} & \textbf{Value} & \textbf{Target} & \textbf{Model} & \textbf{Data} & \textbf{Source} \\
 \midrule
 \multicolumn{4}{l}{\textit{Households}} \\[2pt]
-$\beta_L$ & Impatient's Discount Factor & $\mBetaLow$ & Top 10\% & $\mModTopOneZero$ & $\mDatTopOneZero$ & WID World \\
-$\omega_I$ & Share of Impatient Agents & $\mOmegaI$ & HtM Share & $\mModHtm$ & $\mDatHtm$ & Standard \\
-$\sigma_S$ & Smoothness of Tastes & $\mSig$ & $\Delta_{IF}$ & $\mModDwIF$ & $\mDatDwIF$ & PNAD-C \\
+$\beta_L$  & Impatient's Discount Factor & $\mBetaLow$ & Top 10\%  & $\mModTopOneZero$ & $\mDatTopOneZero$ & WID World \\
+$\omega_I$ & Share of Impatient Agents   & $\mOmegaI$  & HtM Share & $\mModHtm$        & $\mDatHtm$        & Standard \\
+$\sigma_S$ & Smoothness of Tastes        & $\mSig$     & $xxx$     & $xxx$             & $xxx$             & CAGED \\
 [6pt]
 
 \multicolumn{4}{l}{\textit{Labor Market}} \\[2pt]
-$\pi_F, \pi_F^U$ & Formal Offer Probability & $\mPiF, \mPiUF$ & $F$ & $\mF$ & $\mDatF$ & PNAD-C \\
-$\pi_I, \pi_I^U$ & Informal Offer Probability & $\mPiI, \mPiUI$ & $I$ & $\mI$ & $\mDatI$ & PNAD-C \\
-$\rho_e$ & Persistence of Productivity & $\mRhoE$ & $\rho_1^y$ & $\mModAcOne$ & $\mDatAcOne$ & PNAD-C \\
-$\sigma_e$ & Productivity Std. Dev. & $\mSdE$ & $q_{90}$ & $\mModQNineZeroF$ & $\mDatQNineZeroF$ & PNAD-C \\
-$\mu_I$ & Informal Average Productivity & $\mMuI$ & $q_{50}^I$ & $\mModQFiveZeroI$ & $\mDatQFiveZeroI$ & PNAD-C \\
-$\sigma_F$ & Formal Std. Dev. Produc. & $\mSigmaF$ & $q_{50}^F$ & $\mModQFiveZeroF$ & $\mDatQFiveZeroF$ & PNAD-C \\
-$\sigma_I$ & Informal Std. Dev. Produc. & $\mSigmaI$ & $q_{75}^I$ & $\mModQSevenFiveI$ & $\mDatQSevenFiveI$ & PNAD-C \\
+$\rho_e$   & Persistence of Productivity   & $\mRhoE$   & $\rho_4^y$ & $\mModAcFour$      & $\mDatAcFour$      & PNAD-C Panel \\
+$\sigma_e$ & Productivity Std. Dev.        & $\mSdE$    & $q_{50}$   & $\mModQFiveZeroF$  & $\mDatQFiveZeroF$  & PNAD-C \\
+$\mu_I$    & Informal Average Productivity & $\mMuI$    & $q_{50}^I$ & $\mModQFiveZeroI$  & $\mDatQFiveZeroI$  & PNAD-C \\
+$\sigma_F$ & Formal Std. Dev. Produc.      & $\mSigmaF$ & $q_{75}^F$ & $\mModQSevenFiveF$ & $\mDatQSevenFiveF$ & PNAD-C \\
+$\sigma_I$ & Informal Std. Dev. Produc.    & $\mSigmaI$ & $q_{75}^I$ & $\mModQSevenFiveI$ & $\mDatQSevenFiveI$ & PNAD-C \\
+[6pt]
+
+\multicolumn{4}{l}{\textit{Internal Consistency}} \\[2pt]
+$\pi_F$   & Formal Offer Probability      & $\mPiF$      & $I \to F$ & $\mModIF$  & $\mDatIF$  & PNAD-C Panel \\
+$\pi_F^U$ & Formal Offer Prob. (Unemp.)   & $\mPiUF$     & $U \to F$ & $\mModUF$  & $\mDatUF$  & PNAD-C Panel \\
+$\pi_I$   & Informal Offer Probability    & $\mPiI$      & $F \to I$ & $\mModFI$  & $\mDatFI$  & PNAD-C Panel \\
+$\pi_I^U$ & Informal Offer Prob. (Unemp.) & $\mPiUI$     & $U \to I$ & $\mModUI$  & $\mDatUI$  & PNAD-C Panel \\
+$\lambda$ & BF Entry Probability          & $\mLambdaBF$ & $BF_U$    & $\mModBFU$ & $\mDatBFU$ & PNAD-C \\
+$\rho_I$ & Informal Fiscalization Prob.   & $\mRhoI$     & $BF_I$    & $\mModBFI$ & $\mDatBFI$ & PNAD-C \\
+$\rho_F$ & Formal Fiscalization Prob.     & $\mRhoF$     & $BF_F$    & $\mModBFF$ & $\mDatBFF$ & PNAD-C \\
 \bottomrule
 \end{tabular}
 \end{table}

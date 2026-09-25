@@ -32,7 +32,7 @@ hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
                         equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
 ss = solve_ss(hank_ss, calibration, flows, verbose=True)
-calibration.update({k: float(ss[k]) for k in [*update, *['Pi', 'Qb']]})
+calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 
 
 # Steady State Diagnostics
@@ -49,8 +49,7 @@ plot_descriptives(ss, savepath='output/figures/bf_descript.png')
 
 
 # No-BF Counterfactuals
-ss_nobf = solve_ss(hank_ss, {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0},
-                   counterfactual=True, verbose=True)
+ss_nobf = solve_ss(hank_ss, {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0}, counterfactual=True, verbose=True)
 
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, savepath='output/figures/bf_descript.png')

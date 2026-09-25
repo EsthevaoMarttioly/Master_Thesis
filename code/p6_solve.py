@@ -81,7 +81,7 @@ def _rates(C, D, qb, tgt, p, it=200, tol=1e-13):
     def check(x, name, flow, tag):
         if not 0 < x <= 1:
             raise RuntimeError(f"\n     Flow {tag} = {flow:.3f} infeasible: "
-                               f"{name} > 1 (sig too small)")
+                               f"{name} > 1 (sig must change)")
         return x
 
     kF, kI = 1 - p['delta_F'], 1 - p['delta_I']    # layoffs are exogenous
@@ -103,7 +103,10 @@ def _rates(C, D, qb, tgt, p, it=200, tol=1e-13):
         if max(abs(nF-eF), abs(nI-eI)) < tol: break
         eF, eI = nF, nI
 
-    return dict(pi_F=eF, pi_I=eI, pi_UF=uF, pi_UI=uI)
+    # Quits: employed formals that accept an offer
+    quit = (1 - p['delta_F']) * (eF * (1-eI) * a[F] + (1-eF) * eI * c[F] + eF * eI * (b[F] + d[F]))
+
+    return dict(pi_F=eF, pi_I=eI, pi_UF=uF, pi_UI=uI, quit=float(quit))
 
 
 def _assemble(C, D, r, qb, nT, nE, Pi_b, Pi_e, probF, probI):
@@ -141,21 +144,24 @@ def _assemble(C, D, r, qb, nT, nE, Pi_b, Pi_e, probF, probI):
 # ---------------------------------------------------------------------------
 # 2. Steady State
 # ---------------------------------------------------------------------------
-def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
-             damp=0.75, tol=1e-6, stol=1e-3, atol=1e-5, maxit=400, bmaxit=5000):
+def solve_ss(hank_block, calib, flows=None, counterfactual=False, sig_calib=False, verbose=False,
+             damp=0.5, tol=1e-6, stol=1e-3, atol=1e-5, maxit=400, bmaxit=5000):
     """Solve the Steady-State by iterating the value function and the transition matrix.
     1) Household Solve:       expensive step, slow;
     2) Market Clear:          closed form, invert exactly, very fast;
     3) Asset Market:          calibrates beta_high to A = B + p_e, secant method;
-    4) Pi_s and BF:           internally calibrate Pi_s and BF.
+    4) Pi_s and BF:           internally calibrate Pi_s, `sig` and BF.
 
     flows           :  dict,      {'FI': value, ...} to be matched
-    counterfactual  :  bool,      True, so B clears asset_market and h_F clear wage_nkpc
+    counterfactual  :  bool,      True to B clears asset_market and h_F clear wage_nkpc,
+                                  and to hold the rates, `sig` and the BF rule fixed
+    sig_calib       :  bool,      True to calibrate `sig` to the job exit hazard `sep`
     damp            :  [0,1],     damp < 1 to avoid stuck, but converges slower
     tol, stol       :  value,     tolerance for 'Pi', and 'Pi_s' and 'BF'
     atol            :  value,     tolerance for 'asset_mkt / B'."""
 
     start = time.time()
+
     # Import Grids
     c = {**unknowns, **calib}
     c['tau_ss'], c['B_ss'] = c['tau'], c['B']
@@ -178,7 +184,7 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
         one = np.ones((N, nA))
         Pi, _ = _assemble(_choice(0*one, one, c['sig'], nT, nE, probF, probI), one, c, qb, *grid)
 
-    dPi = dpi = dbf = dA = np.inf; xb = fb = None; bgain = 0.005
+    dPi = dpi = dbf = dA = np.inf; xb = fb = xs = fs = None; bgain = 0.005; sgain = 0.5
 
     # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
     for it in range(maxit):
@@ -209,13 +215,28 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
         C  = _choice(hhi['V'], hhi['Va'], c['sig'], nT, nE, probF, probI)
         qb = _test(c, hhi['D'], *tgrid)
         if flows is not None:
-            c.update(_rates(C, hhi['D'], qb, flows, c))
+            try:
+                c.update(_rates(C, hhi['D'], qb, flows, c))
+            except RuntimeError:
+                Cup = _choice(hhi['V'], hhi['Va'], 1.2 * c['sig'], nT, nE, probF, probI)
+                c['sig'] *= 1.2 if Cup.mean() > C.mean() else 1 / 1.2   # infeasible: the flows need more acceptance
+                continue
             # Calibrate the BF Rule
             dbf = 0.0
             for k, (agg, sh, sgn) in bf_calib.items():
                 b = (mom_data[agg[:4]] / max(float(ss[agg]) / float(ss[sh]), 1e-12)) ** (sgn / 2)
                 x = float(np.clip(c[k] * b, 1e-4, 1.0))           # probabilities
                 dbf, c[k] = max(dbf, abs(np.log(x / c[k]))), x    # at a bound: the closest fit
+
+            # Calibrate the Taste Dispersion: secant, since d(quit)/d(sig) changes sign
+            if sig_calib:
+                fn = np.log(max(c['delta_F'] + c['quit'], 1e-12) / mom_data['sep'])
+                xn = np.log(c['sig'])
+                if xs is not None and abs(fn - fs) > 1e-10:
+                    sgain = float(np.clip((xn - xs) / (fn - fs), -5.0, 5.0))
+                xs, fs = xn, fn
+                x = float(np.clip(np.exp(xn - np.clip(sgain * fn, -0.5, 0.5)), 1e-3, 5.0))
+                dbf, c['sig'] = max(dbf, abs(np.log(x / c['sig']))), x
         else:
             dpi = dbf = 0.0
 
@@ -239,7 +260,7 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
             tdiff = time.time() - start
             if verbose:
                 print(f"Steady State solved in {tdiff:.1f}s ({tdiff/60:.1f}min),  " +
-                      "  ".join(f"{k}={c[k]:.4f}" for k in (*pi_calib, *bf_calib) if flows is not None))
+                      "  ".join(f"{k}={c[k]:.4f}" for k in (*pi_calib, *bf_calib, 'sig') if flows is not None))
             return ss
         
     # If didn't converge, print why
@@ -588,7 +609,7 @@ if __name__ == "__main__":
 
     # 1. First Run
     p0  = {k: guess[k] for k in smm_space}
-    obj = SMM(hank_ss, coarse=dict(nA=40, nE=7), verbose=True)
+    obj = SMM(hank_ss, coarse=dict(nA=50, nE=7), verbose=True)
 
     # 2. Identification and Sensitivity
     G = jacobian(obj, p0, coarse=True); s, cond, weak = identification(G, obj.W)
@@ -603,7 +624,7 @@ if __name__ == "__main__":
 
     # 4. Polish (Mid Grid)
     # res = load_res('g')       # Load Global Search
-    # res = estimate(obj, p0=res['params'], global_stage=False, polish=dict(nA=150, nE=11))
+    # res = estimate(obj, p0=res['params'], global_stage=False, polish=dict(nE=11))
     # report(res)
 
     # 5. Identification and Inference

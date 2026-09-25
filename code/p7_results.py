@@ -65,12 +65,15 @@ LABELS = {
     'Formal Share'     : r'Formal Share $\alpha_F$',
     'Informal Share'   : r'Informal Share $\alpha_I$',
     'Unemployed Share' : r'Unemployment $\alpha_U$',
-    'HtM (a=a_min)'    : r'Hand-to-Mouth',
+    'HtM'              : r'Hand-to-Mouth',
     'Wealth Gini'      : r'Wealth Gini',
+    'Bottom 50%'       : r'Wealth Share, Bottom 50\%',
+    'Top 10%'          : r'Wealth Share, Top 10\%',
     'Consumption Gini' : r'Consumption Gini',
-    'Aggregate C'      : r'Aggregate Consumption $C$',
+    'Aggregate C'      : r'Consumption $C$',
     'BF Spending'      : r'BF Spending',
-    'Welfare E[V]'     : r'Welfare $\mathbb{E}[V]$',
+    'Lump-Sum'         : r'Lump-Sum $\tau$',
+    'Welfare E[V]'     : r'Welfare $\mathbb{E}[V]$, $\Delta$ = CEV',
 }
 
 _hh = lambda ss: ss.internals['household']
@@ -199,21 +202,27 @@ def _ss_stats(ss):
     h = _hh(ss)
     D, c, V, a = h['D'], h['c'], h['V'], h['a_grid']
     a_dist = D.sum(0)
+    pop    = np.r_[0, np.cumsum(a_dist)]
+    share  = np.r_[0, np.cumsum(a_dist * a) / (a_dist @ a)]
     return {'Formal Share'     : ss['F'],
             'Informal Share'   : ss['I'],
             'Unemployed Share' : ss['U'],
-            'HtM (a=a_min)'    : a_dist[0],
+            'HtM'              : a_dist[a <= ss['N_F'] / ss['F'] / 3].sum(),
             'Wealth Gini'      : gini_coefficient(a, weights=a_dist),
+            'Bottom 50%'       : 1 - top_share(pop, share, 0.50),
+            'Top 10%'          : top_share(pop, share, 0.10),
             'Consumption Gini' : gini_coefficient(c.ravel(), weights=D.ravel()),
             'Aggregate C'      : ss['C'],
             'BF Spending'      : ss['Tr'] * ss['BF'],
+            'Lump-Sum'         : ss['tau'],
             'Welfare E[V]'     : float(np.sum(D * V))}
 
 
 def compare_bf_ss(ss_bf, ss_nobf, savepath=None, label='tab:bf_ss'):
     # Table: Economy with BF vs the Tr=0 counterfactual.
     s1, s0 = _ss_stats(ss_bf), _ss_stats(ss_nobf)
-    pct_rows = {'Formal Share', 'Informal Share', 'Unemployed Share', 'HtM (a=a_min)'}
+    pct_rows = {'Formal Share', 'Informal Share', 'Unemployed Share', 'HtM',
+                'Bottom 50%', 'Top 10%'}
 
     def cell(k, x, delta=False):
         if k in pct_rows:
@@ -221,7 +230,11 @@ def compare_bf_ss(ss_bf, ss_nobf, savepath=None, label='tab:bf_ss'):
         return f'{x:+.3f}' if delta else f'{x:.3f}'
 
     rows = [rf'{LABELS.get(k, k)} & {cell(k, s1[k])} & {cell(k, s0[k])} '
-            rf'& {cell(k, s1[k]-s0[k], delta=True)}' for k in s1]
+            rf'& {cell(k, s1[k]-s0[k], delta=True)}' for k in s1 if k != 'Welfare E[V]']
+
+    cev = _cev(s1['Welfare E[V]'], s0['Welfare E[V]'], float(ss_bf['eis']))
+    rows += [rf"{LABELS['Welfare E[V]']} & {s1['Welfare E[V]']:.3f} & "
+             rf"{s0['Welfare E[V]']:.3f} & {100*cev:+.2f}\%"]
 
     return _tex_table([r' & With BF & No BF & $\Delta$'], rows,
                       r"Steady State: Bolsa Fam\'ilia vs.\ No-Transfer Counterfactual",
@@ -397,18 +410,22 @@ def _by_state(D, x, block):
     return [(D[seg(i)] * xi(i)).sum() / D[seg(i)].sum() for i in range(3)]
 
 
+def _cev(v1, v0, eis):
+    # Consumption Equivalent: V is homogeneous of degree 1 - 1/eis in c
+    return (v1 / v0) ** (1 / (1 - 1 / eis)) - 1
+
+
 def _welfare_gains(ss_bf, ss_nobf):
     # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed].
-    # V is homogeneous of degree 1-1/eis in c, so the ratio nets out the 1/(1-beta)
-    # scale: raw dE[V] is not comparable across patience types.
-    g = 1 - 1 / float(ss_bf['eis'])
+    # The ratio nets out the 1/(1-beta) scale: raw dE[V] is not comparable across types.
+    eis = float(ss_bf['eis'])
     def ev(ss):
         h = _hh(ss)
         D, V = _reshape_hh(h['D'], ss), _reshape_hh(h['V'], ss)
         pat = [(D[:, :, b] * V[:, :, b]).sum() / D[:, :, b].sum() for b in (0, 1)]
         sec = [(D[s] * V[s]).sum() / D[s].sum() for s in (0, 1, 2)]
         return np.array(pat + sec)
-    return (ev(ss_bf) / ev(ss_nobf)) ** (1 / g) - 1
+    return _cev(ev(ss_bf), ev(ss_nobf), eis)
 
 
 def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
@@ -470,6 +487,7 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
     # Re-solve the Steady State over BF_w in {0, .5, 1, 1.5, 2} x BF_w0.
     # Sweep the ratio: calibrate_ss inverts Tr out of it every iteration.
     keys = ['Informal Share', 'Unemployed Share', 'Wealth Gini', 'Welfare E[V]']
+    eis  = float(calibration['eis'])
     series = {k: [] for k in keys}
     Tr0 = calibration['BF_w']
     Tr_grid = Tr0 * np.array([0, 0.5, 1, 1.5, 2])
@@ -490,13 +508,16 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
         for k in keys:
             series[k].append(st[k])
 
+    v0 = series['Welfare E[V]'][0]                        # CEV against BF_w = 0
+    series['Welfare E[V]'] = [_cev(v, v0, eis) for v in series['Welfare E[V]']]
+
     fig, axes = plt.subplots(2, 2, figsize=(10, 7))
     for ax, k in zip(axes.flat, keys):
         ax.plot(Tr_grid, series[k], marker='o', ms=4, color=COL4, lw=2.2)
         ax.axvline(Tr0, color=GRAY, ls='--', lw=1)
         ax.set_xticks(Tr_grid, [f'{t:.3f}' for t in Tr_grid])
         ax.set_xlabel('BF Spending / Wage Bill')
-        ax.set_title(k)
+        ax.set_title('Welfare (CEV)' if k == 'Welfare E[V]' else k)
     fig.suptitle('Steady State vs BF Transfer', fontsize=11)
     _save_or_show(fig, savepath)
 
@@ -615,8 +636,9 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 
 # Macro formats. The default is 3 decimals; these are the exceptions.
 PCT  = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'B_gdp', 'Tr_yF',
-        'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI', 'tau_l']
-ZERO = ['amin', 'amax', 'nT', 'nE', 'nA']
+        'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI',
+        'tau_l', 'tau_d', 'omega_I']
+ZERO = ['amin', 'amax', 'nT', 'nE', 'nA', 'T_BFF']
 ONE  = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'varphi', 'q', 'dat_mpc']
 TWO  = ['lambda_BF', 'ybar', 'sig_BF', 'y35', 'rho_F', 'rho_I', 'kappa', 'kappa_w',
         'mu', 'mu_w', 'dat_gini']

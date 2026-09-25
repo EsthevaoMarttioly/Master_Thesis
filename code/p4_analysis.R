@@ -18,16 +18,19 @@ set.seed(20260415)
 year       = 2025
 quarter    = FALSE     # TRUE to run quarter
 transition = FALSE     # TRUE to run every panel
+hourswage  = FALSE     # TRUE to run wage x hours graph
 
 
 # ---- Config ---------------------------------------------------------------
 mw         = 1518                 # Minimum Wage
 bf_line    = c(218, mw / 2, mw)   # Poverty Line and Regra de Protecao
-wedges     = seq(0, 8000, 200)
+w_edges    = seq(0, 8000, 200)
 S          = c("F", "I", "U")     # N = Outside Labor Force
 formal_idx = c("01", "03", "05", "07", "08")
 inform_idx = c("02", "04", "06", "09", "10")
 input_txt  = "data/pnad/input_PNADC_trimestral.txt"
+time_start = Sys.time()           # Set timer
+
 
 # Quarterly Deflator
 deflator = list.files("data/pnad", "^deflator_PNADC.*\\.xls$", full.names = TRUE)[1] %>%
@@ -38,6 +41,7 @@ def_base = names(which.min(deflator))
 
 vs    = function(x)    unname(c(coef(x)[1], SE(x)[1]))    # Estimate and its Standard Error
 vs_by = function(x, s) unname(c(coef(x)[[s]], SE(x)[x$status == s]))
+
 
 # Calibration Statistics
 statistics = function(d, se = FALSE, wmin = 0) {
@@ -106,34 +110,50 @@ if (quarter) {
   full_dataset = data.frame(Information = info, setNames(cols, names(txts)), check.names = FALSE)
   write.csv(full_dataset, "data/final/pnad_historical.csv", row.names = FALSE)
   stopCluster(cl)
+  print(paste("Quarterly Statistics done in",
+              round(as.numeric(Sys.time() - time_start, units = "mins"), 1), "minutes."))
 }
 
 
 
 # ---------------------------------------------------------------------------
 # 2. Annual Statistics, Visita 1
+time_start0 = Sys.time()
 df = get_pnadc(year = year, interview = 1, deflator = FALSE, labels = FALSE,
                reload = FALSE, savedir = "data/pnad/raw/annual/")
 
 df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                 wage   = ifelse(is.na(as.numeric(VD4019)), 0, as.numeric(VD4019)),
                 hours  = ifelse(is.na(as.numeric(VD4031)), 0, as.numeric(VD4031)),
-                wbin = cut(wage, c(wedges, Inf), include.lowest = TRUE),
+                wbin   = cut(wage, c(w_edges, Inf), include.lowest = TRUE),
                 status = case_when(VD4009 %in% formal_idx ~ "F",
                                    VD4009 %in% inform_idx ~ "I",
                                    VD4002 == "2"          ~ "U",
-                                   VD4001 == "2"          ~ "N", TRUE ~ NA_character_))
+                                   VD4001 == "2"          ~ "N", TRUE ~ NA_character_),
+                ten = case_when(V4040 == "1" ~ 0.5,  V4040 == "2" ~ as.numeric(V40401),
+                                V4040 == "3" ~ 12 + as.numeric(V40402),
+                                V4040 == "4" ~ 12 * as.numeric(V40403)))
 
 dataset = data.frame(statistics(df, se = TRUE, wmin = mw))
 wage_yr = 12 * coef(svytotal(~wage, df, na.rm = TRUE))[[1]]   # Total Wage Bill
 
+# Job Tenure
+dfT   = subset(df, VD4009 == "01" & !is.na(ten))              # Private CLT: public sector is too stable
+ten12 = svymean(~I(1 * (ten < 12)), dfT, na.rm = TRUE)        # Share under one year
+
+dataset = cbind(dataset, ten   = vs(svymean(~ten, dfT, na.rm = TRUE)),        # Mean Tenure (months)
+                         ten12 = vs(ten12),
+                         sep   = c(1 - (1 - coef(ten12)[[1]]) ^ (1/4), 0))    # Quarterly Exit Hazard
+
+
+# Household Identification
 df$variables$id_dom = with(df$variables, paste0(UPA, V1008, V1014))
 df$variables$bf_hh  = ave(df$variables$bf, df$variables$id_dom,
                           FUN = function(x) as.integer(any(x == 1, na.rm = TRUE)))
 df$variables$lf_n   = ave(as.integer(df$variables$status %in% S),
                           df$variables$id_dom, FUN = sum)
 
-as.numeric(coef(svyquantile(~wage, subset(df, wage > 0, status == "F"), 0.35, na.rm = TRUE)))
+
 # Wage Distribution
 cap = as.numeric(coef(svyquantile(~wage, subset(df, wage > 0), 0.99, na.rm = TRUE)))
 dfp = subset(df, wage > 0)
@@ -178,7 +198,7 @@ pphh       = bf_size / bf_size_hh
 # Labor Force Members
 bf_share_lf = svymean(~bf_hh, subset(df, status %in% S), na.rm = TRUE)              # Coverage (%)
 bf_lf       = coef(svytotal(~bf_hh, subset(df, status %in% S), na.rm = TRUE))[[1]]  # Covered (Total)
-df = update(df, tr_i = ifelse(bf_hh == 1 & status %in% S, bf_value / lf_n, 0))
+df     = update(df, tr_i = ifelse(bf_hh == 1 & status %in% S, bf_value / lf_n, 0))
 tr_lf  = coef(svytotal(~tr_i, df, na.rm = TRUE))[[1]]     # Total Spending (Labor Force)
 tr_ind = tr_lf / bf_lf                                    # Transfer per Labor Force
 y35    = svyquantile(~wage, subset(df, status %in% S), 0.35, na.rm = TRUE)   # Labor Income
@@ -190,14 +210,14 @@ dataset = cbind(dataset,
                 BF_U = vs_by(bf_sector, "U"),
                 BF_w  = c(12 * tr_lf / wage_yr, 0),             # Spending / Wage Bill
                 Tr_yF = c(tr_ind / dataset["est", "y_F"], 0),   # Transfer / E[y_F]
-                ybar  = c(bf_line[1] * pphh / dataset["est", "y_F"], 0),    # R$218 x BF HH Size / E[y_F]
+                yrule = c(bf_line[1] * pphh / dataset["est", "y_F"], 0),    # R$218 x BF HH Size / E[y_F]
                 y35   = c(coef(y35), SE(y35)) / dataset["est", "y_F"])      # 35th Percentile / E[y_F]
 
 
 # Wage Distribution
 cov_dist = imap_dfr(subs, ~dens(.x, .y, bf_hh ~ wage))
 cov_wage = imap_dfr(subs, ~as_tibble(svyby(~bf_hh, ~wbin, .x, svymean, na.rm = TRUE)) %>%
-  transmute(group = .y, wage = wedges, y = bf_hh, se = se)) %>% drop_na()
+  transmute(group = .y, wage = w_edges, y = bf_hh, se = se)) %>% drop_na()
 cov_wage$group = factor(cov_wage$group, levels = names(subs))
 cov_dist$group = factor(cov_dist$group, levels = names(subs))
 
@@ -238,11 +258,15 @@ sgs = function(id) as.numeric(tail(jsonlite::fromJSON(sprintf(
 
 dataset = cbind(dataset, B_gdp = c(sgs(13762) / 100, 0))    # Debt / GDP (annual)
 
+print(paste("Annual PNAD and BF Statistics done in",
+            round(as.numeric(Sys.time() - time_start0, units = "mins"), 1), "minutes."))
+
 
 
 # ---------------------------------------------------------------------------
 # 5. Matched Panel: Transitions and Wage Persistence
 ## The panel follows a household over 5 quarterly visits
+time_start0 = Sys.time()
 classify = function(d, v) {
   vd4001 = d[[paste0("vd4001_", v)]]
   vd4002 = d[[paste0("vd4002_", v)]]
@@ -324,9 +348,16 @@ panel = map(csvs, function(f) {
   d  = read_csv(f, col_select = all_of(cols), show_col_types = FALSE)
   p1 = map_dfr(1:4, ~pair_of(d, .x))          # one quarter apart
   p4 = pair_of(d, 1, 4)                       # one year apart
-  list(flow = count(p1, y0, s0, s1, wt = w, name = "n"),
+  list(flow = count(p4, y0, s0, s1, wt = w, name = "n"),      # annual: see `qroot`
        wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)))
 })
+
+
+# Quarterly Root
+qroot = function(P) {
+  e = eigen(P);  R = Re(e$vectors %*% diag(e$values ^ (1/4)) %*% solve(e$vectors))
+  R = pmax(R, 0);  R / rowSums(R)
+}
 
 
 # Transition rates by origin year
@@ -352,10 +383,12 @@ dataset = cbind(dataset, ac1 = ac(1), ac4 = ac(4))
 # Calibration Matrix (tilt the flows with annual stocks)
 alpha = c(t(dataset["est", S]));  alpha = alpha / sum(alpha)
 P_raw = wide_P(filter(trans, y0 == year))
-P     = tilt(P_raw, alpha)
+P_yr  = tilt(P_raw, alpha)
+P     = qroot(P_yr)                        # annual -> quarterly
 cat(sprintf("Attrition tilt: c = [%s], %d it, max|dP| = %.4f\n",
-            paste(round(attr(P, "c"), 3), collapse = ", "),
-            attr(P, "it"), max(abs(P - P_raw))))
+            paste(round(attr(P_yr, "c"), 3), collapse = ", "),
+            attr(P_yr, "it"), max(abs(P_yr - P_raw))))
+
 
 # Historical Series
 if (transition) {
@@ -367,20 +400,24 @@ if (transition) {
     pivot_wider(names_from = Information, values_from = v)
 
   trans = map_dfr(sort(intersect(trans$y0, a_year$y0)), function(y)
-    long_P(tilt(wide_P(filter(trans, y0 == y)),
-                unlist(a_year[a_year$y0 == y, S])), y))
+    long_P(qroot(tilt(wide_P(filter(trans, y0 == y)),
+                      unlist(a_year[a_year$y0 == y, S]))), y))
   write.csv(trans, "data/final/pnad_transition_historical.csv", row.names = FALSE)
 }
 
 P_ss = Re(eigen(t(P))$vectors[, 1])
 P_ss = P_ss / sum(P_ss); names(P_ss) = S
 
+print(paste("Panel PNAD for Transitions done in",
+            round(as.numeric(Sys.time() - time_start0, units = "mins"), 1), "minutes."))
+
 
 
 # ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
-xmax = max(wedges)        # plotting window for wage densities
+time_start0 = Sys.time()
+xmax = max(w_edges)        # plotting window for wage densities
 pal  = c('#1b325f', '#9cc4e4', '#e9f2f9', '#3a89c9', '#f26c4f', '#a8a3af')
 col_sector = c(F = pal[1], I = pal[4])
 col_state  = c(F = pal[1], I = pal[4], U = pal[2])
@@ -436,21 +473,23 @@ save_fig(g, "wage_distribution")
 
 
 # Hours against Earnings
-sel = with(dfp$variables, status %in% S[1:2] & hours > 0 & wage <= cap)
-sc  = cbind(dfp$variables[sel, c("wage", "hours", "status")], wgt = weights(dfp)[sel])
-sc  = sc[sample(nrow(sc), min(8e3, nrow(sc)), prob = sc$wgt), ]
+if (hourswage) {
+  sel = with(dfp$variables, status %in% S[1:2] & hours > 0 & wage <= cap)
+  sc  = cbind(dfp$variables[sel, c("wage", "hours", "status")], wgt = weights(dfp)[sel])
+  sc  = sc[sample(nrow(sc), min(8e3, nrow(sc)), prob = sc$wgt), ]
 
-g = ggplot(sc, aes(wage, hours, colour = status)) +
-  geom_point(alpha = 0.10, size = 0.7) +
-  geom_smooth(method = "loess", span = 0.6, se = FALSE, linewidth = 1.3) + mytheme +
-  geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
-  scale_x_log10() + scale_colour_manual(values = col_sector, name = NULL,
-                                        labels = c(F = "Formal", I = "Informal")) +
-  labs(title = "Hours and Earnings by Sector",
-       subtitle = "Weighted sample; loess by sector. Dashed line: minimum wage",
-       x = paste0("Monthly Wage (R$ of ", def_base, ", log scale)"),
-       y = "Usual Weekly Hours")
-save_fig(g, "hours_wage")
+  g = ggplot(sc, aes(wage, hours, colour = status)) +
+    geom_point(alpha = 0.10, size = 0.7) +
+    geom_smooth(method = "loess", span = 0.6, se = FALSE, linewidth = 1.3) + mytheme +
+    geom_vline(xintercept = mw, color = "black", linetype = "dashed", linewidth = 0.8) +
+    scale_x_log10() + scale_colour_manual(values = col_sector, name = NULL,
+                                          labels = c(F = "Formal", I = "Informal")) +
+    labs(title = "Hours and Earnings by Sector",
+        subtitle = "Weighted sample; loess by sector. Dashed line: minimum wage",
+        x = paste0("Monthly Wage (R$ of ", def_base, ", log scale)"),
+        y = "Usual Weekly Hours")
+  save_fig(g, "hours_wage")
+}
 
 
 g = ggplot(bf_wage_dist, aes(wage, 100 * y, colour = group, fill = group)) +
@@ -530,6 +569,10 @@ g = ggplot(cal, aes(t, value, colour = Information)) +
   labs(title = "Labor Moments over Time (PNAD)", x = "Year", y = NULL)
 save_fig(g, "calibration_timeseries", h = 6)
 
+print(paste("Calculate results (graphics and tables) in",
+            round(as.numeric(Sys.time() - time_start0, units = "mins"), 1), "minutes."))
+
+
 
 # ---- Tables ---------------------------------------------------------------
 # Statistics
@@ -568,20 +611,21 @@ save_tex(bf_size_tab, "bf_size",
 bf_cover_tab = data.frame(
   row.names = c("BF / Labor Force", "BF in Formal", "BF in Informal",
                 "BF in Unemployed", "BF in Non-Participating",
-                "Spending (Labor Force) / Wage Bill", "Tr / y_F", "ybar / y_F"),
+                "Spending (Labor Force) / Wage Bill", "Tr / y_F", "yrule / y_F"),
   `%` = round(100 * c(coef(bf_share_lf), coef(bf_sector)[c("F", "I", "U", "N")],
-                      dataset["est", "BF_w"], dataset["est", "Tr_yF"], dataset["est", "ybar"]), 1),
+                      dataset["est", "BF_w"], dataset["est", "Tr_yF"], dataset["est", "yrule"]), 1),
   check.names = FALSE)
 print(bf_cover_tab)
 save_tex(bf_cover_tab, "bf_coverage",
          paste0("Bolsa Fam\\'ilia ", year, ": Coverage"), "tab:bf_coverage",
          rows = replace(esc(rownames(bf_cover_tab)),
-                        rownames(bf_cover_tab) %in% c("Tr / y_F", "ybar / y_F"),
-                        c("$T / \\E(y^F)$", "$\\bar y / \\E(y^F)$")))
+                        rownames(bf_cover_tab) %in% c("Tr / y_F", "yrule / y_F"),
+                        c("$T / \\E(y^F)$", "$\\bar y_{law} / \\E(y^F)$")))
 
 
 # Quarter-to-quarter Transitions
 print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(alpha, 4)))
 
-
+print(paste("[End]   All Statistics done in",
+            round(as.numeric(Sys.time() - time_start, units = "mins"), 1), "minutes."))
 

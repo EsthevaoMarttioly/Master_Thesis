@@ -32,7 +32,7 @@ bf_calib = {'lambda_BF': ('BF_U_LF', 'U', 1),      # (moment, sector, sign)
             'ybar'     : ('BF_I_LF', 'I', 1),
             'rho_F'    : ('BF_F_LF', 'F', -1)}
 unknowns = dict(beta_high = 0.98, psi = 0.7, L = 0.7, tau = 0.1, Tr = 0.2, B = 4.0)
-update   = [*pi_calib, *bf_calib, *unknowns, 'tau_ss', 'B_ss']
+update   = [*pi_calib, *bf_calib, 'sig', 'quit', *unknowns, 'tau_ss', 'B_ss']
 
 
 # External Moments for SMM
@@ -57,7 +57,7 @@ calibration = dict(
 
     # --- Discount Factor ---
     dbeta     = 0.16,    # SMM: beta_high - beta_low           -> Wealth
-    omega_I   = 0.70,    # SMM: Share of Impatient Agents      -> HtM
+    omega_I   = 0.50,    # SMM: Share of Impatient Agents      -> HtM
     q         = 0.01,    # Prob of Redrawing beta Type (Generation = 25y = 100q)
 
     # --- Labor market ---
@@ -77,7 +77,7 @@ calibration = dict(
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,         # SMM: Persistence of Productivity     -> Persistence of Income
-    sd_e  = 0.50,          # SMM: Sd of Persistent Productivity   -> Wage Spread (q25, q50, q75)
+    sd_e  = 0.70,          # SMM: Sd of Persistent Productivity   -> Wage Spread (q25, q50, q75)
     nE    = 15,
     amin  = 0.0,
     amax  = 100.0,
@@ -90,16 +90,17 @@ calibration = dict(
 
     # --- Government ---
     tau_l = 0.13,                       # Labor Tax = 13% of Wage
+    tau_d = 0.34,                       # Profit Tax: IRPJ + CSLL
     BF_w  = pnad['BF_w'],               # BF Payment / Wage Bill
     B_gdp = pnad['B_gdp'] * 4,          # Debt / GDP (quarterly)
     phi_B = 1.0125 - 0.5 ** (1/20),     # Response to Pay off Debt: 50% Repaid in 5y
 
     # --- Bolsa Familia Rule ---
-    lambda_BF = 0.30,             # Calibrated: Entry Prob, if Eligible              -> BF_U
-    ybar      = pnad['ybar'],     # Calibrated: Means-Test Threshold (% of E[y|F])   -> BF_I
-    rho_F     = 0.30,             # Calibrated: Formal Audit Probability             -> BF_F
-    rho_I     = 1/8,              # Informal Audit Probability (2y)
-    sig_BF    = 0.05,             # Smoothness of the Means Test
+    lambda_BF = 0.20,          # Calibrated: Entry Prob, if Eligible              -> BF_U
+    ybar      = 0.35,          # Calibrated: Means-Test Threshold (% of E[y|F])   -> BF_I
+    rho_F     = 0.25,          # Calibrated: Formal Audit Probability             -> BF_F
+    rho_I     = 1/8,           # Informal Audit Probability (2y)
+    sig_BF    = 0.05,          # Smoothness of the Means Test
 
     # --- Firms ---
     w        = 1.0,      # Normalized
@@ -151,6 +152,7 @@ mom_data = dict(
     BF_U    = pnad['BF_U'],             # P(BF | U)
     BF_w    = pnad['BF_w'],             # Total Spending / Wage Bill
     Tr_yF   = pnad['Tr_yF'],            # Average Transfer / E[y_F]
+    sep     = pnad['sep'],              # Job Exit Hazard
     y35     = pnad['y35'],              # 35th Percentile of Labor Income / E[y_F], vs ybar
 )
 
@@ -168,7 +170,6 @@ smm_space = {
     'sd_e'    : ( 0.10, 1.20,  'log'),     # e_t ~ N(0, sd_e^2)
     'dbeta'   : ( 0.00, 0.40,  'logit'),   # beta spread      -> HtM and MPC
     'omega_I' : ( 0.05, 0.95,  'logit'),   # Impatient Mass   -> Wealth-Gini
-    # 'sig'     : ( 0.10, 2.00,  'log'),     # Taste Dispersion
 }
 
 
@@ -265,6 +266,8 @@ def model_moments(ss, lags=(1, 4)):
     m['BF_U']  = g('BF_U_LF') / g('U')
     m['BF_w']  = g('Tr') * g('BF') / (g('w') * (g('N_F') + g('N_I')))   # / Wage Bill
     m['Tr_yF'] = g('Tr') / np.exp(ref)
+    m['sep']   = g('delta_F') + g('quit')     # Layoffs plus accepted offers
+    m['T_BFF'] = 1 / g('rho_F') * 3           # Avg Time for Formals lose the Benefit (months)
 
     # Persistence, over the formals that stay formal
     mF = np.asarray(hhi['f'])[:, 0] > 0.5

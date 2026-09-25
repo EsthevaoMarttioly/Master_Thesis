@@ -17,11 +17,11 @@ from sequence_jacobian import simple
 # Firm Block:
 # 1. Production
 @simple
-def firm_formal(L, Z, w, pi, tau_l, mu, kappa):
+def firm_formal(L, Z, w, pi, tau_d, mu, kappa):
     # Formal Sector: Monopolistic Competition with constant Markup.
     Y   = Z * L
     adj = mu / (mu-1) / (2 * kappa) * (1 + pi).apply(np.log) ** 2 * Y
-    Div = (1 - tau_l) * (Y - w*L) - adj
+    Div = (1 - tau_d) * (Y - w*L) - adj       # Profits taxed at IRPJ + CSLL
     return Y, Div, adj
 
 @simple
@@ -88,14 +88,15 @@ def equity_ss(Div, r):
 
 @simple
 def calibrate_ss(Y, Y_I, N_F, N_I, w, mrs, BF, BF_w, B_gdp, B,
-                 r, tau_l, h_F, psi, varphi):
+                 r, tau_l, tau_d, h_F, psi, varphi):
     # Invert Market Clearing in Closed Form. Ratios are per Wage Bill.
     L_hat   = N_F                               # Labor Market
     psi_hat = mrs / h_F ** (1/varphi)           # Calibration:    h_F = 1 (supported by psi)
     h_F_hat = (mrs / psi) ** varphi             # Counterfactual: psi fixed, hours adjust
     Tr_hat  = BF_w * w * (N_F + N_I) / np.maximum(BF, 1e-12)   # BF Payment / Wage Bill
     B_hat   = B_gdp * (Y + Y_I)                 # Debt / GDP
-    tau_hat = tau_l * Y - r * B - Tr_hat * BF   # on the B held: = B_hat once calibrated
+    tax     = tau_l * w * N_F + tau_d * (Y - w * N_F)          # Labor and Profit Taxes
+    tau_hat = tax - r * B - Tr_hat * BF         # on the B held: = B_hat once calibrated
     return L_hat, psi_hat, h_F_hat, tau_hat, Tr_hat, B_hat
 
 
@@ -103,9 +104,9 @@ def calibrate_ss(Y, Y_I, N_F, N_I, w, mrs, BF, BF_w, B_gdp, B,
 # ---------------------------------------------------------------------------
 # Government Block
 @simple
-def fiscal(r, tau_l, Tr, BF, Y, B, tau, tau_ss, B_ss, phi_B):
+def fiscal(r, tau_l, tau_d, Tr, BF, Y, w, L, B, tau, tau_ss, B_ss, phi_B):
     BF_Total    = Tr * BF
-    tax_revenue = tau_l * Y
+    tax_revenue = tau_l * w * L + tau_d * (Y - w * L)
     debt_rule   = tau - tau_ss + phi_B * (B(-1) - B_ss)
     gov_budget  = (1 + r) * B(-1) - B + tau + BF_Total - tax_revenue
     return tax_revenue, gov_budget, debt_rule

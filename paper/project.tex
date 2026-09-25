@@ -198,9 +198,18 @@ a $\rho_F < 1$. Therefore, the probability of being a recipient next period is
 \[
 \P\left[b'=1 | s,b,\theta,e,a \right] = q(s,b,\theta,e,a)
 = \begin{cases}
-    \lambda \mathbbm{1}\{ s\in\{I,U\}, y + r a < \bar y \}, &\text{if } b=0 \\
-    (1-\rho_s) + \rho_s \mathbbm{1}\{ s\in\{I,U\}, y + r a < \bar y \}, &\text{if } b=1
+    \lambda \cdot \mathbbm{1}\{ s \neq F, y + r a < \bar y \}, &\text{if } b=0 \\
+    (1-\rho_s) + \rho_s \mathbbm{1}\{ s \neq F, y + r a < \bar y \}, &\text{if } b=1
 \end{cases}.
+\]
+
+However, we assume that assets are hidden from the government, so the agency
+approves within a group of observationally identical households, considering
+their productivities $x = (\theta, e)$. Thus, the agency approves with a
+conditional probability $\bar Q(x,b)$, weighted by the assets distribution,
+given by
+\[
+\bar Q(x,b) = \E\left[ q(x,b,a) | x \right].
 \]
 
 Households save into a mutual fund of liquid assets $a_{i,t}$ with ex-post
@@ -344,8 +353,8 @@ standard in Neo-Keynesian's literature, with a quadratic adjustment cost
 \left[ \log (1+\pi_t) \right]^2 Y_t.
 \]
 
-Firms' dividends are taxed at the same rate $\tau_{\ell}$ as labor income, so
-$d_t = (1-\tau_{\ell}) (Y_t - w_t L_t) - \Psi_t(\pi_t)$, where $L_t = \E[l_{j,t}]$
+Firms' dividends are taxed at rate $\tau_d$, so
+$d_t = (1-\tau_d) (Y_t - w_t L_t) - \Psi_t(\pi_t)$, where $L_t = \E[l_{j,t}]$
 is the aggregate formal labor. Such as \textcite{hagedorn2019fiscal},
 the Phillips curve for price inflation is given by
 \[
@@ -393,9 +402,11 @@ Let $1+r_t = (1+i_{t-1})/(1+\pi_t)$ be the real interest rates.
 In the governmental sphere, we have a government that collects taxes, makes
 transfers, and incurs debt; therefore, the government's budget constraint
 is characterized by
-\[
-\tau_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1} = B_t + \tau_\ell Y_t.
-\]
+\begin{align*}
+    \tau_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1}
+    &= B_t + \tau_\ell w_t L_t + \tau_d (Y_t - w_t L_t) \\
+    &= B_t + \tau_d Y_t - (\tau_d - \tau_\ell) w_t L_t.
+\end{align*}
 
 We consider two types of government policy, a revenue-neutral and a deficit-financed.
 The policymaker chooses a path of the conditional transfers and adjusts transfers
@@ -403,7 +414,7 @@ or debt such that the budget is balanced at each period.
 
 The revenue-neutral policy sets a path of $T_t$ and adjusts transfers such that
 \[
-\tau_t = \tau_\ell Y_t - T_t \cdot \text{BF}_t - r_t \bar B,
+\tau_t = \tau_d Y_t - (\tau_d - \tau_\ell) w_t L_t - T_t \cdot \text{BF}_t - r_t \bar B,
 \]
 which means that the fiscal policy is passive and the monetary policy is active.
 The nominal interest rate adjust at least one-for-one to changes in inflation.
@@ -434,8 +445,8 @@ Finally, there is a mutual fund collecting household savings $a_{i,t}$ and
 investing on government bonds and the stock market. No-arbitrage condition
 garanties that
 \[
-(1+r_{t+1}) p_t^e = p_{t+1}^e + d_{t+1} \quad \Leftrightarrow \quad
-p_t^e = \sum_{s\geq 1} \frac{d_{t+s}}{\prod_{k=1}^s (1+r_{t+k})},
+(1+r_{t+1}) p_t^e = p_{t+1}^e + (1-\tau_d) d_{t+1} \quad \Leftrightarrow \quad
+p_t^e = \sum_{s\geq 1} \frac{(1-\tau_d) d_{t+s}}{\prod_{k=1}^s (1+r_{t+k})},
 \]
 which implies
 \[
@@ -555,11 +566,70 @@ work card, are self-employed, or unpaid family. We only consider household
 in the labor force, dropping those who are non-participating, retired, or
 students, to keep the empirical states aligned with the model's.
 
-% In the future, we aim to gather information also in the
-% \textit{Relação Anual de Informações Sociais} (RAIS), a mandatory annual reporting
-% of firms, but without informality information and only up to 2003, and
-% \textit{Economia Informal Urbana} (ECINF), a survey conducted by IBGE that focus
-% on small business, specially informal ones.
+
+
+\subsubsection*{Sectoral Transitions}
+The transition matrix across $s\in\{F,I,U\}$ is estimated on the PNAD-C rotating panel,
+which follows each household for five consecutive quarters. Two issues arise before the
+matrix can be taken to the model.
+
+First, quarter-to-quarter transitions are contaminated by classification error: a worker
+whose contract status is misreported in one interview appears as two spurious moves. The
+error is detectable because a Markov chain must satisfy $P(h)=P(1)^{h}$. Table
+xxx compares the matrix estimated directly at horizons of one to four
+quarters with the iterated one-quarter matrix. At one year the quarterly matrix predicts
+$\P(F\to I)=0.251$, while the same panel measures $0.116$; the same gap appears for
+$\P(I\to F)$, $0.334$ against $0.155$. Iterating $P(1)$ compounds the measurement error,
+so the one-quarter matrix overstates mobility by a factor of two.
+
+We therefore estimate the transition matrix over one year, from the first to the fifth
+visit, and convert it to the quarterly frequency by its principal fourth root,
+\[
+    \Pi_s = P(4)^{1/4},
+\]
+computed by eigendecomposition. The root is a valid transition matrix here: all entries
+are non-negative and the rows sum to one, so no regularization of the generator is needed.
+The resulting quarterly flows are $\P(F\to I)=\mDatFI$ and $\P(F\to U)=\mDatFU$, against
+$0.084$ and $0.012$ in the raw quarterly panel. The cost of this choice is that round
+trips within the year are not observed, so $\Pi_s$ is a lower bound on true mobility;
+we prefer it to a matrix whose implied one-year flows are twice what the data show.
+
+Second, panel attrition is selective: households that stay in the sample for five visits
+are more likely to be formally employed. The stationary distribution of the raw matrix is
+$(0.549,\,0.415,\,0.036)$ against the cross-sectional shares $(\mDatF,\,\mDatI,\,\mDatU)$.
+We correct it by scaling the columns of $P$ by a vector $c$ and renormalizing the rows,
+\[
+    \tilde P_{ss'} = \frac{P_{ss'}\,c_{s'}}{\sum_{k} P_{sk}\,c_{k}},
+\]
+where $c$ solves the fixed point that makes the stationary distribution of $\tilde P$ equal
+to the annual stocks $\alpha$, normalized at $c_F=1$. The tilt reweights the destinations,
+not the origins, so it preserves the ranking of the flows out of each state; it moves
+$\P(F\to I)$ by less than one percentage point.
+
+\subsubsection*{Job Tenure}
+The tenure question (V4040, with V40401 to V40403) gives the time the worker has been in
+the current job, which disciplines how often jobs end. Restricting to private employees
+with a formal contract (VD4009 $=01$), since public employment has a stability the model
+does not represent, mean tenure is $\mDatTen$ months and a share $\mDatTenOneTwo$ of workers
+have been less than one year in the job. Under a constant exit rate $\eta$ and stationary
+hiring, tenure in the stock of employed workers is geometric, so
+\[
+    \Pr(\text{tenure}<1\ \text{year})=1-(1-\eta)^{4}
+    \quad\Longrightarrow\quad
+    \eta = 1-\left(1-\Pr(\text{tenure}<1\ \text{year})\right)^{1/4} = \mDatSep .
+\]
+The share with less than three months of tenure, $0.070$, implies the same rate, which
+supports the constant-hazard approximation. In the model the job exit rate is
+$\eta=\delta_F+(1-\delta_F)\,\phi$, where $\phi$ is the probability that an employed formal
+worker receives and accepts an outside offer. Since $\delta_F$ and the sectoral flows are
+matched by construction, the residual identifies the formal-to-formal job change, which
+the sectoral flows cannot see, and it is what we use to calibrate the taste dispersion
+$\sigma_S$. Note that this discipline is only available once the quarterly flows come from
+the annual matrix: with the raw quarterly flows the sectoral exit rate alone, $0.097$, already
+exceeds the job exit rate $\mDatSep$, which is impossible since every sectoral move is also
+a job change.
+
+
 
 \begin{figure}[H]
     \centering
@@ -705,13 +775,14 @@ those very choices generate along the transition \parencite{auclert2021using}.
 \input{int_calibration.tex}
 
 Each model period stands for one quarter and the computational time horizon is
-100 quarters (or 25 years). We internally calibrate the steady by setting $\beta_H$
-to balance the asset market; $\pi_F$, $\pi_I$, $\pi_{UF}$, $\pi_{UI}$ to match the
-sectoral transition; and $\lambda$, $\rho_I$, $\rho_F$ to match the BF coverage
-by sector in steady state. Also, we internally calibrate parameters using the
-Simulated Method of Moments (SMM) by a Global Search on a coarse grid, followed by
-a local polish using the Nelder-Mead algorithm. The external calibration is shown
-in table \ref{tab:ext_calibration} and the endogenous calibration is in
+100 quarters (or 25 years). We internally calibrate the steady state by setting
+$\beta_H$ to balance the asset market; $\pi_F$, $\pi_I$, $\pi_{UF}$, $\pi_{UI}$ to
+match the sectoral transition; and $\lambda$, $\bar y$, $\rho_F$ to match the BF
+coverage by sector in steady state (Figure \ref{tab:bf_coverage}). Also, we
+internally calibrate parameters using the Simulated Method of Moments (SMM) by
+a Global Search on a coarse grid, followed by a local polish using the
+Nelder-Mead algorithm. The external calibration is shown in table
+\ref{tab:ext_calibration} and the endogenous calibration is in
 \ref{tab:int_calibration}.
 
 The idiosyncratic productivity follows a log-normal $AR(1)$ process,
@@ -778,34 +849,38 @@ the HANK literature \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{
 and $\kappa = \kappa_w = \mKappa$, similar to \textcite{kaplan2018monetary}
 and consistent with an average duration of 4 quarters for readjustment\footnote{
     We calculate $\kappa$ following the standard Calvo formula
-    $\kappa = \frac{1}{1+\Gamma} \frac{(1+\theta)(1-\bar \beta)}{\theta}$, with
+    $\kappa = \frac{1}{1+\Gamma} \frac{(1+\theta)(1-\bar \beta \theta)}{\theta}$, with
     the real rigidity coefficient $\Gamma = 5$ and the quarterly wage adjustment
-    probability $1 - \theta = 0.2$.
+    probability $1 - \theta = 25.4\%$ from Caccioli (2026).
 }.
 
 Taylor Rule is pretty standard, with $\phi=\mPhi$ and $r^* = \mRstar$, consistent
 with a $5\%$ annual real interest rate for Brazilian economy
 \parencite{dos2024natural}. Also, we set $\phi_B = \mPhiB$ so that the half-live
 of the debt is 5 years, slower than \textcite{auclert2025fiscal} and consistent
-with \textcite{campos2019alert}. Wage tax is based on the average formal worker
-contribution, $\tau_\ell = \mTauL$.
+with \textcite{campos2019alert}.
 
-The Government debt is set to $\mDatBGdp$ of yearly GDP, consistent with Brazilian
-National Treasure data. The steady state stock market size is $p^e = d/r = \mPE$,
-so $A/Y = \mModAGdp$, compared to $\mDatAGdp$ from BCB Credit Statistics for
-liquid wealth.
+Wage tax is based on the average formal worker contribution, $\tau_\ell = \mTauL$,
+and profit's tax is based on the statutory rates for Brazil, IRPJ and CSLL, which
+are 25\% and 9\% respectively. The Government debt is set to $\mDatBGdp$ of yearly
+GDP, consistent with Brazilian National Treasure data. The steady state stock
+market size is $p^e = d/r = \mPE$, so $A/Y = \mModAGdp$, compared to $\mDatAGdp$
+from BCB Credit Statistics for liquid wealth.
 
 We calibrated the \textit{Bolsa Família} transfer size $T = \mTr$ to match the
 \textit{Bolsa Família} expenditure as a percentage of the Wage Bill,
 $\text{BF} \cdot T / W$ from Brazilian economy. In order to keep the internal
 consistency of the model, we consider $T$ as the average transfer received only
-by indivuals in labor force, disconsidering children and elderly. On the other
-hand, the threshold $\bar y$ is set externally to the legal line: R\$ 218 per capita
-times the average size of beneficiary households, relative to the mean formal earnings,
-$\bar y = \mYbar$. Given $\bar y$ and $\sigma_{BF} = \mSigBF$, the entry
-probability $\lambda$ and the audits $\rho_I$ and $\rho_F$ match the coverage by sector,
-$\P(\text{BF}\mid U)$, $\P(\text{BF}\mid I)$ and $\P(\text{BF}\mid F)$
-(Figure \ref{fig:bf_coverage_by_wage}), while the aggregate coverage is untargeted.
+by indivuals in labor force, disconsidering children and elderly.
+
+On the other hand, the entry probability $\lambda = \mLambdaBF$, the threshold
+$\bar y / y^F = \mYbar$, and the audit probability for formals $\rho_F = \mRhoF$ are
+internally calibrated to match the coverage by sector, $BF_U = \mDatBFU$,
+$BF_I = \mDatBFI$, and $BF_F = \mDatBFF$, where $BF_s := \P[b=1|s]$.
+The audit probability for informals $\rho_I = \mRhoI$ is set by a $2$ years time
+for review, standard in CadÚnico. $\bar y$ is consistent with the $35th$ percentile
+of formal income \parencite{ferriere2025heterogeneous}, $y_{35} / y^F = \mDatYThreeFive$,
+and $\rho_F$ is consistent with an average time of $\mModTBFF$ months to lose the benefit.
 
 
 %---------------------------------------------------
@@ -927,6 +1002,9 @@ we intent to do some robustness tests changing some calibration parameters,
 such as $\gamma$, $r^*$ (4\% and 6\%), and $\phi$ (2.0). This parameters might
 have minor implications in the results, but it is expected that the model continues
 to have the same results.
+
+Another test would be removing self-employed and unpaid family (Conta Própria and
+Familiar Auxiliar) from informal households in PNAD.
 
 
 %---------------------------------------------------

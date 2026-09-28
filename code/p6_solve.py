@@ -27,15 +27,17 @@ CH = 7        # Channels: cF0 cF1 cI0 cI1 cB0 cB1 cB2
 
 def _softmax(Vals, sig):
     # Smooth max{Vstay, VF, VI, VU, ...} (sig -> 0 = hard max).
-    V = np.stack(Vals, 0)
+    V = np.stack(np.broadcast_arrays(*Vals), 0)
     Probs = np.exp((V - V.max(0)) / np.maximum(sig, 1e-10))
     return Probs / Probs.sum(0)
 
 
 def _test(c, D, e_grid, thetaF, thetaI, a_grid):
     # Pooled BF Test P[b' = 1 | state], averaged over own assets
-    q = bf_test(bf_income(e_grid, thetaF, thetaI, a_grid, c['rstar'] / (c['w'] * c['h_F'])),
-                c['ybar'], c['sig_BF'], c['lambda_BF'], c['rho_F'], c['rho_I'])
+    yF = c['w'] * c['h_F']
+    q  = bf_test(bf_income(e_grid, thetaF, thetaI, a_grid, c['w_I'] * c['h_I'] / yF,
+                           c.get('r', c['rstar']) / yF),
+                 c['ybar'], c['sig_BF'], c['lambda_BF'], c['rho_F'], c['rho_I'])
     m = D.sum(1)
     return np.where(m > 1e-14, (D * q).sum(1) / np.maximum(m, 1e-14), q.mean(1))
 
@@ -61,15 +63,26 @@ def _choice(V, Va, sig, nT, nE, probF, probI):
     Var = Va.reshape(M, nB, nE, nA).transpose(1, 2, 0, 3)
     Vs  = Vr.reshape(nB, nE, nS, nF, nT, nA)
 
-    # An offer keeps the BF status: E_theta V(s', b, theta')
-    ev  = lambda p, s: np.broadcast_to(np.einsum('t,bekta->beka', p, Vs[:, :, s])\
-                                       [:, :, None, :, None], Vs.shape).reshape(Vr.shape)
-    EVF, EVI = ev(probF, F), ev(probI, I)
+    # An offer keeps the BF status: V(s', b, theta') for each draw theta'
+    fo = (np.arange(M) // nT) % nF                              # BF status of the origin
+    WF = Vs[:, :, F][:, :, fo].transpose(0, 1, 3, 2, 4)         # (nB, nE, nT, M, nA)
+    WI = Vs[:, :, I][:, :, fo].transpose(0, 1, 3, 2, 4)
 
-    cF = _softmax([Vr, EVF], sig * Var)           # Only a Formal Offer
-    cI = _softmax([Vr, EVI], sig * Var)           # Only an Informal Offer
-    cB = _softmax([Vr, EVF, EVI], sig * Var)      # Both Offers
-    return np.stack([cF[0], cF[1], cI[0], cI[1], cB[0], cB[1], cB[2]], 2)
+    V1, S1 = Vr[:, :, None], (sig * Var)[:, :, None]
+    cF = _softmax([V1, WF], S1)                                 # Only a Formal Offer
+    cI = _softmax([V1, WI], S1)                                 # Only an Informal Offer
+    cB = _softmax([V1[:, :, None], WF[:, :, :, None],           # Both Offers: two draws
+                   WI[:, :, None, :]], S1[:, :, None])
+
+    # Integrate the draws out, channel by channel
+    pF, pI = probF[:, None, None], probI[:, None, None]
+    bF, bI = np.einsum('u,betuma->betma', probI, cB[1]), np.einsum('t,betuma->beuma', probF, cB[2])
+    mean   = lambda p, x: np.einsum('t,betma->bema', p, x)
+    C = np.stack([mean(probF, cF[0]), mean(probF, cF[1]),
+                  mean(probI, cI[0]), mean(probI, cI[1]),
+                  np.einsum('t,u,betuma->bema', probF, probI, cB[0]),
+                  mean(probF, bF), mean(probI, bI)], 2)
+    return C, [pF * cF[1], pF * bF, pI * cI[1], pI * bI]
 
 
 def _rates(C, D, qb, tgt, p, it=200, tol=1e-13):
@@ -80,8 +93,7 @@ def _rates(C, D, qb, tgt, p, it=200, tol=1e-13):
 
     def check(x, name, flow, tag):
         if not 0 < x <= 1:
-            raise RuntimeError(f"\n     Flow {tag} = {flow:.3f} infeasible: "
-                               f"{name} > 1 (sig must change)")
+            raise RuntimeError(f"\n     Flow {tag} = {flow:.3f} infeasible:  {name} > 1")
         return x
 
     kF, kI = 1 - p['delta_F'], 1 - p['delta_I']    # layoffs are exogenous
@@ -90,38 +102,35 @@ def _rates(C, D, qb, tgt, p, it=200, tol=1e-13):
     # Unemployed: a 2 x 2 block, independent of the rest
     uF, uI = p['pi_UF'], p['pi_UI']
     for _ in range(it):
-        nF = check(tgt['UF'] / ((1-uI)*a[U] + uI*b[U]), 'pi_UF', tgt['UF'], 'U -> F')
-        nI = check(tgt['UI'] / ((1-uF)*c[U] + uF*d[U]), 'pi_UI', tgt['UI'], 'U -> I')
-        if max(abs(nF-uF), abs(nI-uI)) < tol: break
-        uF, uI = nF, nI
+        xF = check(tgt['UF'] / ((1-uI)*a[U] + uI*b[U]), 'pi_UF', tgt['UF'], 'U -> F')
+        xI = check(tgt['UI'] / ((1-uF)*c[U] + uF*d[U]), 'pi_UI', tgt['UI'], 'U -> I')
+        if max(abs(xF-uF), abs(xI-uI)) < tol: break
+        uF, uI = xF, xI
 
     # Employed: pi_F and pi_I, a 2 x 2 block net of the layoffs
     eF, eI = p['pi_F'], p['pi_I']
     for _ in range(it):
-        nF = check(tgt['IF'] / (kI * ((1-eI)*a[I] + eI*b[I])), 'pi_F', tgt['IF'], 'I -> F')
-        nI = check(tgt['FI'] / (kF * ((1-nF)*c[F] + nF*d[F])), 'pi_I', tgt['FI'], 'F -> I')
-        if max(abs(nF-eF), abs(nI-eI)) < tol: break
-        eF, eI = nF, nI
+        xF = check(tgt['IF'] / (kI * ((1-eI)*a[I] + eI*b[I])), 'pi_F', tgt['IF'], 'I -> F')
+        xI = check(tgt['FI'] / (kF * ((1-xF)*c[F] + xF*d[F])), 'pi_I', tgt['FI'], 'F -> I')
+        if max(abs(xF-eF), abs(xI-eI)) < tol: break
+        eF, eI = xF, xI
 
-    # Quits: employed formals that accept an offer
-    quit = (1 - p['delta_F']) * (eF * (1-eI) * a[F] + (1-eF) * eI * c[F] + eF * eI * (b[F] + d[F]))
-
-    return dict(pi_F=eF, pi_I=eI, pi_UF=uF, pi_UI=uI, quit=float(quit))
+    return dict(pi_F=eF, pi_I=eI, pi_UF=uF, pi_UI=uI)
 
 
-def _assemble(C, D, r, qb, nT, nE, Pi_b, Pi_e, probF, probI):
+def _assemble(C, A, D, pr, qb, nT, nE, Pi_b, Pi_e):
     # Pi and the Sector Flows, contracting over assets without ever forming P.
     M = nS * nF * nT
 
-    piF  = np.repeat([r['pi_F'], r['pi_F'], r['pi_UF']], nF * nT)[:, None]
-    piI  = np.repeat([r['pi_I'], r['pi_I'], r['pi_UI']], nF * nT)[:, None]
-    dlt  = np.repeat([r['delta_F'], r['delta_I'], 0.0], nF * nT)
+    piF  = np.repeat([pr['pi_F'], pr['pi_F'], pr['pi_UF']], nF * nT)[:, None]
+    piI  = np.repeat([pr['pi_I'], pr['pi_I'], pr['pi_UI']], nF * nT)[:, None]
+    dlt  = np.repeat([pr['delta_F'], pr['delta_I'], 0.0], nF * nT)
     keep = 1 - dlt
 
     stay = ((1-piF)*(1-piI) + piF*(1-piI)*C[:, :, 0]
             + (1-piF)*piI*C[:, :, 2] + piF*piI*C[:, :, 4])
-    a_F  = piF * ((1-piI)*C[:, :, 1] + piI*C[:, :, 5])
-    a_I  = piI * ((1-piF)*C[:, :, 3] + piF*C[:, :, 6])
+    a_F  = piF * ((1-piI)*A[0] + piI*A[1])        # by destination draw theta'
+    a_I  = piI * ((1-piF)*A[2] + piF*A[3])
 
     # BF Test, then sector moves, averaged over its assets
     ar = np.arange(M)
@@ -130,8 +139,8 @@ def _assemble(C, D, r, qb, nT, nE, Pi_b, Pi_e, probF, probI):
     (st, aF, aI, q), tot = zip(*(_pool(x, D, qb, nT, nE) for x in (stay, a_F, a_I, 0 * stay + 1)))
     for g in range(nF):
         X[:, :, ar, (s_*nF + g)*nT + t_]          += keep * st[g]
-        X[:, :, :, (F*nF + g)*nT + np.arange(nT)] += (keep * aF[g])[..., None] * probF
-        X[:, :, :, (I*nF + g)*nT + np.arange(nT)] += (keep * aI[g])[..., None] * probI
+        X[:, :, :, (F*nF + g)*nT + np.arange(nT)] += np.moveaxis(keep * aF[g], 2, -1)
+        X[:, :, :, (I*nF + g)*nT + np.arange(nT)] += np.moveaxis(keep * aI[g], 2, -1)
         X[:, :, ar, (U*nF + g)*nT + t_]           += dlt * q[g]       # layoffs
 
     # Order:   s (x) b (x) theta (x) beta (x) e
@@ -144,18 +153,16 @@ def _assemble(C, D, r, qb, nT, nE, Pi_b, Pi_e, probF, probI):
 # ---------------------------------------------------------------------------
 # 2. Steady State
 # ---------------------------------------------------------------------------
-def solve_ss(hank_block, calib, flows=None, counterfactual=False, sig_calib=False, verbose=False,
+def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
              damp=0.5, tol=1e-6, stol=1e-3, atol=1e-5, maxit=400, bmaxit=5000):
     """Solve the Steady-State by iterating the value function and the transition matrix.
     1) Household Solve:       expensive step, slow;
     2) Market Clear:          closed form, invert exactly, very fast;
     3) Asset Market:          calibrates beta_high to A = B + p_e, secant method;
-    4) Pi_s and BF:           internally calibrate Pi_s, `sig` and BF.
+    4) Pi_s and BF:           internally calibrate Pi_s and BF.
 
     flows           :  dict,      {'FI': value, ...} to be matched
-    counterfactual  :  bool,      True to B clears asset_market and h_F clear wage_nkpc,
-                                  and to hold the rates, `sig` and the BF rule fixed
-    sig_calib       :  bool,      True to calibrate `sig` to the job exit hazard `sep`
+    counterfactual  :  bool,      True to B clears asset_market and tau_l the budget
     damp            :  [0,1],     damp < 1 to avoid stuck, but converges slower
     tol, stol       :  value,     tolerance for 'Pi', and 'Pi_s' and 'BF'
     atol            :  value,     tolerance for 'asset_mkt / B'."""
@@ -164,7 +171,7 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, sig_calib=Fals
 
     # Import Grids
     c = {**unknowns, **calib}
-    c['tau_ss'], c['B_ss'] = c['tau'], c['B']
+    c['tau_ss'], c['B_ss'] = c['tau_l'], c['B']
     nE, nA, nT = c['nE'], c['nA'], c['nT']
 
     e_grid, Pi_e, a_grid, thetaF, probF, thetaI, probI =\
@@ -172,7 +179,7 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, sig_calib=Fals
                    c['sigma_F'], c['mu_I'], c['sigma_I'], nT)
 
     _, Pi_b = make_bgrid(c['beta_high'], c['dbeta'], c['omega_I'], c['q'], nE, nT)
-    grid  = (nT, nE, Pi_b, Pi_e, probF, probI)
+    grid  = (nT, nE, Pi_b, Pi_e)
     tgrid = (e_grid, thetaF, thetaI, a_grid)
 
     # Start from a given Pi and BF test
@@ -182,9 +189,9 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, sig_calib=Fals
     else:
         qb  = _test(c, np.ones((N, nA)), *tgrid)
         one = np.ones((N, nA))
-        Pi, _ = _assemble(_choice(0*one, one, c['sig'], nT, nE, probF, probI), one, c, qb, *grid)
+        Pi, _ = _assemble(*_choice(0*one, one, c['sig'], nT, nE, probF, probI), one, c, qb, *grid)
 
-    dPi = dpi = dbf = dA = np.inf; xb = fb = xs = fs = None; bgain = 0.005; sgain = 0.5
+    dPi = dpi = dbf = dA = np.inf; xb = fb = None; bgain = 0.005
 
     # Guess Pi -> Solve -> Read V -> Rebuild Pi -> Repeat until Pi converges.
     for it in range(maxit):
@@ -196,60 +203,59 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, sig_calib=Fals
         # Solving unknowns to clear markets analytically
         if 'L_hat' in ss:
             c['L'], c['Tr'] = float(ss['L_hat']), float(ss['Tr_hat'])
-            c['tau'] = c['tau_ss'] = float(ss['tau_hat'])
+            c['h_I'] = np.sqrt(c['h_I'] * float(ss['h_I_hat']))   # informal union: half-step to avoid stuck
             dA = abs(float(ss['asset_mkt']))
             if counterfactual:
-                c['h_F'] = np.sqrt(c['h_F'] * float(ss['h_F_hat']))   # psi structural; half-step, or it cycles
-                c['B'] = c['B_ss'] = float(ss['A'] - ss['p_e'])       # debt absorbs the savings
+                # psi, beta and Z_I structural; hours, w_I, B and tau_l adjust
+                half = lambda x, y: float(np.sqrt(x * y))            # half-step, or it cycles
+                c['h_F'], c['w_I'] = half(c['h_F'], ss['h_F_hat']), half(c['w_I'], ss['w_I_hat'])
+                c['B'] = c['B_ss'] = 0.5 * c['B'] + 0.5 * float(ss['A'] - ss['p_e'])
+                c['tau_l'] = c['tau_ss'] = float(np.clip(            # G fixed, tax residual
+                    0.5 * (c['tau_l'] + float(ss['tau_l_hat'])), 0.0, 0.9))
             else:
+                c['G'] = float(ss['G_hat'])                      # G residual at the calibration
+                c['Z_I'] = float(ss['Z_I_hat'])                  # w_I = w in the SS
                 c['psi'] = float(ss['psi_hat'])                  # hours normalized: psi backed out
                 c['B'] = c['B_ss'] = float(ss['B_hat'])          # debt pinned to B / GDP
                 xn, fn = c['beta_high'], float(ss['asset_mkt'])  # dA/dbeta > 0
                 if xb is not None and abs(fn - fb) > 1e-12:
-                    g = (xn - xb) / (fn - fb)     # dbeta/dA > 0; if not, Pi moved A
+                    g = (xn - xb) / (fn - fb)                    # dbeta/dA > 0; if not, Pi moved A
                     if g > 0: bgain = float(np.clip(g, 1e-4, 0.05))
                 xb, fb = xn, fn
                 c['beta_high'] = float(np.clip(xn - np.clip(bgain*fn, -0.02, 0.02), 0.5, 1.0))
 
         # Acceptance rate from `V` and rates `pi_s`
-        C  = _choice(hhi['V'], hhi['Va'], c['sig'], nT, nE, probF, probI)
+        C, A = _choice(hhi['V'], hhi['Va'], c['sig'], nT, nE, probF, probI)
         qb = _test(c, hhi['D'], *tgrid)
         if flows is not None:
             try:
                 c.update(_rates(C, hhi['D'], qb, flows, c))
-            except RuntimeError:
-                Cup = _choice(hhi['V'], hhi['Va'], 1.2 * c['sig'], nT, nE, probF, probI)
-                c['sig'] *= 1.2 if Cup.mean() > C.mean() else 1 / 1.2   # infeasible: the flows need more acceptance
-                continue
+            except RuntimeError:                # infeasible: the flows need more acceptance
+                if c['sig'] >= 1.0: raise       # capped, so the SMM does not run forever
+                c['sig'] = min(c['sig'] * 1.5, 1.0); continue
             # Calibrate the BF Rule
             dbf = 0.0
             for k, (agg, sh, sgn) in bf_calib.items():
                 b = (mom_data[agg[:4]] / max(float(ss[agg]) / float(ss[sh]), 1e-12)) ** (sgn / 2)
                 x = float(np.clip(c[k] * b, 1e-4, 1.0))           # probabilities
                 dbf, c[k] = max(dbf, abs(np.log(x / c[k]))), x    # at a bound: the closest fit
-
-            # Calibrate the Taste Dispersion: secant, since d(quit)/d(sig) changes sign
-            if sig_calib:
-                fn = np.log(max(c['delta_F'] + c['quit'], 1e-12) / mom_data['sep'])
-                xn = np.log(c['sig'])
-                if xs is not None and abs(fn - fs) > 1e-10:
-                    sgain = float(np.clip((xn - xs) / (fn - fs), -5.0, 5.0))
-                xs, fs = xn, fn
-                x = float(np.clip(np.exp(xn - np.clip(sgain * fn, -0.5, 0.5)), 1e-3, 5.0))
-                dbf, c['sig'] = max(dbf, abs(np.log(x / c['sig']))), x
         else:
             dpi = dbf = 0.0
 
-        Pi_new, P_s = _assemble(C, hhi['D'], c, qb, *grid)
+        Pi_new, P_s = _assemble(C, A, hhi['D'], c, qb, *grid)
         dPi = np.max(np.abs(Pi_new - Pi)); Pi = damp * Pi + (1-damp) * Pi_new    # damp to avoid stucking
         if flows is not None:
             dpi = max(abs(np.log(max(P_s[i, j], 1e-12) / flows[n]))    # zero, unless a rate has clipped
                       for n, (i, j) in sectors.items())
 
         # Iterate until converges
-        if verbose: print(f"[Pi loop] it {it:3d}     |dPi|={dPi:.1e}")
+        if verbose:
+            print(f"[Pi loop] it {it:3d}     |dPi|={dPi:.1e}" + (
+                  f"  tau_l={c['tau_l']:.4f}  B={c['B']:.3f}  w_I={c['w_I']:.4f}"
+                  f"  h_F={c['h_F']:.4f}  I={float(ss['I']):.4f}" if counterfactual else ""))
         if np.isfinite(hhi['Va']).all():
-            _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = (hhi['Va'].copy(), hhi['V'].copy())
+            _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = \
+                (hhi['Va'].copy(), hhi['V'].copy(), hhi['Vc'].copy())
         
         # Converged: one last solve
         if dPi < tol and dpi < stol and dbf < stol and dA < atol * abs(c['B']):
@@ -301,17 +307,21 @@ def _dyn_jacobian(hank, ss, unknowns, targets, inp, T, cache):
     return cache[key]
 
 
+PRC = ('w', 'w_I', 'h_F', 'h_I')      # prices the BF means test is evaluated at
+
 def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
-              damp=1.0, gpi=0.75, tol=1e-6, maxit=100, verbose=False, jac=None):
+              damp=0.5, gpi=0.5, tol=1e-6, ptol=1e-5, maxit=100, verbose=False, jac=None):
     """Solve the Dynamics by iteration the transition matrix.
 
     shock           :  string,    the exogenous variable input name ('Tr', 'rstar')
     dZ              :  list,      the shock's path, normally an AR(1)
     unknowns        :  list,      variables that moves, solving `targets`
     moving          :  bool,      allow Pi_s to move, endogeneously
-    damp, gpi       :  [0,1],     damp < 1 to avoid stuck, but converges slower"""
+    damp, gpi       :  [0,1],     damp < 1 to avoid stuck, but converges slower
+    tol, ptol       :  value,     tolerance for the targets and for the Pi path"""
 
     start, T = time.time(), len(dZ)
+    prc = [k for k in PRC if k in unknowns]
     inp = {shock: dZ}
     if moving:
         inp['Pi'] = np.zeros((T,) + ss['Pi'].shape)     # Change in Pi_s
@@ -330,6 +340,7 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
         tgrid = (e_grid, thetaF, thetaI, a_grid)
 
     U, dpi = ImpulseDict({k: np.zeros(T) for k in unknowns}), 0.0
+    best, stall = np.inf, 0
     for it in range(maxit):
         # One Newton step on the unknowns, given the current Pi path
         td  = hank.impulse_nonlinear(ss, ImpulseDict({**inp, **U}), [*var, *targets],
@@ -338,29 +349,39 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
         err = float(np.max([np.max(np.abs(td[k])) for k in targets]))
         if not np.isfinite(err):
             raise RuntimeError(f"\n     Dynamics blew up at it {it}: lower `damp`")
-        U  += damp * HU.apply(td)
 
-        # MOVING: Rebuild Pi_t from the period-t value/dist, iterate to consistency
+        # MOVING: Pi_t is chosen at the end of t over the t+1 values, at the t prices
         if moving:
             h, dpi = td.internals['household'], 0.0
+            dr = np.asarray(td['r']) if 'r' in td else np.zeros(T)
             for t in range(T):
+                s = min(t + 1, T - 1)
+                ct = {**calib, 'r': calib['rstar'] + float(dr[t]),
+                      **{k: calib[k] + float(U[k][t]) for k in prc}}
                 D  = D_ss + h['D'][t]
-                C  = _choice(V_ss + h['V'][t], Va_ss + h['Va'][t], calib['sig'],
-                             calib['nT'], calib['nE'], probF, probI)
-                dP = _assemble(C, D, calib, _test(calib, D, *tgrid), calib['nT'], calib['nE'],
-                               Pi_b, Pi_e, probF, probI)[0] - ss['Pi'] - inp['Pi'][t]
+                C, A = _choice(V_ss + h['V'][s], Va_ss + h['Va'][s], calib['sig'],
+                               calib['nT'], calib['nE'], probF, probI)
+                dP = _assemble(C, A, D, calib, _test(ct, D, *tgrid), calib['nT'],
+                               calib['nE'], Pi_b, Pi_e)[0] - ss['Pi'] - inp['Pi'][t]
                 dpi = max(dpi, np.max(np.abs(dP)))
                 inp['Pi'][t] += gpi * dP      # Damp to avoid cycling
+
+        U += damp * HU.apply(td)
+
+        # Break a limit cycle: if it stops improving, damp harder
+        if err < 0.9 * best: best, stall = err, 0
+        else: stall += 1
+        if stall >= 5: damp, gpi, stall = 0.6 * damp, 0.6 * gpi, 0
 
         tdiff = time.time() - start
         if verbose:
             print(f"[Dyn loop] it {it:3d}  |err|={err:.1e}  |dPi|={dpi:.1e}"
                   f"  ({tdiff:.0f}s, {tdiff/60:.1f}min)")
-        if err < tol and dpi < tol:
+        if err < tol and dpi < ptol:
             print(f"Dynamics solved in {tdiff:.1f}s ({tdiff/60:.1f}min), {it+1} it.")
             return {v: td[v] for v in var}
     raise RuntimeError(f"\n     Dynamics stalled in {maxit} it: "
-                       f"|err|={err:.1e}>{tol:.1e}, |dPi|={dpi:.1e}>{tol:.1e}")
+                       f"|err|={err:.1e}>{tol:.1e}, |dPi|={dpi:.1e}>{ptol:.1e}")
 
 
 def irf_builder(hank, ss, calib, unknowns, targets, var):
@@ -412,7 +433,7 @@ def _bounds_x(space=smm_space):
 class SMM:
     # Objective with caching and an evaluation log.
     def __init__(self, model, calib=None, space=smm_space, se=mom_se, coarse=None,
-                 verbose=False, floor=0.02, logpath='output/smm_log.csv', every=25):
+                 verbose=False, floor=0.05, logpath='output/smm_log.csv', every=25):
         self.model = model
         self.cal0  = dict(calibration if calib is None else calib)
         self.space = space
@@ -469,14 +490,14 @@ class SMM:
 
 # 3. Estimate Parameters
 def estimate(obj, p0=None, global_stage=True, local_stage=True, polish=None,
-             popsize=8, maxiter_g=25, maxiter_l=80, seed=20260415):
+             popsize=8, maxiter_g=15, maxiter_l=80, seed=20260415):
     # Global Search on obj.coarse, then a local polish on `polish` (None keeps it).
     t0 = time.time()
     x0 = _to_x(p0 or {k: guess[k] for k in obj.space}, obj.space)
     if global_stage:
         print("\n--- Stage 1: Global Search ---")
         x0 = differential_evolution(obj, _bounds_x(obj.space), args=(True,),
-                                    popsize=popsize, maxiter=maxiter_g, tol=1e-3,
+                                    popsize=popsize, maxiter=maxiter_g, tol=1e-4,
                                     seed=seed, polish=False, init='sobol').x
     if local_stage:
         # The stages score on different grids, so `best` restarts with the polish
@@ -619,7 +640,7 @@ if __name__ == "__main__":
                        columns=obj.keys).round(3).to_string())
 
     # 3. Global Search
-    # res = estimate(obj, local_stage=False, popsize=2)
+    # res = estimate(obj, local_stage=False, popsize=4)
     # report(res)
 
     # 4. Polish (Mid Grid)

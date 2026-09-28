@@ -31,8 +31,9 @@ flows    = {n: Pi_s[i, j] for n, (i, j) in sectors.items()}
 bf_calib = {'lambda_BF': ('BF_U_LF', 'U', 1),      # (moment, sector, sign)
             'ybar'     : ('BF_I_LF', 'I', 1),
             'rho_F'    : ('BF_F_LF', 'F', -1)}
-unknowns = dict(beta_high = 0.98, psi = 0.7, L = 0.7, tau = 0.1, Tr = 0.2, B = 4.0)
-update   = [*pi_calib, *bf_calib, 'sig', 'quit', *unknowns, 'tau_ss', 'B_ss']
+unknowns = dict(beta_high = 0.98, psi = 1.1, L = 0.6, G = 0.1,
+                Tr = 0.2, B = 4.0, h_I = 0.9, Z_I = 0.9)
+update   = [*pi_calib, *bf_calib, *unknowns, 'tau_ss', 'B_ss']
 
 
 # External Moments for SMM
@@ -40,37 +41,40 @@ wid = dict(gini  = 0.82,             # 2025 Global Wealth Report, UBS
            bot50 = 0.02,             # Brazilian Wealth Shares (WID.world, 2024), untargeted
            top10 = 0.719,
            top1  = 0.395,
-           htm   = 0.35,             # Costa-Junior et al. (2025), untargeted
+           htm   = 0.35,             # Costa-Junior et al. (2025)
            mpc   = 0.20,             # Income-Weighted Quarterly MPC: Auclert et al. (2025)
-           A_gdp = 14.82 / 12.7,     # M4 / GDP (BCB, IBGE)
-        #    A_gdp = 7.90 / 12.7,      # Household Financial Investments / GDP (ANBIMA, IBGE)
+        #    A_gdp = 14.82 / 12.7,     # M4 / GDP (BCB, IBGE)
+           A_gdp = 7.90 / 12.7,      # Household Financial Investments / GDP (ANBIMA, IBGE)
 )
 
 
 # ---------------------------------------------------------------------------
 # 1. External Calibration
+rstar = 0.05 / 4            # Real Interest Rate (5% Annual)
+
 calibration = dict(
     # --- Household Preferences ---
     eis    = 0.5,                 # EIS = gamma = 0.5 (CRRA sigma = 2)
     varphi = 0.5,                 # Frisch Elasticity             --- attention!
     h_F    = 1.0,                 # Normalized: Formal Worked Hours
+    y_u    = 0.02,                # Subsistence Income, or Home Production
 
     # --- Discount Factor ---
     dbeta     = 0.16,    # SMM: beta_high - beta_low           -> Wealth
-    omega_I   = 0.50,    # SMM: Share of Impatient Agents      -> HtM
+    omega_I   = 0.60,    # SMM: Share of Impatient Agents      -> HtM
     q         = 0.01,    # Prob of Redrawing beta Type (Generation = 25y = 100q)
 
     # --- Labor market ---
     delta_F = Pi_s[F, U],   # Job Loss from Formal
     delta_I = Pi_s[I, U],   # Job Loss from Informal
     pi_F    = 0.30,         # Calibrated: Formal Offer Prob   | Employed
-    pi_I    = 0.20,         # Calibrated: Informal Offer Prob | Employed
-    pi_UF   = 0.45,         # Calibrated: Formal Offer Prob   | Unemployed
-    pi_UI   = 0.70,         # Calibrated: Informal Offer Prob | Unemployed
-    sig     = 0.5,          # SMM: Smoothness of Tastes       -> xxx
+    pi_I    = 0.40,         # Calibrated: Informal Offer Prob | Employed
+    pi_UF   = 0.40,         # Calibrated: Formal Offer Prob   | Unemployed
+    pi_UI   = 0.50,         # Calibrated: Informal Offer Prob | Unemployed
+    sig     = 0.05,         # Smoothness of Tastes    (sig -> 0 = hard max)
 
     # --- Sector Productivities ---
-    mu_I    = -0.5,        # SMM: Informal Productivity    -> Median Wage Gap (q50)
+    mu_I    = -0.4,        # SMM: Informal Productivity    -> Median Wage Gap (q50)
     sigma_F = 0.30,        # SMM: Formal Volatility        -> Formal Wage Spread (q25, q75)
     sigma_I = 0.40,        # SMM: Informal Volatility      -> Informal Wage Spread (q25, q75)
     nT      = 5,
@@ -85,29 +89,32 @@ calibration = dict(
 
     # --- Monetary ---
     phi   = 1.5,          # Taylor Rule Coefficient
-    rstar = 0.0125,       # Real Interest Rate (5% Annual)
+    rstar = rstar,        # Real Interest Rate (5% Annual)
     pi    = 0.0,          # Normalized: Inflation Deviation (Steady State)
 
     # --- Government ---
-    tau_l = 0.13,                       # Labor Tax = 13% of Wage
-    tau_d = 0.34,                       # Profit Tax: IRPJ + CSLL
-    BF_w  = pnad['BF_w'],               # BF Payment / Wage Bill
-    B_gdp = pnad['B_gdp'] * 4,          # Debt / GDP (quarterly)
-    phi_B = 1.0125 - 0.5 ** (1/20),     # Response to Pay off Debt: 50% Repaid in 5y
+    tau_l = 0.13,                         # Labor Tax = 13% of Wage
+    tau_d = 0.34,                         # Profit Tax: IRPJ + CSLL
+    BF_w  = pnad['BF_w'],                 # BF Payment / Wage Bill
+    B_gdp = pnad['B_gdp'] * 4,            # Debt / GDP (quarterly)
+    phi_B = 1 + rstar - 0.5 ** (1/40),    # Response to Pay off Debt: 50% Repaid in 10y
 
     # --- Bolsa Familia Rule ---
     lambda_BF = 0.20,          # Calibrated: Entry Prob, if Eligible              -> BF_U
     ybar      = 0.35,          # Calibrated: Means-Test Threshold (% of E[y|F])   -> BF_I
     rho_F     = 0.25,          # Calibrated: Formal Audit Probability             -> BF_F
     rho_I     = 1/8,           # Informal Audit Probability (2y)
-    sig_BF    = 0.05,          # Smoothness of the Means Test
+    sig_BF    = 0.05,          # Smoothness of the Means Test    (sig -> 0 = hard max)
 
     # --- Firms ---
     w        = 1.0,      # Normalized
+    w_I      = 1.0,      # Normalized (w_I = w)
     mu       = 1.11,     # Price Markup
     mu_w     = 1.11,     # Wage Markup
     kappa    = 0.10,     # Price PC Slope
-    kappa_w  = 0.10,     # Wage PC Slope
+    kappa_w  = 0.10,     # Formal Wage PC Slope
+    kappa_wI = 0.30,     # Informal Wage PC Slope         --- attention!
+    alpha_I  = 0.85,     # Informal Returns to Scale      --- attention!
 )
 
 # SMM Estimates
@@ -125,8 +132,8 @@ if smm_est:
 # ---------------------------------------------------------------------------
 # 2. Internal Calibration
 # Targeted Moments
-mom_risk   = ['ac4']                                             # Idiosyncratic Risk
-mom_wealth = ['gini', 'mpc']                                     # Wealth Distribution
+mom_risk   = ['ac1', 'ac4']                                      # Idiosyncratic Risk
+mom_wealth = ['gini', 'mpc', 'htm']                              # Wealth Distribution
 mom_wage   = [f'q{q}_{s}' for s in 'FI' for q in qs]             # Wage Distribution
 mom_wage_t = [f'q{q}_{s}' for s in 'FI' for q in (25, 50, 75)]   # q10 and q90 untargeted
 
@@ -152,8 +159,6 @@ mom_data = dict(
     BF_U    = pnad['BF_U'],             # P(BF | U)
     BF_w    = pnad['BF_w'],             # Total Spending / Wage Bill
     Tr_yF   = pnad['Tr_yF'],            # Average Transfer / E[y_F]
-    sep     = pnad['sep'],              # Job Exit Hazard
-    y35     = pnad['y35'],              # 35th Percentile of Labor Income / E[y_F], vs ybar
 )
 
 # Design-based SE for the weight matrix
@@ -228,8 +233,8 @@ def model_moments(ss, lags=(1, 4)):
     m.update({n: P[i, j] for n, (i, j) in sectors.items()})
 
     # Hours and Earnings
-    m['xi']      = (g('N_I') / sI) / (g('N_F') / sF)
-    m['h_ratio'] = (g('H_I') / sI) / g('h_F')
+    m['xi']      = (g('w_I') * g('N_I') / sI) / (g('w') * g('N_F') / sF)
+    m['h_ratio'] = g('h_I') / g('h_F')
 
     # Wealth Distribution, over the asset grid
     a, a_d = hhi['a_grid'], hhi['D'].sum(0)
@@ -266,7 +271,6 @@ def model_moments(ss, lags=(1, 4)):
     m['BF_U']  = g('BF_U_LF') / g('U')
     m['BF_w']  = g('Tr') * g('BF') / (g('w') * (g('N_F') + g('N_I')))   # / Wage Bill
     m['Tr_yF'] = g('Tr') / np.exp(ref)
-    m['sep']   = g('delta_F') + g('quit')     # Layoffs plus accepted offers
     m['T_BFF'] = 1 / g('rho_F') * 3           # Avg Time for Formals lose the Benefit (months)
 
     # Persistence, over the formals that stay formal

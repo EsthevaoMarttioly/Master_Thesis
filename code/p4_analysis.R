@@ -129,21 +129,10 @@ df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                 status = case_when(VD4009 %in% formal_idx ~ "F",
                                    VD4009 %in% inform_idx ~ "I",
                                    VD4002 == "2"          ~ "U",
-                                   VD4001 == "2"          ~ "N", TRUE ~ NA_character_),
-                ten = case_when(V4040 == "1" ~ 0.5,  V4040 == "2" ~ as.numeric(V40401),
-                                V4040 == "3" ~ 12 + as.numeric(V40402),
-                                V4040 == "4" ~ 12 * as.numeric(V40403)))
+                                   VD4001 == "2"          ~ "N", TRUE ~ NA_character_))
 
 dataset = data.frame(statistics(df, se = TRUE, wmin = mw))
 wage_yr = 12 * coef(svytotal(~wage, df, na.rm = TRUE))[[1]]   # Total Wage Bill
-
-# Job Tenure
-dfT   = subset(df, VD4009 == "01" & !is.na(ten))              # Private CLT: public sector is too stable
-ten12 = svymean(~I(1 * (ten < 12)), dfT, na.rm = TRUE)        # Share under one year
-
-dataset = cbind(dataset, ten   = vs(svymean(~ten, dfT, na.rm = TRUE)),        # Mean Tenure (months)
-                         ten12 = vs(ten12),
-                         sep   = c(1 - (1 - coef(ten12)[[1]]) ^ (1/4), 0))    # Quarterly Exit Hazard
 
 
 # Household Identification
@@ -348,16 +337,9 @@ panel = map(csvs, function(f) {
   d  = read_csv(f, col_select = all_of(cols), show_col_types = FALSE)
   p1 = map_dfr(1:4, ~pair_of(d, .x))          # one quarter apart
   p4 = pair_of(d, 1, 4)                       # one year apart
-  list(flow = count(p4, y0, s0, s1, wt = w, name = "n"),      # annual: see `qroot`
+  list(flow = count(p1, y0, s0, s1, wt = w, name = "n"),
        wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)))
 })
-
-
-# Quarterly Root
-qroot = function(P) {
-  e = eigen(P);  R = Re(e$vectors %*% diag(e$values ^ (1/4)) %*% solve(e$vectors))
-  R = pmax(R, 0);  R / rowSums(R)
-}
 
 
 # Transition rates by origin year
@@ -383,11 +365,10 @@ dataset = cbind(dataset, ac1 = ac(1), ac4 = ac(4))
 # Calibration Matrix (tilt the flows with annual stocks)
 alpha = c(t(dataset["est", S]));  alpha = alpha / sum(alpha)
 P_raw = wide_P(filter(trans, y0 == year))
-P_yr  = tilt(P_raw, alpha)
-P     = qroot(P_yr)                        # annual -> quarterly
+P     = tilt(P_raw, alpha)
 cat(sprintf("Attrition tilt: c = [%s], %d it, max|dP| = %.4f\n",
-            paste(round(attr(P_yr, "c"), 3), collapse = ", "),
-            attr(P_yr, "it"), max(abs(P_yr - P_raw))))
+            paste(round(attr(P, "c"), 3), collapse = ", "),
+            attr(P, "it"), max(abs(P - P_raw))))
 
 
 # Historical Series
@@ -400,8 +381,8 @@ if (transition) {
     pivot_wider(names_from = Information, values_from = v)
 
   trans = map_dfr(sort(intersect(trans$y0, a_year$y0)), function(y)
-    long_P(qroot(tilt(wide_P(filter(trans, y0 == y)),
-                      unlist(a_year[a_year$y0 == y, S]))), y))
+    long_P(tilt(wide_P(filter(trans, y0 == y)),
+                unlist(a_year[a_year$y0 == y, S])), y))
   write.csv(trans, "data/final/pnad_transition_historical.csv", row.names = FALSE)
 }
 
@@ -620,7 +601,7 @@ save_tex(bf_cover_tab, "bf_coverage",
          paste0("Bolsa Fam\\'ilia ", year, ": Coverage"), "tab:bf_coverage",
          rows = replace(esc(rownames(bf_cover_tab)),
                         rownames(bf_cover_tab) %in% c("Tr / y_F", "yrule / y_F"),
-                        c("$T / \\E(y^F)$", "$\\bar y_{law} / \\E(y^F)$")))
+                        c("$T / \\E(y^F)$", "$\\bar y_\\text{law} / \\E(y^F)$")))
 
 
 # Quarter-to-quarter Transitions

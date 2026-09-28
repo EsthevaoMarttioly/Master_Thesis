@@ -11,12 +11,8 @@
 # pip install -r requirements.txt
 
 # ---- Packages -------------------------------------------------------------
-import random
 import numpy as np
 from sequence_jacobian import create_model
-
-random.seed(20260415)
-
 
 # Import parameters
 from code.p1_household import hh, hh_ss
@@ -49,7 +45,8 @@ plot_descriptives(ss, savepath='output/figures/bf_descript.png')
 
 
 # No-BF Counterfactuals
-ss_nobf = solve_ss(hank_ss, {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0}, counterfactual=True, verbose=True)
+calib_nobf = {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0}
+ss_nobf    = solve_ss(hank_ss, calib_nobf, counterfactual=True, verbose=True)
 
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_descriptives(ss, ss_nobf, savepath='output/figures/bf_descript.png')
@@ -83,16 +80,15 @@ dTr_ant = ar1( 0.01,    0.40, T, delay=4)    # Antecipated Shock
 
 
 ## Market Clearing Targets
-unknowns_dyn = ['B', 'L', 'h_F', 'pi', 'w', 'tau', 'p_e']
-targets_dyn  = ['debt_rule', 'asset_mkt', 'labor_mkt',
-                'nkpc', 'wage_nkpc', 'gov_budget', 'equity']
-variables    = ['B', 'C', 'Y', 'L', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i', 'tau']
+unknowns_dyn = ['B', 'L', 'h_F', 'h_I', 'pi', 'w', 'w_I', 'tau_l', 'p_e']
+targets_dyn  = ['debt_rule', 'asset_mkt', 'labor_mkt', 'informal',
+                'nkpc', 'wage_nkpc', 'wage_nkpc_I', 'gov_budget', 'equity']
+variables    = ['B', 'C', 'Y', 'Y_I', 'L', 'I', 'U', 'BF', 'pi', 'w', 'w_I', 'r', 'i', 'tau_l']
 
 
 ## IRFs: Fiscal (Tr) and Monetary (i) Shocks
 build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, variables)
-build_nobf = irf_builder(hank, dyn_nobf, {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0},
-                         unknowns_dyn, targets_dyn, variables)
+build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unknowns_dyn, targets_dyn, variables)
 
 G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
 irf_tr    = build_irfs('Tr', dTr)
@@ -148,4 +144,9 @@ plot_irf({'Instant Shock': irf_tr['full'], 'Antecipated Shock': irf_tr_ant},
 
 rr(); from code.p7_results import *
 
+import importlib, code.p6_solve
+importlib.reload(code.p6_solve)
+globals().update({k: v for k, v in vars(code.p6_solve).items()
+                    if not k.startswith('_')})
+from code.p6_solve import *
 

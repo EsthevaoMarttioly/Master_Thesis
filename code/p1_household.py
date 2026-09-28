@@ -8,12 +8,9 @@
 
 # ---- Packages -------------------------------------------------------------
 import numpy as np
-import random
 from scipy.stats import norm
 from scipy.special import expit
 from sequence_jacobian import het, interpolate, grids
-
-random.seed(20260415)
 
 
 # ---------------------------------------------------------------------------
@@ -28,22 +25,8 @@ states = lambda x: [slice(k * x.shape[0] // nS, (k+1) * x.shape[0] // nS) for k 
 
 u = lambda c, eis: np.log(np.maximum(c, 1e-12)) if eis == 1 else\
                             np.maximum(c, 1e-12)  ** (1-1/eis) / (1-1/eis)
-
-v = lambda h, psi, varphi: psi * np.maximum(h, 1e-8) ** (1+1/varphi)/(1+1/varphi)
-
-def cn(uc, we, eis, varphi, psi, h_F):      # Euler + Intertemporal FOC (capped)
-    return uc ** (-eis), np.minimum((we * uc / psi) ** varphi, h_F)
-
-def solve_cn(we, res, eis, varphi, psi, h_F, uc):
-    # If constrained (a' = amin), c - we*h(c) = res.
-    # If not, Newton in log u'(c), whose derivative [-eis*c - we*varphi*h] is always negative.
-    x = np.log(uc)
-    for _ in range(30):
-        c, h = cn(np.exp(x), we, eis, varphi, psi, h_F)
-        ne   = c - we * h - res
-        if np.max(np.abs(ne)) < 1e-11: break
-        x   -= ne / (-eis * c - we * varphi * h * (h < h_F))
-    return cn(np.exp(x), we, eis, varphi, psi, h_F)
+v  = lambda h, psi, varphi: psi * np.maximum(h, 1e-8) ** (1+1/varphi)/(1+1/varphi)
+uc = lambda c, eis: np.maximum(c, 1e-12) ** (-1/eis)
 
 
 # 1.2. Exogenous Transition States Grid
@@ -80,12 +63,12 @@ def make_bgrid(beta_high, dbeta, omega_I, q, nE, nT):
     return beta, Pi_b
 
 
-def bf_income(e_grid, thetaF, thetaI, a_grid, ya):
+def bf_income(e_grid, thetaF, thetaI, a_grid, xi, ya):
     # Tested Income: y + ra, in units of E[y|F] = w * h_F
     wr = np.stack([np.exp(thetaF[:, None]) * e_grid,
-                   np.exp(thetaI[:, None]) * e_grid,
-                   np.zeros((thetaF.size, e_grid.size))])            # Unemployed: no wage
-    wr = np.repeat(np.repeat(wr[:, None, :, None], nF, 1), nB, 3)    # s, b, theta, beta, e
+                   xi * np.exp(thetaI[:, None]) * e_grid,             # xi = w_I h_I / (w h_F)
+                   np.zeros((thetaF.size, e_grid.size))])             # Unemployed: always eligible
+    wr = np.repeat(np.repeat(wr[:, None, :, None], nF, 1), nB, 3)     # s, b, theta, beta, e
     return wr.reshape(-1)[:, None] + ya * a_grid
 
 
@@ -100,113 +83,98 @@ def bf_test(yt, ybar, sig_BF, lambda_BF, rho_F, rho_I):
 
 
 # 1.3. Labor Income Function
-def labor_income(w, h_F, Tr, tau, e_grid, nE, nT, thetaF, thetaI, tau_l, psi, varphi):
-    # Lump-Sum Rebate and BF Status
-    tau_i = np.tile(tau, nS*nF*nT*nB*nE)
-    b     = np.tile(np.repeat([0.0, 1.0], nT*nB*nE), nS)
+def labor_income(w, w_I, h_F, h_I, Tr, y_u, e_grid, nE, nT, thetaF, thetaI, tau_l, psi, varphi):
+    # BF Status
+    b = np.tile(np.repeat([0.0, 1.0], nT*nB*nE), nS)
 
     e_F = np.exp(thetaF[:, None]) * e_grid[None, :]
     e_I = np.exp(thetaI[:, None]) * e_grid[None, :]
 
-    y_F = w * e_F * h_F           # Gross Earnings
+    y_F = w   * e_F * h_F             # Gross Earnings
+    y_I = w_I * e_I * h_I
+    y_U = y_u * np.ones((nT, nE))     # Home Production
 
-    # Income that doesn't come from own hours
     y = np.r_[expand((1 - tau_l) * y_F),
-              expand(np.zeros((nT, nE))),
-              expand(np.zeros((nT, nE)))] + Tr * b + tau_i
+              expand(y_I), expand(y_U)] + Tr * b
 
-    we = np.r_[expand(np.zeros((nT, nE))),        # Zero because it's not chosen
-               expand(w * e_I),                   # Marginal Return to Hours
+    vh = np.r_[expand(np.full((nT, nE), v(h_F, psi, varphi))),        # Effort Cost, by sector
+               expand(np.full((nT, nE), v(h_I, psi, varphi))),
                expand(np.zeros((nT, nE)))]
-    
-    vh = np.r_[expand(np.full((nT, nE), v(h_F, psi, varphi))),      # Formal Effort Cost
-               expand(np.zeros((nT, nE))),
-               expand(np.zeros((nT, nE)))]
-    return y, we, vh, y_F, e_F, e_I, b
+    return y, vh, y_F, y_I, e_F, e_I, b
 
 
 # ---------------------------------------------------------------------------
 # 2. Endogenous Grid Method (EGM)
 _HH_WARM = {}                     # cache in household_block.py
-def hh_init(a_grid, y, we, r, eis):
+def hh_init(a_grid, y, r, eis):
     key = (y.shape[0], a_grid.shape[0])
     if key in _HH_WARM:           # reuse last converged guess to speed up
         return _HH_WARM[key]
-    coh = (1 + r) * a_grid + (y + we)[:, None]
-    Va  = (1 + r) * (0.1 * coh) ** (-1 / eis)
+    coh = (1 + r) * a_grid + np.maximum(y, 1e-12)[:, None]
+    Va  = (1 + r) * uc(0.1 * coh, eis)
     V   = u(0.1 * coh, eis) / (1 - 0.96)
-    return Va, V
+    Vc  = V.copy()
+    return Va, V, Vc
 
 
-@het(exogenous=['Pi'], policy='a', backward=['Va', 'V'], backward_init=hh_init)
-def household(Va_p, V_p, a_grid, y, we, vh, r, beta, eis, varphi, psi, h_F):
+@het(exogenous=['Pi'], policy='a', backward=['Va', 'V', 'Vc'], backward_init=hh_init)
+def household(Va_p, V_p, Vc_p, a_grid, y, vh, r, beta, eis):
     # Change the SSJ Package to allow beta's heterogeneity
-    uc_nextgrid = beta[:, None] * Va_p
-    c_nextgrid, h_nextgrid = cn(uc_nextgrid, we[:, None], eis, varphi, psi, h_F)
-
-    # Endogenous grid: resources the choice needs, against the ones carried in
-    lhs = c_nextgrid - we[:, None] * h_nextgrid + a_grid - y[:, None]
+    c_nextgrid = (beta[:, None] * Va_p) ** (-eis)
+    lhs = c_nextgrid + a_grid - y[:, None]
     c = interpolate.interpolate_y(lhs, (1 + r) * a_grid, c_nextgrid)
-    h = interpolate.interpolate_y(lhs, (1 + r) * a_grid, h_nextgrid)
 
-    a = (1 + r) * a_grid + we[:, None] * h + y[:, None] - c
-    ab = np.clip(a, a_grid[0], a_grid[-1])
-    bd = ab != a                      # a bound binds: redo the static problem at a'
-    if bd.any():
-        res = (1 + r) * a_grid + y[:, None] - ab
-        c[bd], h[bd] = solve_cn(np.broadcast_to(we[:, None], a.shape)[bd], res[bd],
-                                eis, varphi, psi, h_F, uc_nextgrid[bd])
-    a = ab
+    a = np.clip((1 + r) * a_grid + y[:, None] - c, a_grid[0], a_grid[-1])
+    c = (1 + r) * a_grid + y[:, None] - a         # at the bound: eat what is left
 
-    Va = (1 + r) * c ** (-1 / eis)
-    V  = (u(c, eis) - v(h, psi, varphi) - vh[:, None]
-          + beta[:, None] * interpolate.interpolate_y(a_grid, a, V_p))
-    return Va, V, a, c, h
+    Va = (1 + r) * uc(c, eis)
+    V  = (u(c, eis) - vh[:, None] + beta[:, None] * interpolate.interpolate_y(a_grid, a, V_p))
+    Vc = (u(c, eis) + beta[:, None] * interpolate.interpolate_y(a_grid, a, Vc_p))  # Without v(h), for CEV
+    return Va, V, Vc, a, c
 
 
 # ---------------------------------------------------------------------------
 # 3. Hetoutputs
-def sector_shares(c, h, e_F, e_I, h_F, b, beta, eis):
+def sector_shares(c, e_F, e_I, h_F, h_I, b, beta, eis):
     sF, sI, sU = states(c)
-    f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf, uc_f, beta_f = zeros(c, 11)
+    f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf, uc_f, uc_i, beta_f, beta_i = zeros(c, 13)
 
     # Sector Indicator, F=0, I=1, U=2
     f[sF], i[sI], u[sU] = 1.0, 1.0, 1.0
 
-    # Labor Supply = theta * e * h;  Formal Hours set by the Union
+    # Labor Supply = theta * e * h;  the Union sets the hours of both sectors
     n_f[sF] = expand(e_F * h_F)[:, None]
-    n_i[sI] = expand(e_I)[:, None] * h[sI]
+    n_i[sI] = expand(e_I * h_I)[:, None]
 
     # Bolsa Familia: Recipients
     bf = b[:, None] * np.ones_like(c)
     bf_f_lf[sF], bf_i_lf[sI], bf_u_lf[sU] = bf[sF], bf[sI], bf[sU]
 
-    # Union: Efficiency-Weighted u'(c) over Formals
-    uc_f[sF]   = expand(e_F)[:, None] * c[sF] ** (-1/eis)
+    # Union: Efficiency-Weighted u'(c), Formals and Informals
+    uc_f[sF]   = expand(e_F)[:, None] * uc(c, eis)[sF]
+    uc_i[sI]   = expand(e_I)[:, None] * uc(c, eis)[sI]
     beta_f[sF] = beta[:, None][sF] * uc_f[sF]
+    beta_i[sI] = beta[:, None][sI] * uc_i[sI]
 
-    return f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf, uc_f, beta_f
+    return f, i, u, n_f, n_i, bf_f_lf, bf_i_lf, bf_u_lf, bf, uc_f, uc_i, beta_f, beta_i
 
 
-def labor_moments(a, c, h, y_F, we, r, a_grid, tau_l):
+def labor_moments(a, c, y_F, y_I, y, r, a_grid):
     # Moments for Calibration.
     sF, sI, _ = states(c)
-    h_i, log_y_f, log_y_i = zeros(c, 3)
+    log_y_f, log_y_i = zeros(c, 2)
 
-    h_i[sI]     = h[sI]
     log_y_f[sF] = expand(np.log(y_F))[:, None]
-    log_y_i[sI] = np.log(np.maximum(we[:, None] * h, 1e-12))[sI]
+    log_y_i[sI] = expand(np.log(y_I))[:, None]
 
     # MPC out of a transitory transfer: 1 - da'/dcoh, with dcoh = (1+r) da.
-    sF, _, _ = states(a)
     mpc = 1 - np.diff(a, axis=1) / ((1 + r) * np.diff(a_grid))
     mpc = np.c_[mpc, mpc[:, -1]]
 
-    inc_l = we[:, None] * h                            # Informal: hours are chosen
-    inc_l[sF] = expand((1 - tau_l) * y_F)[:, None]     # Formal:   hours set by the union
+    inc_l = y[:, None] * np.ones_like(c)      # all households, non-financial income
     mpc_y = mpc * inc_l
 
-    return h_i, log_y_f, log_y_i, mpc_y, inc_l
+    return log_y_f, log_y_i, mpc_y, inc_l
 
 
 # ---------------------------------------------------------------------------

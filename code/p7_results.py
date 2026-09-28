@@ -71,8 +71,7 @@ LABELS = {
     'Top 10%'          : r'Wealth Share, Top 10\%',
     'Consumption Gini' : r'Consumption Gini',
     'Aggregate C'      : r'Consumption $C$',
-    'BF Spending'      : r'BF Spending',
-    'Lump-Sum'         : r'Lump-Sum $\tau$',
+    'BF Spending / GDP': r'BF Spending / GDP',
     'Welfare E[V]'     : r'Welfare $\mathbb{E}[V]$, $\Delta$ = CEV',
 }
 
@@ -158,8 +157,9 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0,
 # 1. Steady-State Summary
 # ---------------------------------------------------------------------------
 
-vars_ss = ['Y', 'Y_I', 'C', 'F', 'L', 'psi', 'beta_high', 'A', 'B', 'p_e',
-           'Div', 'tau', 'BF', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc']
+vars_ss = ['Y', 'Y_I', 'C', 'F', 'L', 'psi', 'beta_high', 'A', 'B', 'p_e', 'Div',
+           'BF', 'asset_mkt', 'goods_mkt', 'labor_mkt', 'wage_nkpc', 'wage_nkpc_I',
+           'informal']
 
 def print_ss_summary(ss, var_ss=vars_ss):
     print("\n" + "=" * 55)
@@ -200,29 +200,28 @@ def transition_table(ss, savepath=None, label='tab:transitions'):
 # ---- Compare Tr with no-Tr ------------------------------------------------
 def _ss_stats(ss):
     h = _hh(ss)
-    D, c, V, a = h['D'], h['c'], h['V'], h['a_grid']
+    D, a = h['D'], h['a_grid']
     a_dist = D.sum(0)
     pop    = np.r_[0, np.cumsum(a_dist)]
     share  = np.r_[0, np.cumsum(a_dist * a) / (a_dist @ a)]
-    return {'Formal Share'     : ss['F'],
-            'Informal Share'   : ss['I'],
-            'Unemployed Share' : ss['U'],
-            'HtM'              : a_dist[a <= ss['N_F'] / ss['F'] / 3].sum(),
-            'Wealth Gini'      : gini_coefficient(a, weights=a_dist),
-            'Bottom 50%'       : 1 - top_share(pop, share, 0.50),
-            'Top 10%'          : top_share(pop, share, 0.10),
-            'Consumption Gini' : gini_coefficient(c.ravel(), weights=D.ravel()),
-            'Aggregate C'      : ss['C'],
-            'BF Spending'      : ss['Tr'] * ss['BF'],
-            'Lump-Sum'         : ss['tau'],
-            'Welfare E[V]'     : float(np.sum(D * V))}
+    return {'Formal Share'       : ss['F'],
+            'Informal Share'     : ss['I'],
+            'Unemployed Share'   : ss['U'],
+            'HtM'                : a_dist[a <= ss['N_F'] / ss['F'] / 3].sum(),
+            'Wealth Gini'        : gini_coefficient(a, weights=a_dist),
+            'Bottom 50%'         : 1 - top_share(pop, share, 0.50),
+            'Top 10%'            : top_share(pop, share, 0.10),
+            'Aggregate C'        : ss['C'],
+            'BF Spending / GDP'  : ss['Tr'] * ss['BF'] / (ss['Y'] + ss['Y_I']),
+            'Welfare E[V]'       : float(np.sum(D * h['V'])),
+            '_Vc'                : float(np.sum(D * h['Vc']))}
 
 
 def compare_bf_ss(ss_bf, ss_nobf, savepath=None, label='tab:bf_ss'):
-    # Table: Economy with BF vs the Tr=0 counterfactual.
+    # Table: Economy with BF vs the Tr=0 counterfactual. Delta = No BF - With BF.
     s1, s0 = _ss_stats(ss_bf), _ss_stats(ss_nobf)
     pct_rows = {'Formal Share', 'Informal Share', 'Unemployed Share', 'HtM',
-                'Bottom 50%', 'Top 10%'}
+                'Bottom 50%', 'Top 10%', 'BF Spending / GDP'}
 
     def cell(k, x, delta=False):
         if k in pct_rows:
@@ -230,9 +229,11 @@ def compare_bf_ss(ss_bf, ss_nobf, savepath=None, label='tab:bf_ss'):
         return f'{x:+.3f}' if delta else f'{x:.3f}'
 
     rows = [rf'{LABELS.get(k, k)} & {cell(k, s1[k])} & {cell(k, s0[k])} '
-            rf'& {cell(k, s1[k]-s0[k], delta=True)}' for k in s1 if k != 'Welfare E[V]']
+            rf'& {cell(k, s0[k]-s1[k], delta=True)}'
+            for k in s1 if not k.startswith(('Welfare', '_'))]
 
-    cev = _cev(s1['Welfare E[V]'], s0['Welfare E[V]'], float(ss_bf['eis']))
+    # CEV: the consumption change in the BF economy equivalent to losing the program
+    cev = _cev(s1['Welfare E[V]'], s0['Welfare E[V]'], float(ss_bf['eis']), s1['_Vc'])
     rows += [rf"{LABELS['Welfare E[V]']} & {s1['Welfare E[V]']:.3f} & "
              rf"{s0['Welfare E[V]']:.3f} & {100*cev:+.2f}\%"]
 
@@ -299,8 +300,9 @@ def _bar_panel(ax, left, height, width, xlabel, title, vlines=(), xlim=None):
         ax.legend(frameon=False)
 
 
-def _lorenz_panel(ax, pop, share, emp, emp_label, kind):
+def _lorenz_panel(ax, pop, share, emp, emp_label, kind, ref=None):
     # Lorenz Panel: Model vs Data, Gini in the legend, Top Shares in a box.
+    # `ref`: {'top10','top1','gini'} to quote instead of reading them off `emp`.
     ax.plot(pop, share, color=COL1, lw=1.8,
             label=f'Model, Gini = {gini_from_lorenz(pop, share):.2f}')
     ax.plot([0, 1], [0, 1], color=COL2, ls=':', lw=1.8, label='Perfect Equality')
@@ -309,8 +311,12 @@ def _lorenz_panel(ax, pop, share, emp, emp_label, kind):
     ax.plot(p, L, color=COL4, ls='--', lw=1.6,
             label=f'{emp_label}, Gini = {gini_from_lorenz(p, L):.2f}')
 
-    box = (f'Top 10% = {top_share(pop, share, 0.10):.0%}\n'
-           f'Top 1%  = {top_share(pop, share, 0.01):.0%}')
+    ref = ref or {'top10': top_share(p, L, 0.10), 'top1': top_share(p, L, 0.01)}
+    box = (f'Top 10% = {top_share(pop, share, 0.10):.0%}  (Data = {ref["top10"]:.0%})\n'
+           f'Top 1%  = {top_share(pop, share, 0.01):.0%}  (Data = {ref["top1"]:.0%})')
+    if 'gini' in ref:
+        box += (f'\nGini    = {gini_from_lorenz(pop, share):.2f}'
+                f'  (Data = {ref["gini"]:.2f})')
     ax.text(0.97, 0.03, box, transform=ax.transAxes, ha='right', va='bottom',
             fontsize=8, bbox=dict(boxstyle='round', fc=COL3, ec=COL3, alpha=0.6))
 
@@ -365,7 +371,7 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     aL_share = np.concatenate([[0], np.cumsum(a_dist * a_grid) / np.sum(a_dist * a_grid)])
 
     # Earnings + Transfers, as in PNAD
-    y = (h['y'][:, None] + h['we'][:, None] * h['h']).ravel()
+    y = np.broadcast_to(h['y'][:, None], D.shape).ravel()      # the union sets the hours
     m = D.ravel()
     o = np.argsort(y); ys, ms = y[o], m[o]
     cy = np.cumsum(ms) / ms.sum()
@@ -388,7 +394,7 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
                        (thr, f'HtM = {htm:.1%}', COL4, '--')])
     _lorenz_panel(axes[0, 1], aL_pop, aL_share,
                   np.loadtxt('data/lorenz_nw_scf_2019.raw', delimiter=','),
-                  'US SCF 2019 (Proxy)', 'Wealth')
+                  'US SCF 2019 (Proxy)', 'Wealth', ref=wid)   # shares: WID / UBS Brazil
 
     _bar_panel(axes[1, 0], edges[:-1], y_hist, np.diff(edges),
                'Income $y$', 'Income Distribution (Near Constraint)', xlim=10)
@@ -410,22 +416,22 @@ def _by_state(D, x, block):
     return [(D[seg(i)] * xi(i)).sum() / D[seg(i)].sum() for i in range(3)]
 
 
-def _cev(v1, v0, eis):
-    # Consumption Equivalent: V is homogeneous of degree 1 - 1/eis in c
-    return (v1 / v0) ** (1 / (1 - 1 / eis)) - 1
+def _cev(v1, v0, eis, vc1):
+    # Consumption Equivalent: only the u(c) leg of V = Vc - Vh scales with (1+g).
+    return ((v0 + vc1 - v1) / vc1) ** (1 / (1 - 1 / eis)) - 1
 
 
 def _welfare_gains(ss_bf, ss_nobf):
     # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed].
     # The ratio nets out the 1/(1-beta) scale: raw dE[V] is not comparable across types.
     eis = float(ss_bf['eis'])
-    def ev(ss):
+    def ev(ss, key):
         h = _hh(ss)
-        D, V = _reshape_hh(h['D'], ss), _reshape_hh(h['V'], ss)
+        D, V = _reshape_hh(h['D'], ss), _reshape_hh(h[key], ss)
         pat = [(D[:, :, b] * V[:, :, b]).sum() / D[:, :, b].sum() for b in (0, 1)]
         sec = [(D[s] * V[s]).sum() / D[s].sum() for s in (0, 1, 2)]
         return np.array(pat + sec)
-    return _cev(ev(ss_bf), ev(ss_nobf), eis)
+    return _cev(ev(ss_nobf, 'V'), ev(ss_bf, 'V'), eis, ev(ss_nobf, 'Vc'))
 
 
 def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
@@ -492,7 +498,7 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
     Tr0 = calibration['BF_w']
     Tr_grid = Tr0 * np.array([0, 0.5, 1, 1.5, 2])
     reuse = [(0.0, ss_nobf), (Tr0, ss_base)]
-    warm  = {}                    # continuation: neighbours on the grid are close
+    warm, vc = {}, []             # continuation: neighbours on the grid are close
     for Tr in Tr_grid:
         base = next((s for t, s in reuse if s is not None and np.isclose(Tr, t)), None)
         if base is None:
@@ -502,14 +508,17 @@ def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=No
             except RuntimeError as err:
                 print(f"  BF_w={Tr:.4f} left as a gap.{err}")
                 for k in keys: series[k].append(np.nan)
+                vc.append(np.nan)
                 continue
-        warm = {k: float(base[k]) for k in ('beta_high', 'L', 'psi', 'tau', 'B')}
+        warm = {k: float(base[k]) for k in
+                ('L', 'B', 'tau_l', 'h_F', 'h_I', 'Z_I', 'Tr')}
         st = _ss_stats(base)
         for k in keys:
             series[k].append(st[k])
+        vc.append(st['_Vc'])
 
-    v0 = series['Welfare E[V]'][0]                        # CEV against BF_w = 0
-    series['Welfare E[V]'] = [_cev(v, v0, eis) for v in series['Welfare E[V]']]
+    v0, vc0 = series['Welfare E[V]'][0], vc[0]            # CEV against BF_w = 0
+    series['Welfare E[V]'] = [_cev(v0, v, eis, vc0) for v in series['Welfare E[V]']]
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7))
     for ax, k in zip(axes.flat, keys):
@@ -588,14 +597,14 @@ def plot_irf_financing(irf_tax, irf_debt, variables=('C', 'Y', 'pi', 'w', 'r', '
             ax.plot(x, irf_debt[v][:T_plot] * 100, color=COLORS['full'],
                     lw=2.2, ls='--', label='Debt-Financed')
         if v == 'B':         # overlay tau on the same axis
-            for irf, ls, lab in [(irf_tax, '-', r'$\tau$ (Tax)'),
-                                 (irf_debt, '--', r'$\tau$ (Debt)')]:
-                if 'tau' in irf:
-                    ax.plot(x, irf['tau'][:T_plot] * 100, color=COL5,
+            for irf, ls, lab in [(irf_tax, '-', r'$\tau_\ell$ (Tax)'),
+                                 (irf_debt, '--', r'$\tau_\ell$ (Debt)')]:
+                if 'tau_l' in irf:
+                    ax.plot(x, irf['tau_l'][:T_plot] * 100, color=COL5,
                             ls=ls, lw=2.2, label=lab)
             ax.legend(frameon=False)
     _irf_panels(variables, T_plot, draw,
-                titles={'B': r'Debt $B$ x Transfers $\tau$'}, savepath=savepath)
+                titles={'B': r'Debt $B$ x Taxes $\tau_\ell$'}, savepath=savepath)
 
 
 
@@ -635,17 +644,17 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 # ---------------------------------------------------------------------------
 
 # Macro formats. The default is 3 decimals; these are the exceptions.
-PCT  = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'B_gdp', 'Tr_yF',
-        'htm', 'top10', 'top1', 'rstar', 'pi_F', 'pi_I', 'pi_UF', 'pi_UI',
-        'tau_l', 'tau_d', 'omega_I']
-ZERO = ['amin', 'amax', 'nT', 'nE', 'nA', 'T_BFF']
-ONE  = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'varphi', 'q', 'dat_mpc']
-TWO  = ['lambda_BF', 'ybar', 'sig_BF', 'y35', 'rho_F', 'rho_I', 'kappa', 'kappa_w',
-        'mu', 'mu_w', 'dat_gini']
-BIG  = ['LF', 'Pop', 'y_F', 'y_I']                                 # people and R$
+PCT     = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'Tr_yF',
+           'htm', 'top10', 'top1', 'rstar']
+PCTZERO = ['tau_l', 'tau_d', 'omega_I', 'B_gdp', 'y_u']
+ZERO    = ['amin', 'amax', 'nT', 'nE', 'nA', 'T_BFF']
+ONE     = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'varphi']
+TWO     = ['lambda_BF', 'ybar', 'sig_BF', 'rho_F', 'rho_I', 'kappa', 'kappa_w',
+           'mu', 'mu_w', 'dat_gini', 'q', 'mpc', 'alpha_I']
+BIG     = ['LF', 'Pop', 'y_F', 'y_I']                     # people and R$
 
-MACRO_FMT  = ({k: '.1%' for k in PCT} | {k: '.1f' for k in ONE} | {k: '.0f' for k in ZERO}
-              | {k: '.2f' for k in TWO} | {k: '.4g' for k in BIG})
+MACRO_FMT  = ({k: '.0%' for k in PCTZERO} | {k: '.1%' for k in PCT} | {k: '.1f' for k in ONE}
+              | {k: '.0f' for k in ZERO} | {k: '.2f' for k in TWO} | {k: '.4g' for k in BIG})
 MACRO_FMT |= {f'{p}_{k}': v for p in ('mod', 'dat')                  # data and model twins
               for k, v in tuple(MACRO_FMT.items())}
 MACRO_FMT |= {f'{p}_{a}{b}': '.1%' for p in ('mod', 'dat') for a in STATES for b in STATES}

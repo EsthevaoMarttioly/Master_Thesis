@@ -17,9 +17,9 @@ from sequence_jacobian import simple
 # Firm Block:
 # 1. Production
 @simple
-def firm_formal(L, Z, w, pi, tau_d, mu, kappa):
-    # Formal Sector: Monopolistic Competition with constant Markup.
-    Y   = Z * L
+def firm_formal(L, Z, w, pi, tau_d, mu, kappa, Phi):
+    # Formal Sector: Monopolistic Competition with constant Markup and Overhead Cost.
+    Y   = Z * L - Phi
     adj = mu / (mu-1) / (2 * kappa) * (1 + pi).apply(np.log) ** 2 * Y
     Div = (1 - tau_d) * (Y - w*L) - adj       # Profits taxed at IRPJ + CSLL
     return Y, Div, adj
@@ -98,7 +98,7 @@ def equity_ss(Div, r):
 
 @simple
 def calibrate_ss(Y, Y_I, N_F, N_I, w, w_I, Z_I, mrs, UC_I, I, BF, BF_w, B_gdp, B, G,
-                 r, tau_l, tau_d, mu_w, alpha_I, h_F, psi, varphi):
+                 r, tau_l, tau_d, mu_w, alpha_I, h_F, psi, varphi, Phi, pe_gdp):
     # Invert Market Clearing in Closed Form. Ratios are per Wage Bill.
     L_hat   = N_F                               # Labor Market
     psi_hat = mrs / h_F ** (1/varphi)           # Calibration:    h_F = 1 (supported by psi)
@@ -107,11 +107,12 @@ def calibrate_ss(Y, Y_I, N_F, N_I, w, w_I, Z_I, mrs, UC_I, I, BF, BF_w, B_gdp, B
     w_I_hat = Z_I * N_I ** (alpha_I - 1)        # Counterfactual: Z_I fixed, w_I adjusts
     h_I_hat = (alpha_I * w_I * UC_I / (I * mu_w * psi)) ** varphi
     Tr_hat  = BF_w * w * (N_F + N_I) / np.maximum(BF, 1e-12)   # BF Payment / Wage Bill
-    B_hat   = B_gdp * (Y + Y_I)                                # Debt / GDP
+    B_hat   = 4 * B_gdp * (Y + Y_I)                            # Debt / GDP (annual)
     tax     = tau_l * w * N_F + tau_d * (Y - w * N_F)          # Labor and Profit Taxes
     G_hat   = tax - r * B - Tr_hat * BF         # on the B held: = B_hat once calibrated
     tau_l_hat = (G + r * B + Tr_hat * BF - tau_d * (Y - w * N_F)) / (w * N_F)
-    return L_hat, psi_hat, h_F_hat, h_I_hat, Z_I_hat, w_I_hat, G_hat, Tr_hat, B_hat, tau_l_hat
+    Phi_hat   = Y + Phi - w * N_F - 4 * r * pe_gdp * (Y + Y_I) / (1 - tau_d)   # p_e / GDP
+    return L_hat, psi_hat, h_F_hat, h_I_hat, Z_I_hat, w_I_hat, G_hat, Tr_hat, B_hat, tau_l_hat, Phi_hat
 
 
 

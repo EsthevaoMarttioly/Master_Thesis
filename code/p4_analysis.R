@@ -23,6 +23,7 @@ hourswage  = FALSE     # TRUE to run wage x hours graph
 
 # ---- Config ---------------------------------------------------------------
 mw         = 1518                 # Minimum Wage
+wk         = 4.345                # Weeks per month: monthly pay -> hourly wage
 bf_line    = c(218, mw / 2, mw)   # Poverty Line and Regra de Protecao
 w_edges    = seq(0, 8000, 200)
 S          = c("F", "I", "U")     # N = Outside Labor Force
@@ -53,14 +54,22 @@ statistics = function(d, se = FALSE, wmin = 0) {
                                    TRUE                   ~ NA_character_))
   d = update(d, nF = z(status == "F"), nI = z(status == "I"),
                 nU = z(status == "U"), nN = z(status == "N"))
-  d = update(d, wF = nF * z(VD4019 >= wmin))                # Formal hours: w >= minimum wage
-  d = update(d, hF = z(VD4031) * wF,  hI = z(VD4031) * nI,  hI2 = z(VD4031)^2 * nI,
+  d = update(d, wF = nF * z(VD4019 >= wmin),                # Hours: w >= minimum wage in both,
+                wI = nI * z(VD4019 >= wmin))                # the model has no part-time margin
+  d = update(d, hF = z(VD4031) * wF,  hI = z(VD4031) * wI,  hI2 = z(VD4031)^2 * wI,
                 yF = z(VD4019) * nF,  yI = z(VD4019) * nI,
-                mhF = z(!is.na(VD4031)) * wF, mhI = z(!is.na(VD4031)) * nI,
+                mhF = z(!is.na(VD4031)) * wF, mhI = z(!is.na(VD4031)) * wI,
                 myF = z(!is.na(VD4019)) * nF, myI = z(!is.na(VD4019)) * nI)
+  d = update(d, hw = z(VD4019) / pmax(z(VD4031) * wk, 1))           # Hourly wage, all jobs
+  d = update(d, oF = nF * z(VD4019 > 0 & VD4031 > 0),               # Wage sample: pay and hours
+                oI = nI * z(VD4019 > 0 & VD4031 > 0))
+  d = update(d, pF = oF * z(VD4019), pI = oI * z(VD4019),           # Same sample, for the ratio
+                gF = oF * z(VD4031), gI = oI * z(VD4031))
+  d = update(d, lF = oF * log(pmax(hw, 1e-8)), lI = oI * log(pmax(hw, 1e-8)))
+  d = update(d, qF = lF^2, qI = lI^2)
 
-  T = svytotal(~nF + nI + nU + nN + hF + hI + hI2 + yF + yI +
-                mhF + mhI + myF + myI, d)
+  T = svytotal(~nF + nI + nU + nN + hF + hI + hI2 + yF + yI + pF + pI + gF + gI +
+                mhF + mhI + myF + myI + oF + oI + lF + lI + qF + qI, d)
   m = lapply(list(F       = quote(nF / (nF + nI + nU)),
                   I       = quote(nI / (nF + nI + nU)),
                   U       = quote(nU / (nF + nI + nU)),
@@ -70,9 +79,13 @@ statistics = function(d, se = FALSE, wmin = 0) {
                   h_I     = quote(hI / mhI),
                   y_F     = quote(yF / myF),
                   y_I     = quote(yI / myI),
-                  xi      = quote((yI / myI) / (yF / myF)),
+                  w_F     = quote(pF / (gF * wk)),          # Hourly wage, R$ per hour
+                  w_I     = quote(pI / (gI * wk)),
+                  xi      = quote((pI / gI) / (pF / gF)),   # Hourly: the hours gap is h_ratio
                   h_ratio = quote((hI / mhI) / (hF / mhF)),
-                  h_I_sd  = quote(sqrt(hI2 / mhI - (hI / mhI)^2) / (hF / mhF))),
+                  h_I_sd  = quote(sqrt(hI2 / mhI - (hI / mhI)^2) / (hF / mhF)),
+                  sd_F    = quote(sqrt(qF / oF - (lF / oF)^2)),   # sd of log hourly wage
+                  sd_I    = quote(sqrt(qI / oI - (lI / oI)^2))),
              function(e) svycontrast(T, e))    # Delta Method
 
   v = setNames(sapply(m, coef), names(m))
@@ -81,7 +94,7 @@ statistics = function(d, se = FALSE, wmin = 0) {
 }
 
 info = c("F", "I", "U", "LF", "Pop", "h_F", "h_I",
-         "y_F", "y_I", "xi", "h_ratio", "h_I_sd")
+         "y_F", "y_I", "w_F", "w_I", "xi", "h_ratio", "h_I_sd", "sd_F", "sd_I")
 
 
 
@@ -125,6 +138,7 @@ df = get_pnadc(year = year, interview = 1, deflator = FALSE, labels = FALSE,
 df = update(df, bf     = as.integer(as.character(V5002A) == "1"),
                 wage   = ifelse(is.na(as.numeric(VD4019)), 0, as.numeric(VD4019)),
                 hours  = ifelse(is.na(as.numeric(VD4031)), 0, as.numeric(VD4031)),
+                hwage  = ifelse(hours > 0, wage / (wk * hours), 0),
                 wbin   = cut(wage, c(w_edges, Inf), include.lowest = TRUE),
                 status = case_when(VD4009 %in% formal_idx ~ "F",
                                    VD4009 %in% inform_idx ~ "I",
@@ -147,23 +161,29 @@ df$variables$lf_n   = ave(as.integer(df$variables$status %in% S),
 cap = as.numeric(coef(svyquantile(~wage, subset(df, wage > 0), 0.99, na.rm = TRUE)))
 dfp = subset(df, wage > 0)
 
-dens = function(d, g, f = ~wage, bw = 200)
-  with(svysmooth(f, d, bandwidth = bw, xlim = c(0, cap))[[1]],
+dens = function(d, g, f = ~wage, bw = 200, hi = cap)
+  with(svysmooth(f, d, bandwidth = bw, xlim = c(0, hi))[[1]],
        tibble(group = g, wage = x, y = y))
 
 
-# Theta: Quantiles of log Wage (Net from E[y_F])
-qs = c(.10, .25, .50, .75, .90)
+# Theta: Quantiles of log Hourly Wage (Net from E[w_F])
+qs  = c(.10, .25, .50, .75, .90)
+dfw = subset(df, wage > 0 & hours > 0)            # Same sample as sd_F, sd_I and xi
 lq = function(s) {
-  x = svyquantile(~I(log(wage)), subset(dfp, status == s), qs, na.rm = TRUE)
-  rbind(as.numeric(coef(x)) - log(dataset["est", "y_F"]), as.numeric(SE(x)))
+  x = svyquantile(~I(log(hwage)), subset(dfw, status == s), qs, na.rm = TRUE)
+  rbind(as.numeric(coef(x)) - log(dataset["est", "w_F"]), as.numeric(SE(x)))
 }
 qmat = cbind(lq("F"), lq("I"))     # Shift does not move the SE
 colnames(qmat) = paste0("q", 100 * qs, "_", rep(S[1:2], each = length(qs)))
 dataset = cbind(dataset, qmat)
 
-wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F"),
+
+wage_dist = bind_rows(dens(subset(dfp, status == "F"), "F"),     # monthly, for the figure
                       dens(subset(dfp, status == "I"), "I"))
+
+hcap = as.numeric(coef(svyquantile(~hwage, dfw, 0.99, na.rm = TRUE)))
+hwage_dist = bind_rows(dens(subset(dfw, status == "F"), "F", ~hwage, 1.5, hcap),
+                       dens(subset(dfw, status == "I"), "I", ~hwage, 1.5, hcap))
 
 
 
@@ -240,17 +260,6 @@ pphh_vis     = sum((1:8) * siz) / sum(siz)           # People per HH (8 = 8+)
 bf_value_vis = fam$Value[fam$Year == year] / bf_size_vis / 12
 
 
-# BCB/SGS: Gross Government Debt (%GDP)
-sgs = function(id) as.numeric(tail(jsonlite::fromJSON(sprintf(
-  "https://api.bcb.gov.br/dados/serie/bcdata.sgs.%d/dados?formato=json&dataInicial=01/01/%d&dataFinal=31/12/%d",
-  id, year, year)), 1)$valor)
-
-dataset = cbind(dataset, B_gdp = c(sgs(13762) / 100, 0))    # Debt / GDP (annual)
-
-print(paste("Annual PNAD and BF Statistics done in",
-            round(as.numeric(Sys.time() - time_start0, units = "mins"), 1), "minutes."))
-
-
 
 # ---------------------------------------------------------------------------
 # 5. Matched Panel: Transitions and Wage Persistence
@@ -266,11 +275,13 @@ classify = function(d, v) {
             vd4001 == "2" ~ "N", TRUE ~ NA_character_)
 }
 
-wage_of = function(d, v) suppressWarnings(as.numeric(d[[paste0("vd4019_", v)]]))
+num_of  = function(d, v, x) suppressWarnings(as.numeric(d[[paste0(x, "_", v)]]))
+wage_of = function(d, v)                        # Hourly wage, as in statistics()
+  num_of(d, v, "vd4019") / (wk * num_of(d, v, "vd4031"))
 
 pair_of = function(d, v, h = 1)     # Visits v -> v+h, using the origin weight
   tibble(s0 = classify(d, v),     s1 = classify(d, v + h),   # sector
-         x0 = wage_of(d, v),      x1 = wage_of(d, v + h),    # wage
+         x0 = wage_of(d, v),      x1 = wage_of(d, v + h),    # hourly wage
          w  = d[[paste0("v1028_", v)]], y0 = d[[paste0("ano_", v)]],
          id = d$upa, hh = d$estrato) %>%          # PSU and stratum
   filter(s0 %in% S, s1 %in% S, !is.na(w))
@@ -303,6 +314,20 @@ lw_mom = function(p, h) {
 }
 
 
+# Weighted Wage Change for Switchers: the same worker, so no selection on the fixed effect
+dw_mom = function(p) {
+  p = filter(p, s0 != s1, s0 %in% S[1:2], s1 %in% S[1:2], x0 > 0, x1 > 0)
+  M = mult(p$hh, p$id)
+  map_dfr(c("FI", "IF"), function(fl) {
+    k = p$s0 == substr(fl, 1, 1) & p$s1 == substr(fl, 2, 2)
+    w = p$w[k];  dl = log(p$x1[k]) - log(p$x0[k])
+    Z = cbind(n = w, sl = w * dl, sc = w * (dl < 0))      # level, and the pay-cut share
+    as_tibble(crossprod(M[k, , drop = FALSE], Z)) %>%
+      mutate(fl = fl, r = row_number() - 1L, .before = 1)
+  })
+}
+
+
 # Attrition Tilt
 tilt = function(P, alpha, tol = 1e-14, maxit = 500) {
   a = alpha / sum(alpha);  cj = rep(1, length(a))
@@ -330,7 +355,7 @@ csvs = sprintf("data/pnad/final/pnadc.microdados.painel.%d.csv",
                as.vector(outer(pids, 1:4, function(y, q) 10 * y + q)))
 csvs = csvs[file.exists(csvs)]
 cols = c("upa", "estrato",
-         outer(c("vd4001", "vd4002", "vd4009", "vd4019", "v1028", "ano"),
+         outer(c("vd4001", "vd4002", "vd4009", "vd4019", "vd4031", "v1028", "ano"),
                1:5, paste, sep = "_"))
 
 panel = map(csvs, function(f) {
@@ -338,7 +363,8 @@ panel = map(csvs, function(f) {
   p1 = map_dfr(1:4, ~pair_of(d, .x))          # one quarter apart
   p4 = pair_of(d, 1, 4)                       # one year apart
   list(flow = count(p1, y0, s0, s1, wt = w, name = "n"),
-       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)))
+       wage = bind_rows(lw_mom(p1, 1), lw_mom(p4, 4)),
+       swit = dw_mom(p1))
 })
 
 
@@ -360,6 +386,19 @@ ac = function(h, s = "F") {
   c(x[1], sd(x[-1]))
 }
 dataset = cbind(dataset, ac1 = ac(1), ac4 = ac(4))
+
+
+# Wage Change on the F <-> I flows. The difference identifies mu_I, the sum the spread.
+switchers = map_dfr(panel, "swit") %>% group_by(r, fl) %>%
+  summarise(across(n:sc, sum), .groups = "drop") %>%
+  transmute(r, fl, dw = sl / n, cut = sc / n)
+
+dw = function(fl, v = "dw") {
+  x = switchers[[v]][switchers$fl == fl]
+  c(x[1], sd(x[-1]))
+}
+dataset = cbind(dataset, dw_FI = dw("FI"), dw_IF = dw("IF"),
+                cut_FI = dw("FI", "cut"), cut_IF = dw("IF", "cut"))
 
 
 # Calibration Matrix (tilt the flows with annual stocks)
@@ -558,7 +597,7 @@ print(paste("Calculate results (graphics and tables) in",
 # ---- Tables ---------------------------------------------------------------
 # Statistics
 write.csv(dataset, "data/final/pnad_calibration.csv", row.names = FALSE)
-write.csv(wage_dist, "data/final/pnad_income_dist.csv", row.names = FALSE)
+write.csv(hwage_dist, "data/final/pnad_income_dist.csv", row.names = FALSE)
 write.csv(rbind(P, P_ss), "data/final/pnad_transition_matrix.csv")
 
 
@@ -609,4 +648,3 @@ print(rbind(round(P, 4), `Stationary` = round(P_ss, 4), `Survey` = round(alpha, 
 
 print(paste("[End]   All Statistics done in",
             round(as.numeric(Sys.time() - time_start, units = "mins"), 1), "minutes."))
-

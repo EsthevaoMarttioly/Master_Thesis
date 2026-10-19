@@ -1,5 +1,6 @@
 #=
 # ---------------------------------------------------------------------------
+# DESCRIPTION
 # Graphics and Tables in functions for main.py.
 # ---------------------------------------------------------------------------
 #=
@@ -332,6 +333,8 @@ def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
     ly_s = (h['log_y_f'] + h['log_y_i'])[:, 0]              # gross, a-invariant
     mass = h['D'].sum(1)
     blk  = ly_s.size // 3
+    ly_s = ly_s - np.r_[np.full(blk, np.log(ss['h_F'])),    # hourly, as the moments are
+                        np.full(blk, np.log(ss['h_I'])), np.zeros(ly_s.size - 2 * blk)]
     ref  = np.log(mass[:blk] @ np.exp(ly_s[:blk]) / mass[:blk].sum())
 
     d = pd.read_csv('data/final/pnad_income_dist.csv')
@@ -344,18 +347,16 @@ def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
         ly  = ly_s[sl] - ref
         mod = _kde(ly, mass[sl], grid)                  # the states are atoms
         g   = d[(d.group == s) & (d.wage > 0)]
-        dat, _ = np.histogram(np.log(g.wage / pnad['y_F']), bins=edges,
+        dat, _ = np.histogram(np.log(g.wage / pnad['w_F']), bins=edges,
                               weights=g.y * np.gradient(g.wage))
         c, bw = 0.5 * (edges[:-1] + edges[1:]), edges[1] - edges[0]
         ax.fill_between(grid, 100 * mod, color=col, alpha=0.35, label='Model')
         ax.plot(grid, 100 * mod, color=col, lw=1.6)
         ax.plot(c, 100 * dat / dat.sum() / bw, color='black', lw=1.6, ls='--', label='PNAD')
-        # Targeted Quantiles
-        ax.plot([pnad[f'q{q}_{s}'] for q in qs], np.zeros(len(qs)), '|', color=col, ms=14, mew=2)
         ax.axvline(0, color=GRAY, lw=0.8)
-        ax.set_xlabel(r'$\log(y / \bar{y}^F)$')
+        ax.set_xlabel(r'$\log(w / \bar{w}^F)$')
         ax.set_ylabel('Density (%)')
-        ax.set_title(f'{STATES[s]} Earnings')
+        ax.set_title(f'{STATES[s]} Hourly Wage')
         ax.legend(frameon=False)
 
     _save_or_show(fig, savepath)
@@ -434,11 +435,30 @@ def _welfare_gains(ss_bf, ss_nobf):
     return _cev(ev(ss_nobf, 'V'), ev(ss_bf, 'V'), eis, ev(ss_nobf, 'Vc'))
 
 
-def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
-    # Consumption and Wealth by State, Formality by Wealth, Welfare gain by Group.
+def _by_wealth(D, qidx, n_q, block):
+    # Sector shares and BF coverage within each wealth quantile.
+    sh, mass = np.full((3, n_q), np.nan), np.full(n_q, np.nan)
+    for q in range(n_q):
+        sel = qidx == q
+        m   = np.array([D[i * block:(i + 1) * block, sel].sum() for i in range(3)])
+        if m.sum() > 0:
+            sh[:, q], mass[q] = m / m.sum(), m.sum()
+    return sh, mass
+
+
+def _wealth_bins(D, n_q):
+    # Map each asset node to a quantile of the overall wealth distribution.
+    cum = np.concatenate([[0.0], np.cumsum(D.sum(0))[:-1]])
+    return np.minimum((cum * n_q).astype(int), n_q - 1)
+
+
+def plot_descriptives(ss, n_q=5, savepath=None):
+    # Consumption and Wealth by State, Formality by Wealth, and by Patience.
     h = _hh(ss)
     D, c, a_grid = h['D'], h['c'], h['a_grid']
     block = D.shape[0] // 3
+    qidx  = _wealth_bins(D, n_q)
+    x     = np.arange(n_q)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
@@ -453,83 +473,98 @@ def plot_descriptives(ss, ss_nobf=None, n_q=5, savepath=None):
     axes[0, 1].set_title('Wealth by Employment State')
 
     # Formality and unemployment by wealth quantile
-    cum_left = np.concatenate([[0.0], np.cumsum(D.sum(0))[:-1]])
-    qidx = np.minimum((cum_left * n_q).astype(int), n_q - 1)
-    shares, bf_q = np.full((3, n_q), np.nan), np.full(n_q, np.nan)
-    for q in range(n_q):
-        sel  = qidx == q
-        mass = np.array([D[i * block:(i + 1) * block, sel].sum() for i in range(3)])
-        if mass.sum() > 0:
-            shares[:, q] = mass / mass.sum()
-            bf_q[q] = (D[:, sel] * h['bf'][:, sel]).sum() / mass.sum()
-    x = np.arange(n_q)
-    for i, (key, lab) in enumerate(STATES.items()):
-        axes[1, 0].bar(x + (i - 1) * 0.2, shares[i], width=0.2, color=COLORS[key], label=lab)
+    shares, mass = _by_wealth(D, qidx, n_q, block)
+    bf_q = np.array([(D[:, qidx == q] * h['bf'][:, qidx == q]).sum() / mass[q]
+                     for q in range(n_q)])
+    for i, key in enumerate(STATES):
+        axes[1, 0].bar(x + (i - 1) * 0.2, shares[i], width=0.2,
+                       color=COLORS[key], label=STATES[key])
     axes[1, 0].plot(x, bf_q, color='black', lw=1.8, ls='--', marker='o', ms=5,
                     label='Receives BF')
-    axes[1, 0].set_xticks(x)
-    axes[1, 0].set_xticklabels([f'Q{i+1}' for i in range(n_q)])
-    axes[1, 0].set_xlabel('Wealth Quantile')
     axes[1, 0].set_ylabel('Share')
     axes[1, 0].set_title('Formality and Unemployment by Wealth')
     axes[1, 0].legend(frameon=False)
 
-    # Welfare gain from BF by patience type and by sector
-    if ss_nobf is None:
-        axes[1, 1].axis('off')
-    else:
-        axes[1, 1].bar(['Impatient', 'Patient'] + list(STATES.values()),
-                       _welfare_gains(ss, ss_nobf),
-                       color=[GRAY, GRAY] + [COLORS[s] for s in STATES])
-        axes[1, 1].axhline(0, color='k', linewidth=0.8)
-        axes[1, 1].set_ylabel('Welfare Gain (CEV)')
-        axes[1, 1].set_title('Who gains from Bolsa Familia')
+    # The same cut, split by patience: who sorts into informality
+    D5 = _reshape_hh(D, ss)                       # (3, nF x nT, 2, nE, nA)
+    for b, (lab, ls) in enumerate([('Impatient', '--'), ('Patient', '-')]):
+        Db = D5[:, :, b].sum((1, 2))              # (3, nA): one row per sector
+        sh, _ = _by_wealth(Db, qidx, n_q, 1)
+        for i, key in enumerate(('F', 'I')):
+            axes[1, 1].plot(x, sh[i], color=COLORS[key], ls=ls, lw=2.0, marker='o',
+                            ms=4, label=f'{STATES[key]}, {lab}')
+    axes[1, 1].set_ylabel('Share')
+    axes[1, 1].set_title('Formality by Wealth and Patience')
+    axes[1, 1].legend(frameon=False, fontsize=8)
+
+    for ax in (axes[1, 0], axes[1, 1]):
+        ax.set_xticks(x, [f'Q{i+1}' for i in range(n_q)])
+        ax.set_xlabel('Wealth Quantile')
 
     _save_or_show(fig, savepath)
 
 
-# ---- Sensitivity Analysis -------------------------------------------------
-def plot_bf_sweep(solve_fn, calibration, ss_base=None, ss_nobf=None, savepath=None):
-    # Re-solve the Steady State over BF_w in {0, .5, 1, 1.5, 2} x BF_w0.
-    # Sweep the ratio: calibrate_ss inverts Tr out of it every iteration.
-    keys = ['Informal Share', 'Unemployed Share', 'Wealth Gini', 'Welfare E[V]']
-    eis  = float(calibration['eis'])
-    series = {k: [] for k in keys}
-    Tr0 = calibration['BF_w']
-    Tr_grid = Tr0 * np.array([0, 0.5, 1, 1.5, 2])
-    reuse = [(0.0, ss_nobf), (Tr0, ss_base)]
-    warm, vc = {}, []             # continuation: neighbours on the grid are close
-    for Tr in Tr_grid:
-        base = next((s for t, s in reuse if s is not None and np.isclose(Tr, t)), None)
-        if base is None:
-            try:
-                base = solve_fn({**calibration, **warm, 'BF_w': Tr,
-                                 'Pi': ss_base['Pi'], 'Qb': ss_base['Qb']})
-            except RuntimeError as err:
-                print(f"  BF_w={Tr:.4f} left as a gap.{err}")
-                for k in keys: series[k].append(np.nan)
-                vc.append(np.nan)
-                continue
-        warm = {k: float(base[k]) for k in
-                ('L', 'B', 'tau_l', 'h_F', 'h_I', 'Z_I', 'Tr')}
-        st = _ss_stats(base)
-        for k in keys:
-            series[k].append(st[k])
-        vc.append(st['_Vc'])
+def _cev_by_wealth(ss_bf, ss_nobf, n_q=5):
+    # CEV from BF within each wealth quantile of the no-BF economy.
+    eis  = float(ss_bf['eis'])
+    qidx = _wealth_bins(_hh(ss_nobf)['D'], n_q)
+    ev = lambda ss, key, sel: ((_hh(ss)['D'][:, sel] * _hh(ss)[key][:, sel]).sum()
+                               / _hh(ss)['D'][:, sel].sum())
+    out = [_cev(ev(ss_nobf, 'V', qidx == q), ev(ss_bf, 'V', qidx == q), eis,
+                ev(ss_nobf, 'Vc', qidx == q)) for q in range(n_q)]
+    return np.array(out)
 
-    v0, vc0 = series['Welfare E[V]'][0], vc[0]            # CEV against BF_w = 0
-    series['Welfare E[V]'] = [_cev(v0, v, eis, vc0) for v in series['Welfare E[V]']]
 
-    fig, axes = plt.subplots(2, 2, figsize=(10, 7))
-    for ax, k in zip(axes.flat, keys):
-        ax.plot(Tr_grid, series[k], marker='o', ms=4, color=COL4, lw=2.2)
-        ax.axvline(Tr0, color=GRAY, ls='--', lw=1)
-        ax.set_xticks(Tr_grid, [f'{t:.3f}' for t in Tr_grid])
-        ax.set_xlabel('BF Spending / Wage Bill')
-        ax.set_title('Welfare (CEV)' if k == 'Welfare E[V]' else k)
-    fig.suptitle('Steady State vs BF Transfer', fontsize=11)
+def _lorenz(ss):
+    a_d, a = _hh(ss)['D'].sum(0), _hh(ss)['a_grid']
+    return (np.r_[0, np.cumsum(a_d)], np.r_[0, np.cumsum(a_d * a) / (a_d @ a)])
+
+
+def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
+    # Who gains from BF, and how the two steady states differ.
+    block = _hh(ss)['D'].shape[0] // 3
+    x = np.arange(n_q)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    # Welfare gain by patience type and by sector
+    axes[0, 0].bar(['Impatient', 'Patient'] + list(STATES.values()),
+                   100 * _welfare_gains(ss, ss_nobf),
+                   color=[GRAY, GRAY] + [COLORS[s] for s in STATES])
+    axes[0, 0].set_ylabel('Welfare Gain (CEV, %)')
+    axes[0, 0].set_title('Who gains from Bolsa Familia')
+
+    # Welfare gain by wealth: the distributional cut the table cannot show
+    axes[0, 1].bar(x, 100 * _cev_by_wealth(ss, ss_nobf, n_q), color=COL4)
+    axes[0, 1].set_ylabel('Welfare Gain (CEV, %)')
+    axes[0, 1].set_title('Welfare Gain by Wealth')
+
+    # Wealth concentration, both economies
+    for lab, sx, col, ls in [('With BF', ss, COL1, '-'), ('No BF', ss_nobf, COL4, '--')]:
+        pop, share = _lorenz(sx)
+        axes[1, 0].plot(pop, share, color=col, ls=ls, lw=1.8,
+                        label=f'{lab}, Gini = {gini_from_lorenz(pop, share):.2f}')
+    axes[1, 0].plot([0, 1], [0, 1], color=COL2, ls=':', lw=1.6)
+    axes[1, 0].set_xlabel('Cumulative Population Share')
+    axes[1, 0].set_ylabel('Cumulative Wealth Share')
+    axes[1, 0].set_title('Wealth Concentration')
+    axes[1, 0].legend(frameon=False, loc='upper left')
+
+    # Consumption by state, both economies
+    for i, (lab, sx, col) in enumerate([('With BF', ss, COL1), ('No BF', ss_nobf, COL4)]):
+        h = _hh(sx)
+        axes[1, 1].bar(np.arange(3) + (i - 0.5) * 0.35,
+                       _by_state(h['D'], h['c'], block), width=0.35, color=col, label=lab)
+    axes[1, 1].set_xticks(np.arange(3), list(STATES.values()))
+    axes[1, 1].set_ylabel('Mean Consumption $c$')
+    axes[1, 1].set_title('Consumption by Employment State')
+    axes[1, 1].legend(frameon=False)
+
+    for ax in (axes[0, 0], axes[0, 1], axes[1, 1]):
+        ax.axhline(0, color='k', lw=0.8)
+    axes[0, 1].set_xticks(x, [f'Q{i+1}' for i in range(n_q)])
+    axes[0, 1].set_xlabel('Wealth Quantile')
+
     _save_or_show(fig, savepath)
-
 
 
 # ---------------------------------------------------------------------------
@@ -646,7 +681,7 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 # Macro formats. The default is 3 decimals; these are the exceptions.
 PCT     = ['F', 'I', 'U', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w', 'Tr_yF',
            'htm', 'top10', 'top1', 'rstar']
-PCTZERO = ['tau_l', 'tau_d', 'omega_I', 'B_gdp', 'y_u']
+PCTZERO = ['tau_l', 'tau_d', 'omega_I', 'B_gdp', 'y_u', 'pe_gdp']
 ZERO    = ['amin', 'amax', 'nT', 'nE', 'nA', 'T_BFF']
 ONE     = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'varphi']
 TWO     = ['lambda_BF', 'ybar', 'sig_BF', 'rho_F', 'rho_I', 'kappa', 'kappa_w',

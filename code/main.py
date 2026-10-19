@@ -20,6 +20,7 @@ from code.p2_other_blocks import *
 from code.p5_calibration import *
 from code.p6_solve import *
 from code.p7_results import *
+from code.p8_robustness import *
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +28,7 @@ from code.p7_results import *
 hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
                         equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
-ss = solve_ss(hank_ss, calibration, flows, verbose=True)
+ss = solve_ss(hank_ss, calibration, flows, damp=0.0, verbose=True)
 calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 
 
@@ -49,10 +50,15 @@ calib_nobf = {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0}
 ss_nobf    = solve_ss(hank_ss, calib_nobf, counterfactual=True, verbose=True)
 
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
-plot_descriptives(ss, ss_nobf, savepath='output/figures/bf_descript.png')
+plot_bf_comparison(ss, ss_nobf, savepath='output/figures/bf_comparison.png')
 
-# plot_bf_sweep(lambda cal: solve_ss(hank_ss, cal, counterfactual=True),
-#               calibration, ss, ss_nobf, savepath='output/figures/bf_sweep.png')
+
+# Robustness: every variant re-calibrates
+# solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, **kw)
+# rob   = robustness(solve, calibration)          # hours; cached and resumable
+# rob  |= bf_sizes(solve, calibration)
+# robustness_table(rob, savepath='output/tables/robustness.tex')
+# bf_size_table(rob, savepath='output/tables/bf_size.tex')
 
 
 
@@ -74,9 +80,9 @@ print("Steady State reached in dynamics DAG.")
 # ---------------------------------------------------------------------------
 # Dynamics - Shocks
 T = 100
-dTr     = ar1( 0.01,    0.40, T)             # Tr: AR(1), rho = 0.4, size = 1%
-di      = hike(-0.5, 4, 0.85, T)             # i:  Copom cycle, -50bps/quarter for 1y
-dTr_ant = ar1( 0.01,    0.40, T, delay=4)    # Antecipated Shock
+dTr     = ar1( 0.01,  0.40, T)               # Tr: AR(1), rho = 0.4, size = 1%
+di      = hike(-0.25, 0.85, T, 1)            # i:  Copom cycle, -25bps in 1q, then AR(1)
+dTr_ant = ar1( 0.01,  0.40, T, delay=4)      # Antecipated Shock
 
 
 ## Market Clearing Targets
@@ -90,12 +96,15 @@ variables    = ['B', 'C', 'Y', 'Y_I', 'L', 'I', 'U', 'BF', 'pi', 'w', 'w_I', 'r'
 build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, variables)
 build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unknowns_dyn, targets_dyn, variables)
 
-G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r'], T=T)
+G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r', 'tau_l'], T=T)
 irf_tr    = build_irfs('Tr', dTr)
 irfm_bf   = build_irfs('rstar', di)
 irfm_nobf = build_nobf('rstar', di, split=False)
 irf_pe    = irf_partial(G_hh, 'Tr', dTr, variables)
 irfm_pe   = irf_partial(G_hh, 'r',  di,  variables)
+
+for x in ('r', 'tau_l'):
+    print(x, irf_partial(G_hh, x, np.asarray(irf_tr['full'][x]), ['C'])['C'][:8])
 
 
 # ---------------------------------------------------------------------------
@@ -148,5 +157,4 @@ import importlib, code.p6_solve
 importlib.reload(code.p6_solve)
 globals().update({k: v for k, v in vars(code.p6_solve).items()
                     if not k.startswith('_')})
-from code.p6_solve import *
-
+from code.p6_solve import * 

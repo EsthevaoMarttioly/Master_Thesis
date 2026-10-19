@@ -282,9 +282,10 @@ Y_t = \left(
 \]
 where $\varepsilon>0$ is a constant substitution elasticity (CES).
 
-Each intermediate good $j$ is produced by a monopolistic competitive
-firm $y_{j,t} = Z_{t} l_{j,t} $. They hire labor at real wage $w_t$ and set
-a constant markup of $\mu = \frac{\varepsilon}{\varepsilon-1}$.
+Each intermediate good $j$ is produced by a monopolistic competitive firm
+$y_{j,t} = Z_{t} l_{j,t} - \Phi $, where $\Phi$ is an Overhead Cost. They hire
+labor at real wage $w_t$ and set a constant markup of
+$\mu = \frac{\varepsilon}{\varepsilon-1}$.
 Hence, $P_t = \mu W_t/Z_t$, and real wage equals $w_t = Z_t/\mu$ at every date
 in steady-state. There is a mass $1$ of outstanding firm shares with
 end-of-period price $p_t^e$ \parencite{auclert2025fiscal}.
@@ -297,9 +298,9 @@ standard in Neo-Keynesian's literature, with a quadratic adjustment cost
 \]
 
 Firms' dividends are taxed at rate $\tau_d$, so
-$d_t = (1-\tau_d) (Y_t - w_t L_t) - \Psi_t(\pi_t)$, where $L_t = \E[l_{j,t}]$
-is the aggregate formal labor. Such as \textcite{hagedorn2019fiscal},
-the Phillips curve for price inflation is given by
+$d_t = (1-\tau_d) (Y_t - w_t L_t - \Phi) - \Psi_t(\pi_t)$, where
+$L_t = \E[l_{j,t}]$ is the aggregate formal labor. Such as
+\textcite{hagedorn2019fiscal}, the Phillips curve for price inflation is given by
 \[
 \ln(1+\pi_t) = \kappa \left[ \frac{w_t}{Z_t} - \frac{1}{\mu}
 \right] + \frac{\ln(1+\pi_{t+1})}{1+r_{t+1}} \cdot \frac{Y_{t+1}}{Y_t},
@@ -312,7 +313,7 @@ so it sells at the same price $P_t$. Informal units are self-employed or
 revenue-sharing producers, so the entire product is distributed among their
 workers. The informal labor demand is
 \[
-w_t^I = \alpha_I Z_t^I \left( L_t^I \right)^{\alpha_I-1}.
+w_t^I = \frac{Y^I_t}{N^I_t} = Z_t^I \left( L_t^I \right)^{\alpha_I-1}.
 \]
 
 Also, due to decreasing returns to scale, an extra worker congests the average product,
@@ -446,7 +447,7 @@ the firm's demand for labor
     &L_t^I = \int \mathbbm{1}\{s_{i,t}=I \} \cdot \theta^I_{i,t} \cdot
             e_{i,t} \cdot h_{i,t} \; d\Lambda_t(.);
 \end{align*}
-and the goods market clear when $Y + Y^I = C + G + \Psi_t$. We set the goods market to
+and the goods market clear when $Y + Y^I + y_t^U \alpha_U = C + G + \Psi_t$. We set the goods market to
 clear by Walras' Law. Lastly, the BF benefit is given to all eligible households,
 \[
 \text{BF}_t = \int b_{i,t} \; d\Lambda_t(.).
@@ -528,7 +529,9 @@ The formality status is defined as (i) formal workers have signed work card,
 are militaries, or employers, and (ii) informal workers do not have a signed
 work card, are self-employed, or unpaid family. We only consider household
 in the labor force, dropping those who are non-participating, retired, or
-students, to keep the empirical states aligned with the model's.
+students, to keep the empirical states aligned with the model's. To maintain
+the internal consistency with the model, we use hourly wage moments, which
+help to reduce the part-time informal workers who earn less.
 
 \begin{figure}[H]
     \centering
@@ -676,19 +679,22 @@ those very choices generate along the transition \parencite{auclert2021using}.
 Each model period stands for one quarter and the computational time horizon is
 100 quarters (25 years). We internally calibrate the steady state by setting
 $\beta_H$ to balance the asset market; $\pi_F$, $\pi_I$, $\pi_{UF}$, $\pi_{UI}$ to
-match the sectoral transition; and $\lambda$, $\bar y$, $\rho_F$ to match the BF
+solve the sectoral transition; and $\lambda$, $\bar y$, $\rho_F$ to solve the BF
 coverage by sector in steady state (Table \ref{tab:bf_coverage}). The external
 calibration is shown in table \ref{tab:ext_calibration} and the endogenous
 calibration is in \ref{tab:int_calibration}.
 
 The idiosyncratic productivity follows a log-normal $AR(1)$ process,
-$\ln e' = \rho_e \ln e + \varepsilon^e$, with $\varepsilon^e \sim N(0,\sigma^2_e)$.
-This is approximated by a finite Markov chain with $N_e = \mNE$ grid points
+$\ln e' = \rho_e \ln e + \varepsilon^e$, with
+$\varepsilon^e \sim N(0,\Var(\varepsilon^e))$ and $\Var(e) = \sigma^2_e$. This is
+approximated by a finite Markov chain with $N_e = \mNE$ grid points
 \parencite{rouwenhorst1995asset}. We also assume a log-spaced grid for assets
-$[\mAmin, \mAmax]$ with $N_a = \mNA$ points, sufficient to cover the bottom
-and the top of distribution, and a log-normal sector productivity grid
-$\ln \theta^s \sim N(\mu_s, \sigma_s^2)$, that is discretized by Equiprobable
-Bins with $N_\theta = \mNT$ nodes.
+$[\mAmin, \mAmax]$ with $N_a = \mNA$ points, sufficient to cover the bottom and the
+top of distribution, and a log-normal sector productivity grid
+$\ln \theta^s \sim N(\mu_s - \sigma_s^2/2, \sigma_s^2)$, that is discretized by
+Equiprobable Bins with $N_\theta = \mNT$ nodes, where
+$\mu_s = \log \E\!\left[\theta^s_{i,t}\right]$ represents the worker's comparative
+advantage.
 
 In the household preferences, elasticity of intertemporal substitution $\gamma=\mEis$
 and Frisch elasticity $\varphi = \mVarphi$ are standard in literature\footnote{
@@ -708,9 +714,7 @@ $(\pi_F, \pi_F^U, \pi_I, \pi_I^U) = (\mPiF, \mPiUF, \mPiI, \mPiUI)$.
 \input{transition_table.tex}
 
 The average wage is normalized $w=w^I=\mW$, so that we can reference the model as a
-percentage of the Wage Bill. That was prefered rather than normalizing
-the GDP, because there is no capital in this model, therefore the wage if a better
-measure of the economy's size. We defined $\alpha_I = \mAlphaI$ and $\mu = \mMu$,
+percentage of the Wage Bill. We defined $\alpha_I = \mAlphaI$ and $\mu = \mMu$,
 which is standard in the HANK literature
 \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{
     Markup $\mu=\mMu$ is also consistent with the estimates of
@@ -722,55 +726,40 @@ consistent with Caccioli (2026) estimations\footnote{
     $\kappa_w = \frac{1}{1+\Gamma} \frac{(1+\theta)(1-\bar \beta \theta)}{\theta}$,
     with the real rigidity coefficient $\Gamma = 5$ and the quarterly wage
     adjustment probability $1 - \theta = 25.4\%$ from Caccioli (2026).
-}.
+}. We set $\Phi = \mPhi$ so that $p^e = d/r = \mPE$ in steady state and $\beta_H$
+so that $A/Y = B/Y + p^e/Y = \mModAGdp$, from ANBIMA data.
 
 Taylor Rule is pretty standard, with $\phi=\mPhi$ and $r^* = \mRstar$, consistent
 with a $5\%$ annual real interest rate for Brazilian economy
 \parencite{dos2024natural}. Also, we set $\phi_B = \mPhiB$ so that the half-life
 of the debt is 10 years, slower than \textcite{auclert2025fiscal} and consistent
-with \textcite{campos2019alert}.
-
-Wage tax is based on the average formal worker contribution, $\tau^\ell = \mTauL$,
-and profit's tax is based on the statutory rates for Brazil, IRPJ and CSLL, which
-are 25\% and 9\% respectively. The Government debt is set to $\mDatBGdp$ of yearly
-GDP, consistent with Brazilian National Treasure data. The steady state stock
-market size is $p^e = d/r = \mPE$, so $A/Y = \mModAGdp$, compared to $\mDatAGdp$
-from BCB Credit Statistics for liquid wealth.
+with \textcite{campos2019alert}. Wage tax is based on the average formal worker
+contribution, $\tau^\ell = \mTauL$, and profit's tax is based on the statutory
+rates for Brazil, IRPJ and CSLL, which are 25\% and 9\% respectively.
 
 We calibrated the \textit{Bolsa Família} transfer size $T = \mTr$ to match the
 \textit{Bolsa Família} expenditure as a percentage of the Wage Bill,
 $\text{BF} \cdot T / W$. In order to keep the internal consistency of the model,
 we consider $T$ as the average transfer received only by indivuals in labor force,
-disconsidering children and elderly. The audit probability for informals
-$\rho_I = \mRhoI$ is set by an average $2$ years time for review, standard in CadÚnico.
+disconsidering children and elderly.
 
+The audit probability for informals $\rho_I = \mRhoI$ is set by an average $2$ years
+time for review, by the CadÚnico regulation. While the entry probability
+$\lambda = \mLambdaBF$, the threshold $\bar y / y^F = \mYbar$, and the audit
+probability for formals $\rho_F = \mRhoF$ are internally calibrated to match the
+coverage by sector (Table \ref{tab:bf_coverage}). $\bar y$ value is similar to the
+$35th$ percentile of formal income \parencite{ferriere2025heterogeneous},
+$y_{35} / y^F = \mDatYThreeFive$, and $\rho_F$ is consistent with an average time
+of $\mModTBFF$ months to lose the benefit.
 
-
-
-
-On the other hand, the entry probability $\lambda = \mLambdaBF$, the threshold
-$\bar y / y^F = \mYbar$, and the audit probability for formals $\rho_F = \mRhoF$ are
-internally calibrated to match the coverage by sector, $BF_U = \mDatBFU$,
-$BF_I = \mDatBFI$, and $BF_F = \mDatBFF$, where $BF_s := \P[b=1|s]$.
-$\bar y$ is consistent with the $35th$ percentile
-of formal income \parencite{ferriere2025heterogeneous}, $y_{35} / y^F = \mDatYThreeFive$,
-and $\rho_F$ is consistent with an average time of $\mModTBFF$ months to lose the benefit.
-
-
-Further, we
-internally calibrate parameters using the Simulated Method of Moments (SMM) by
-a Global Search on a coarse grid, followed by a local polish using the
-Nelder-Mead algorithm.
-
-We internally calibrate $\rho_e$ and $\sigma_e$
-to match the autocorrelation of wages in PNAD-C
-$\rho_4^y := \text{Corr}(\ln y_t, \ln y_{t-4})$ and the observed wage distribution.
-
-
-The impatient's discount factor $\beta_L = \mBetaLow$ and the share of impatient
-households $\omega_I = \mOmegaI$ are calibrated to match the Wealth Gini Coefficient
-($\mDatGini$, from UBS Global Report) and the income-weighted
-Marginal Propensity of Consumption (MPC)\footnote{
+Finally, we internally calibrate parameters using the Simulated Method of Moments
+(SMM) by a Global Search on a coarse grid, followed by a local polish using the
+Nelder-Mead algorithm. We jointly estimate
+$(\rho_e, \sigma_e, \beta_L, \omega_I, \mu_I, \sigma_F, \sigma_I)$ to match
+the autocorrelation of wages $\rho_4^y := \text{Corr}(\ln y_t, \ln y_{t-4})$, the
+quantiles $\{0.25, 0.50, 0.75\}$ of formal and informal income, the Wealth Gini
+Coefficient ($\mDatGini$, from UBS Global Report) and the income-weighted Marginal
+Propensity of Consumption (MPC)\footnote{
     Income-Weighted MPC is consistent with the estimates of \textcite{costa2025fiscal}
     and \textcite{galveasuncertain}.
 } ($\mDatMpc$), letting the Top 10\% Share of Wealth
@@ -778,11 +767,6 @@ Marginal Propensity of Consumption (MPC)\footnote{
 Hand-to-Mouth households ($\mDatHtm$) untargeted.
 
 
-We internally calibrate moments of $\theta$ to match three quantiles
-$\{0.25, 0.50, 0.75\}$ of the observed wage distribution for formal and
-informal workers, with respect to $\E(y^F)$, which yields $\mu_I = \mMuI$,
-$\sigma_F = \mSigmaF$, and $\sigma_I = \mSigmaI$, after normalizing
-$\E\!\left[\theta^F_{i,t}\right] = 1$.
 
 %---------------------------------------------------
 %	RESULTS
@@ -997,6 +981,7 @@ possible value such that the steady state converged.
 % Thus, we can create an inverse backwards iteration function of $V_a^{t}$ with
 % respect to $V_a^{t+1}$, which is the central idea of the EGM.
 
+
 \subsubsection*{Price Phillips Curve}
 
 Let $Y_t$ be the aggregate output of the economy, a CES of the intermediary inputs,
@@ -1069,6 +1054,7 @@ Linearizing around the steady-state $\pi_t = \bar \Pi$,
 where $\kappa = \varepsilon / \theta_p$ and $mc_t = w_t / Z_t$. This environment
 is equivalent to \textcite{calvo1983staggered} in first order around zero inflation.
 
+
 \subsubsection*{Wage Phillips Curve}
 
 We will use the same setting as \textcite{hagedorn2019fiscal}, but considering just
@@ -1140,6 +1126,70 @@ informal wage is
 - \frac{\alpha_I w_t^I}{\mu_w I_t} \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
 + \bar \beta_I \ln (1+\pi_{t+1}^{w_I}).
 \]
+
+
+\subsubsection*{Computational Appendix}
+
+% ## 4. Data appendix
+
+% - **Standard errors.** Design-based (delta method on `svytotal`) for the cross-section; stratified
+%   cluster bootstrap with 200 replicates, resampling PSUs within strata, for everything built on the
+%   panel ($ac_1$, $ac_4$, $dw_{FI}$, $dw_{IF}$, $cut_{FI}$, $cut_{IF}$).
+
+% ---
+
+% ## 5. Computational appendix
+
+% ### 5.1 Solution
+% Sequence-space Jacobian (Auclert et al. 2021). The steady state iterates on the full transition
+% matrix $\Pi$: guess $\Pi$ → solve the household problem → read $V$ and $V_a$ → rebuild $\Pi$ from
+% the Gumbel choice probabilities → repeat. Inside each iteration the market-clearing unknowns are
+% inverted in closed form, $\beta^{high}$ is calibrated to the asset market by a secant step, and the
+% arrival rates and the BF rule are recalibrated. Convergence: $|\Delta\Pi| < 10^{-6}$,
+% $|A - B| < 10^{-5}\,|B|$.
+
+% ### 5.2 SMM
+% $\hat\vartheta = \arg\min\ g(\vartheta)' W g(\vartheta)$ with $W = S^{-1}$ and
+% $S = \mathrm{diag}(\hat{\sigma}^2_m + \underline{\sigma}^2)$, where $\underline{\sigma} = 0.05$ is a
+% specification floor: without it the design-based standard errors (all below 0.01) would make the
+% criterion numerically singular and would assert a precision the model does not have.
+
+% Pipeline, each stage with its grid:
+
+% | Stage | Grid | What it does |
+% |---|---|---|
+% | `screen` | $n_A=50$, $n_e=11$ | Score 16 Sobol draws, keep the 4 best, drop any that cannot match the flows |
+% | `multistart` | $n_A=50$, $n_e=11$ | One Nelder–Mead per start, in parallel |
+% | `collect` | full | Re-score every start on the full grid: the coarse ranking can put a phantom first |
+% | `pre_smm` | $n_A=50$, $n_e=11$ | Block-wise warm-up, each block scored on the full moment set |
+% | `polish` | full | Joint Nelder–Mead over all six parameters |
+% | `inference` | full | $G$ by central differences, sandwich s.e., Hansen $J$ |
+
+% ### 5.3 Numerical notes worth one paragraph each
+% - **Simplex.** scipy's default Nelder–Mead simplex is multiplicative ($x_j \cdot 1.05$), which is
+%   0.1–1.5% of the box for a log or logit coordinate and zero for $x = 0$ — parameters freeze. The
+%   initial simplex is built instead as 10% of each parameter's box, mapped back through the
+%   transform.
+% - **Finite differences.** $G$ is differenced in parameter units, not transformed units.
+% - **Grid convergence.** $sd_F$ is 0.662 at $n_e = 11$ against 0.761 at $n_e = 15$ and 0.763 at
+%   $n_e = 19$: the estimate is reported at $n_e = 15$, and $n_A = 50$ against $n_A = 100$ moves the
+%   wealth moments by less than 0.011.
+% - **Summary statistics over quantiles.** Quantiles of the model wage distribution locate specific
+%   atoms of the discrete $\theta \otimes e$ grid and move with $n_e$; standard deviations integrate
+%   over the whole distribution and do not. The criterion moved 444 → 553 → 473 across grids with
+%   quantile moments and 68.0 → 59.9 → 60.2 without.
+
+% ### 5.4 Identification and sensitivity
+% Report the singular values of $G$, the condition number, the weakest direction, and the
+% \citet{andrews2017measuring} sensitivity matrix $-(G'WG)^{-1}G'W$. The narrative: the condition
+% number fell from \PH{23.2} to \PH{18.0} when $dw_{FI}$ and $dw_{IF}$ entered, and $\mu_I$ moved
+% from the weakest direction to the best-identified parameter.
+
+% ### 5.5 Over-identification
+% Hansen $J = \PH{}$ on \PH{3} degrees of freedom, $p = \PH{}$. If it rejects, say what it rejects:
+% the model's only route to a cross-sectional gap larger than the within-worker gap is negative
+% sorting of permanent ability into informality, and a rejection is evidence that this channel alone
+% is not strong enough. That is a finding, not a failure.
 
 
 \end{document}

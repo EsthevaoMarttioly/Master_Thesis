@@ -47,6 +47,7 @@ def make_egrid(rho_e, sd_e, nE, amin, amax, nA,
     thetaF, probF = discretize_normal(0.0, sigma_F, nT)
     thetaF        = thetaF - np.log(probF @ np.exp(thetaF))   # Normalized: E(exp(theta_F)) = 1
     thetaI, probI = discretize_normal(mu_I, sigma_I, nT)
+    thetaI        = thetaI - np.log(probI @ np.exp(thetaI)) + mu_I   # E(exp(theta_I)) = exp(mu_I)
 
     # Asset Grid
     a_grid = grids.asset_grid(amin=amin, amax=amax, n=nA)
@@ -74,7 +75,7 @@ def bf_income(e_grid, thetaF, thetaI, a_grid, xi, ya):
 
 def bf_test(yt, ybar, sig_BF, lambda_BF, rho_F, rho_I):
     # BF Test: P[b' = 1 | s, b, theta, beta, e, a]
-    elig = expit((np.log(ybar) - np.log(yt + 1e-12)) / sig_BF)        # Steep 1{y < ybar}
+    elig = expit((np.log(ybar) - np.log(np.maximum(yt, 1e-12))) / sig_BF)   # Steep 1{y < ybar}
     s, b = np.divmod(np.arange(yt.shape[0]) // (yt.shape[0] // (nS * nF)), nF)
     iu   = (s > 0)[:, None]
     # Entry: I and U only;     Audit: Formals always leave
@@ -184,5 +185,5 @@ hh_ss = hh.add_hetoutputs([sector_shares, labor_moments])
 hh    = hh.add_hetoutputs([sector_shares])
 
 
-print(f'Inputs: {hh.inputs}')
-print(f'Macro outputs: {hh.outputs}')
+# print(f'Inputs: {hh.inputs}')
+# print(f'Macro outputs: {hh.outputs}')

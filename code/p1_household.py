@@ -45,7 +45,7 @@ def make_egrid(rho_e, sd_e, nE, amin, amax, nA,
     e_grid, pi_e_e, Pi_e = grids.markov_rouwenhorst(rho=rho_e, sigma=sd_e, N=nE)
     e_grid        = e_grid / np.sum(pi_e_e * e_grid)
     thetaF, probF = discretize_normal(0.0, sigma_F, nT)
-    thetaF        = thetaF - np.log(probF @ np.exp(thetaF))   # Normalized: E(exp(theta_F)) = 1
+    thetaF        = thetaF - np.log(probF @ np.exp(thetaF))          # E(exp(theta_F)) = 1
     thetaI, probI = discretize_normal(mu_I, sigma_I, nT)
     thetaI        = thetaI - np.log(probI @ np.exp(thetaI)) + mu_I   # E(exp(theta_I)) = exp(mu_I)
 
@@ -106,7 +106,7 @@ def labor_income(w, w_I, h_F, h_I, Tr, y_u, e_grid, nE, nT, thetaF, thetaI, tau_
 
 # ---------------------------------------------------------------------------
 # 2. Endogenous Grid Method (EGM)
-_HH_WARM = {}                     # cache in household_block.py
+_HH_WARM = {}                     # last converged guess, read by solve_ss
 def hh_init(a_grid, y, r, eis):
     key = (y.shape[0], a_grid.shape[0])
     if key in _HH_WARM:           # reuse last converged guess to speed up
@@ -119,18 +119,18 @@ def hh_init(a_grid, y, r, eis):
 
 
 @het(exogenous=['Pi'], policy='a', backward=['Va', 'V', 'Vc'], backward_init=hh_init)
-def household(Va_p, V_p, Vc_p, a_grid, y, vh, r, beta, eis):
+def household(Va_p, V_p, Vc_p, a_grid, y, vh, r, beta, eis, tau_c):
     # Change the SSJ Package to allow beta's heterogeneity
-    c_nextgrid = (beta[:, None] * Va_p) ** (-eis)
-    lhs = c_nextgrid + a_grid - y[:, None]
+    c_nextgrid = ((1 + tau_c) * beta[:, None] * Va_p) ** (-eis)   # u'(c) = (1+tau_c) beta Va'
+    lhs = (1 + tau_c) * c_nextgrid + a_grid - y[:, None]
     c = interpolate.interpolate_y(lhs, (1 + r) * a_grid, c_nextgrid)
 
-    a = np.clip((1 + r) * a_grid + y[:, None] - c, a_grid[0], a_grid[-1])
-    c = (1 + r) * a_grid + y[:, None] - a         # at the bound: eat what is left
+    a = np.clip((1 + r) * a_grid + y[:, None] - (1 + tau_c) * c, a_grid[0], a_grid[-1])
+    c = ((1 + r) * a_grid + y[:, None] - a) / (1 + tau_c)   # at the bound: eat what is left
 
-    Va = (1 + r) * uc(c, eis)
+    Va = (1 + r) * uc(c, eis) / (1 + tau_c)
     V  = (u(c, eis) - vh[:, None] + beta[:, None] * interpolate.interpolate_y(a_grid, a, V_p))
-    Vc = (u(c, eis) + beta[:, None] * interpolate.interpolate_y(a_grid, a, Vc_p))  # Without v(h), for CEV
+    Vc = (u(c, eis) + beta[:, None] * interpolate.interpolate_y(a_grid, a, Vc_p))
     return Va, V, Vc, a, c
 
 
@@ -183,7 +183,6 @@ def labor_moments(a, c, y_F, y_I, y, r, a_grid):
 hh    = household.add_hetinputs([make_egrid, make_bgrid, labor_income])
 hh_ss = hh.add_hetoutputs([sector_shares, labor_moments])
 hh    = hh.add_hetoutputs([sector_shares])
-
 
 # print(f'Inputs: {hh.inputs}')
 # print(f'Macro outputs: {hh.outputs}')

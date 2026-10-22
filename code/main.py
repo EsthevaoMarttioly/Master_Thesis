@@ -19,8 +19,9 @@ from code.p1_household import hh, hh_ss
 from code.p2_other_blocks import *
 from code.p5_calibration import *
 from code.p6_solve import *
-from code.p7_results import *
-from code.p8_robustness import *
+from code.p7_smm import load_res, report
+from code.p8_results import *
+from code.p9_robustness import *
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ from code.p8_robustness import *
 hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
                         equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
-ss = solve_ss(hank_ss, calibration, flows, damp=0.0, verbose=True)
+ss = solve_ss(hank_ss, calibration, flows, verbose=True)
 calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 
 
@@ -36,6 +37,7 @@ calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 print_ss_summary(ss)
 tex_macros(ss, calibration, savepath='output/tables/macros.tex')
 transition_table(ss, savepath='output/tables/transition_table.tex')
+report(load_res(), savepath='output/tables/moments.tex')
 
 
 # Distribution and Policy Functions
@@ -43,19 +45,25 @@ plot_consumption_policy(ss, calibration, savepath='output/figures/consump_policy
 plot_wealth_distribution(ss, savepath='output/figures/wealth_distribution.png')
 plot_income_distribution(ss, savepath='output/figures/income_distribution.png')
 plot_descriptives(ss, savepath='output/figures/bf_descript.png')
+plot_bf_targeting(ss, savepath='output/figures/bf_distribution.png')
 
 
-# No-BF Counterfactuals
-calib_nobf = {**calibration,  'lambda_BF': 0.0, 'BF_w': 0.0}
-ss_nobf    = solve_ss(hank_ss, calib_nobf, counterfactual=True, verbose=True)
 
+# ---------------------------------------------------------------------------
+# Counterfactuals
+solve_cf = lambda cal, **kw: solve_ss(hank_ss, cal, verbose=True, **kw)
+cfs      = counterfactuals(solve_cf)
+(ss_nobf, calib_nobf), (ss_perf, calib_perf) = cfs.values()
+
+compare_ss({'Baseline': ss, **{n: s for n, (s, _) in cfs.items()}},
+           savepath='output/tables/ss_counterfactuals.tex')
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_bf_comparison(ss, ss_nobf, savepath='output/figures/bf_comparison.png')
 
 
-# Robustness: every variant re-calibrates
+# 2. Robustness Tests
 # solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, **kw)
-# rob   = robustness(solve, calibration)          # hours; cached and resumable
+# rob   = robustness(solve, calibration)
 # rob  |= bf_sizes(solve, calibration)
 # robustness_table(rob, savepath='output/tables/robustness.tex')
 # bf_size_table(rob, savepath='output/tables/bf_size.tex')
@@ -86,25 +94,23 @@ dTr_ant = ar1( 0.01,  0.40, T, delay=4)      # Antecipated Shock
 
 
 ## Market Clearing Targets
-unknowns_dyn = ['B', 'L', 'h_F', 'h_I', 'pi', 'w', 'w_I', 'tau_l', 'p_e']
+unknowns_dyn = ['B', 'L', 'h_F', 'h_I', 'pi', 'w', 'w_I', 'tau_c', 'p_e']
 targets_dyn  = ['debt_rule', 'asset_mkt', 'labor_mkt', 'informal',
                 'nkpc', 'wage_nkpc', 'wage_nkpc_I', 'gov_budget', 'equity']
-variables    = ['B', 'C', 'Y', 'Y_I', 'L', 'I', 'U', 'BF', 'pi', 'w', 'w_I', 'r', 'i', 'tau_l']
+variables    = ['B', 'C', 'Y', 'Y_I', 'L', 'N_I', 'I', 'U', 'BF', 'pi', 'w', 'w_I', 'r', 'i', 'tau_c']
 
 
 ## IRFs: Fiscal (Tr) and Monetary (i) Shocks
 build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, variables)
 build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unknowns_dyn, targets_dyn, variables)
 
-G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r', 'tau_l'], T=T)
+G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r', 'tau_c', 'w'], T=T)
 irf_tr    = build_irfs('Tr', dTr)
 irfm_bf   = build_irfs('rstar', di)
 irfm_nobf = build_nobf('rstar', di, split=False)
 irf_pe    = irf_partial(G_hh, 'Tr', dTr, variables)
 irfm_pe   = irf_partial(G_hh, 'r',  di,  variables)
 
-for x in ('r', 'tau_l'):
-    print(x, irf_partial(G_hh, x, np.asarray(irf_tr['full'][x]), ['C'])['C'][:8])
 
 
 # ---------------------------------------------------------------------------
@@ -139,8 +145,17 @@ cumulative_response_table(irfm_bf['insu'], irfm_bf['full'], shock='i',
 
 # ---------------------------------------------------------------------------
 # Dynamics - Financing and Timing
-irf_tr_tax = build_irfs('Tr', dTr, unknowns_dyn[1:], targets_dyn[1:], variables[1:])
-irf_tr_ant = build_irfs('Tr', dTr_ant, split=False)
+# unk_G       = [k if k != 'tau_c' else 'G' for k in unknowns_dyn]
+# irf_tr_G    = build_irfs('Tr', dTr, unk=unk_G, split=False)
+irf_tr_ant  = build_irfs('Tr', dTr_ant, split=False)
+irf_tr_tax  = build_irfs('Tr', dTr, unknowns_dyn[1:], targets_dyn[1:], variables[1:])
+
+
+# plot_irf_financing(irf_tr_fast, irf_tr['full'], ('Fast Repayment', 'Baseline'),
+#                    savepath='output/figures/irf_financing.png')
+
+# plot_irf_financing(irf_tr_G, irf_tr['full'], ('G-Financed', 'Tax-Financed'),
+#                    savepath='output/figures/irf_financing_G.png')
 
 
 plot_irf_financing(irf_tr_tax['full'], irf_tr['full'],
@@ -151,10 +166,4 @@ plot_irf({'Instant Shock': irf_tr['full'], 'Antecipated Shock': irf_tr_ant},
          savepath='output/figures/irf_antecipated.png')
 
 
-rr(); from code.p7_results import *
-
-import importlib, code.p6_solve
-importlib.reload(code.p6_solve)
-globals().update({k: v for k, v in vars(code.p6_solve).items()
-                    if not k.startswith('_')})
-from code.p6_solve import * 
+rr(); from code.p8_results import *

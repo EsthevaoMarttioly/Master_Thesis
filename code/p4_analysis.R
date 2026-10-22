@@ -23,7 +23,7 @@ hourswage  = FALSE     # TRUE to run wage x hours graph
 
 # ---- Config ---------------------------------------------------------------
 mw         = 1518                 # Minimum Wage
-wk         = 4.345                # Weeks per month: monthly pay -> hourly wage
+wk         = 4.345                # Weeks per Month
 bf_line    = c(218, mw / 2, mw)   # Poverty Line and Regra de Protecao
 w_edges    = seq(0, 8000, 200)
 S          = c("F", "I", "U")     # N = Outside Labor Force
@@ -112,7 +112,8 @@ if (quarter) {
   q_stats = function(f, d) {
     gc(verbose = FALSE)
     s = statistics(pnadc_design(read_pnadc(microdata = f, input_txt = input_txt,
-                                           c("VD4001", "VD4002", "VD4009", "VD4019", "VD4031"))))
+                                           c("VD4001", "VD4002", "VD4009", "VD4019", "VD4031"))),
+                   wmin = mw)                       # same sample as the calibration
     replace(s, info %in% c("y_F", "y_I"), s[info %in% c("y_F", "y_I")] * d)
   }
 
@@ -226,7 +227,8 @@ dataset = cbind(dataset,
 # Wage Distribution
 cov_dist = imap_dfr(subs, ~dens(.x, .y, bf_hh ~ wage))
 cov_wage = imap_dfr(subs, ~as_tibble(svyby(~bf_hh, ~wbin, .x, svymean, na.rm = TRUE)) %>%
-  transmute(group = .y, wage = w_edges, y = bf_hh, se = se)) %>% drop_na()
+  transmute(group = .y, wage = w_edges[as.integer(wbin)],   # svyby drops empty bins
+            y = bf_hh, se = se)) %>% drop_na()
 cov_wage$group = factor(cov_wage$group, levels = names(subs))
 cov_dist$group = factor(cov_dist$group, levels = names(subs))
 
@@ -258,6 +260,9 @@ bf_size_vis  = fam$HH[fam$Year == year]              # BF Households
 bf_ind_vis   = ind$Ind[ind$Year == year]             # BF Individuals
 pphh_vis     = sum((1:8) * siz) / sum(siz)           # People per HH (8 = 8+)
 bf_value_vis = fam$Value[fam$Year == year] / bf_size_vis / 12
+
+print(paste("Annual Statistics done in",
+            round(as.numeric(Sys.time() - time_start0, units = "mins"), 1), "minutes."))
 
 
 
@@ -506,7 +511,7 @@ if (hourswage) {
                                           labels = c(F = "Formal", I = "Informal")) +
     labs(title = "Hours and Earnings by Sector",
         subtitle = "Weighted sample; loess by sector. Dashed line: minimum wage",
-        x = paste0("Monthly Wage (R$ of ", def_base, ", log scale)"),
+        x = "Monthly Wage (R$, nominal, log scale)",
         y = "Usual Weekly Hours")
   save_fig(g, "hours_wage")
 }
@@ -548,8 +553,9 @@ save_fig(g, "bf_coverage_by_wage")
 
 
 # ---- Time series ----------------------------------------------------------
-th      = read.csv("data/final/pnad_transition_historical.csv")
-history = read.csv("data/final/pnad_historical.csv", check.names = FALSE) %>%
+th      = if (transition) trans else read.csv("data/final/pnad_transition_historical.csv")
+history = (if (quarter) full_dataset else
+           read.csv("data/final/pnad_historical.csv", check.names = FALSE)) %>%
   pivot_longer(-Information, names_to = "q", values_to = "value") %>%
   mutate(t = as.numeric(str_sub(q, 1, 4)) + (as.numeric(str_sub(q, 6)) - 1) / 4)
 tbreaks = seq(floor(min(history$t)), ceiling(max(history$t)), by = 2)
@@ -598,6 +604,7 @@ print(paste("Calculate results (graphics and tables) in",
 # Statistics
 write.csv(dataset, "data/final/pnad_calibration.csv", row.names = FALSE)
 write.csv(hwage_dist, "data/final/pnad_income_dist.csv", row.names = FALSE)
+write.csv(cov_wage, "data/final/pnad_bf_coverage.csv", row.names = FALSE)
 write.csv(rbind(P, P_ss), "data/final/pnad_transition_matrix.csv")
 
 

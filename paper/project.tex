@@ -179,7 +179,7 @@ baseline wage, $\tau_{\ell}$ is a fixed labor income tax rate. Unemployed earn
 a subsistence income $y_t^U$. Let $y_t(s,e,\theta)$ be this non-financial income,
 \[
     y_t(s,e,\theta) = \begin{cases}
-        (1-\tau^\ell_t) w_t h_t e \theta^F, &\text{if formal;} \\
+        (1-\tau_\ell) w_t h_t e \theta^F, &\text{if formal;} \\
         w_t^I h_t^I e \theta^I, \quad &\text{if informal;} \\
         y_t^U, &\text{if unemployed}.
     \end{cases}
@@ -213,9 +213,10 @@ probability $\bar Q(x,b)$, weighted by the assets distribution, given by
 \]
 
 Households save into a mutual fund of liquid assets $a_{i,t}$ with ex-post
-real return $1+r_t^a$. Their budget constraint at time $t$ reads:
+real return $1+r_t^a$, and pays consumption taxes $\tau^c_t$.
+Their budget constraint at time $t$ reads:
 \[
-c_{i,t} + a_{i,t} = (1+r_t^a) a_{i,t-1} + y_{i,t}(s,e,\theta) + T_t b_{i,t}.
+(1-\tau^c_t) c_{i,t} + a_{i,t} = (1+r_t^a) a_{i,t-1} + y_{i,t}(s,e,\theta) + T_t b_{i,t}.
 \]
 
 Incomplete markets impose a borrowing constraint $a_{i,t} \geq \underline{a}$.
@@ -246,7 +247,8 @@ The Bellman Equation for each individual $i$ in sector $s\in\{F,I\}$ is
             V_{t+1}^I(.,\theta'), V_{t+1}^F(.,\theta')\right\} \\
     &\quad\qquad + (1-\pi_F)(1-\pi_I) V_{t+1}^s(.,\theta)
     \bigg) \bigg] \Bigg\} \\
-    \text{s.t.} \qquad &c+a' = (1+r_t^a) a + y_t(s,e,\theta) + T_t b \\
+    \text{s.t.} \qquad &(1-\tau^c_t)c+a'
+        = (1+r_t^a) a + y_t(s,e,\theta) + T_t b \\
     &a' \in [\underline a, \infty),
 \end{align*}
 where workers take hours as given. And for each unemployed worker is
@@ -261,7 +263,8 @@ where workers take hours as given. And for each unemployed worker is
     &\quad\qquad + \pi_F^U \pi_I^U \max\!\left\{V_{t+1}^U(.), 
             V_{t+1}^I(.), V_{t+1}^F(.)\right\}
     \bigg] \Bigg\} \\
-    \text{s.t.} \qquad &c+a' = (1+r_t^a) a + y_t(U) + T_t b \\
+    \text{s.t.} \qquad &(1-\tau^c_t)c+a'
+        = (1+r_t^a) a + y_t(U) + T_t b \\
     &a' \in [\underline a, \infty).
 \end{align*}
 
@@ -342,14 +345,16 @@ $\pi_t^{w_I} = (1+\pi_t) w_t^I / w_{t-1}^I $ given by
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi}
-- \frac{(1-\tau^\ell_t) w_t}{\mu_w F_t} \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
+- \frac{(1-\tau_\ell) w_t}{(1-\tau^c_t)\mu_w F_t}
+    \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
 + \bar \beta_F \ln (1+\pi_{t+1}^w),
 \]
 and
 \[
 \ln (1+\pi_t^{w_I})
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
-- \frac{\alpha_I w_t^I}{\mu_w I_t} \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
+- \frac{\alpha_I w_t^I}{(1-\tau^c_t) \mu_w I_t}
+    \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
 + \bar \beta_I \ln (1+\pi_{t+1}^{w_I}),
 \]
 where the informal adjustment cost is lower than the formal one, so
@@ -364,14 +369,15 @@ The Phillips Curve calculations for price and wage are found in the Appendix.
 Monetary Policy follows a standard lagged Taylor Rule, without microfoundations
 and only with an inflation target, $i_t = r^*_t + \phi \pi_t$, where $r^*$
 is the neutral real interest rate, $i_t$ is the nominal interest
-rates, $pi_t$ is the inflation, and $\phi > 1$ \parencite{taylor1993follow}.
+rates, $pi_t$ is the inflation, and $\phi > 1$ \parencite{taylor1993discretion}.
 Let $1+r_t = (1+i_{t-1})/(1+\pi_t)$ be the real interest rates.
 
 In the governmental sphere, we have a government that collects taxes, makes
 transfers, purchases public goods, and incurs debt; therefore, the government's
 budget constraint is characterized by
 \[
-G_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1} = B_t + \tau^\ell_t w_t L_t + \tau_d (Y_t - w_t L_t).
+G_t + T_t \cdot \text{BF}_t + (1+r_t) B_{t-1}
+= B_t + \tau_\ell w_t L_t + \tau^c_t C_t + \tau_d (Y_t - w_t L_t).
 \]
 
 We consider two types of government policy, a revenue-neutral and a deficit-financed.
@@ -380,23 +386,24 @@ or debt such that the budget is balanced at each period.
 
 The revenue-neutral policy sets a path of $T_t$ and adjusts taxes such that
 \[
-\tau^\ell_t = \frac{r_t \bar B + G_t + T_t \cdot \text{BF}_t - \tau_d (Y_t - w_t L_t)}{w_t L_t},
+\tau^c_t = \frac{r_t \bar B + G_t + T_t \cdot \text{BF}_t
+    + (\tau_d - \tau_\ell) w_t L_t - \tau_d Y_t}{C_t},
 \]
 which means that the fiscal policy is passive and the monetary policy is active.
 The nominal interest rate adjust at least one-for-one to changes in inflation.
 
 However, governments normally finance themselves by increasing deficit and
-issuing new debt. The deficit-financed policy sets a path of $T_t$ and $\tau^\ell_t$,
+issuing new debt. The deficit-financed policy sets a path of $T_t$ and $\tau^c_t$,
 adjusting the debt to pay off. We assume that the government repays its debt
 in the long run by increasing taxes, with elasticity $\phi_B$,
 \[
-\tau^\ell_t = \bar \tau^\ell + \phi_B \frac{B_{t-1} - \bar B}{w_t L_t}.
+\tau^c_t = \bar \tau^c + \phi_B \frac{B_{t-1} - \bar B}{C_t}.
 \]
 
 Or, in another words, using \textcite{auclert2025fiscal} notation, the debt
 persistency is defined by
 \[
-dB_t = (1+r_t) dB_{t-1} - w_t L_t d\tau^\ell_t = (1 + r - \phi_B) dB_{t-1} = \rho_B dB_{t-1},
+dB_t = (1+r_t) dB_{t-1} - C_t d\tau^c_t = (1 + r - \phi_B) dB_{t-1} = \rho_B dB_{t-1},
 \]
 where $\rho_B$ is the debt persistency, which we calibrate so that debt has a
 half-life of 10 years, so $\rho_B = {0.5}^{1/40} \approx 0.983$ and $\phi_B = \mPhiB$.
@@ -699,7 +706,7 @@ advantage.
 In the household preferences, elasticity of intertemporal substitution $\gamma=\mEis$
 and Frisch elasticity $\varphi = \mVarphi$ are standard in literature\footnote{
     EIS $\gamma=\mEis$ is consistent with micro estimates surveyed by
-    \textcite{valickova2015financial}.}.
+    \textcite{havranek2015cross}.}.
 The disutility of labor $\psi = \mPsi$ is set to normalize worked hours
 $h = \mHF$ in steady state. Each household has a $q = \mQ$ probability of
 drawing a new discount factor $(\beta_L, \beta_H)$, corresponding to an
@@ -723,19 +730,21 @@ which is standard in the HANK literature
 $\kappa = \mKappa$, similar to \textcite{kaplan2018monetary}, and $\kappa_w = \mKappaW$,
 consistent with Caccioli (2026) estimations\footnote{
     We calculate $\kappa_w$ following the standard Calvo formula
-    $\kappa_w = \frac{1}{1+\Gamma} \frac{(1+\theta)(1-\bar \beta \theta)}{\theta}$,
-    with the real rigidity coefficient $\Gamma = 5$ and the quarterly wage
-    adjustment probability $1 - \theta = 25.4\%$ from Caccioli (2026).
+    $\kappa_w = \frac{(1+\theta)(1-\bar \beta \theta)}{\theta}
+    \frac{1}{1 + \varepsilon_w \varphi}$, with the quarterly wage adjustment
+    probability $1 - \theta = 25.4\%$ from Caccioli (2026).
 }. We set $\Phi = \mPhi$ so that $p^e = d/r = \mPE$ in steady state and $\beta_H$
 so that $A/Y = B/Y + p^e/Y = \mModAGdp$, from ANBIMA data.
 
-Taylor Rule is pretty standard, with $\phi=\mPhi$ and $r^* = \mRstar$, consistent
-with a $5\%$ annual real interest rate for Brazilian economy
+Taylor Rule is pretty standard, with $\phi=\mPhiTaylor$ and $r^* = \mRstar$,
+consistent with a $5\%$ annual real interest rate for Brazilian economy
 \parencite{dos2024natural}. Also, we set $\phi_B = \mPhiB$ so that the half-life
 of the debt is 10 years, slower than \textcite{auclert2025fiscal} and consistent
 with \textcite{campos2019alert}. Wage tax is based on the average formal worker
-contribution, $\tau^\ell = \mTauL$, and profit's tax is based on the statutory
-rates for Brazil, IRPJ and CSLL, which are 25\% and 9\% respectively.
+contribution, $\tau_\ell = \mTauL$, profit's tax is based on the statutory
+rates for Brazil, IRPJ and CSLL, which are 25\% and 9\% respectively, and
+consumption tax is based on taxes on goods and services, $\tau^c = \mTauC$, from
+Brazilian National Treasury.
 
 We calibrated the \textit{Bolsa Família} transfer size $T = \mTr$ to match the
 \textit{Bolsa Família} expenditure as a percentage of the Wage Bill,
@@ -753,18 +762,22 @@ $y_{35} / y^F = \mDatYThreeFive$, and $\rho_F$ is consistent with an average tim
 of $\mModTBFF$ months to lose the benefit.
 
 Finally, we internally calibrate parameters using the Simulated Method of Moments
-(SMM) by a Global Search on a coarse grid, followed by a local polish using the
-Nelder-Mead algorithm. We jointly estimate
-$(\rho_e, \sigma_e, \beta_L, \omega_I, \mu_I, \sigma_F, \sigma_I)$ to match
-the autocorrelation of wages $\rho_4^y := \text{Corr}(\ln y_t, \ln y_{t-4})$, the
-quantiles $\{0.25, 0.50, 0.75\}$ of formal and informal income, the Wealth Gini
-Coefficient ($\mDatGini$, from UBS Global Report) and the income-weighted Marginal
-Propensity of Consumption (MPC)\footnote{
+(SMM) by a Nelder-Mead algorithm, explained in detail in the appendix. We jointly estimate
+$(\mu_I, \sigma_F, \sigma_I, \sigma_e, \rho_e, \beta_L, \omega_I)$ to match the
+average wage gap between sectors $\xi = \E[y_F]/ \E[y_I]$, the standard deviation
+of each sector's income, the autocorrelation of wages
+$\rho_4^y := \text{Corr}(\ln y_t, \ln y_{t-4})$, the wage difference of switchers
+$\E[\Delta \ln y_t | F\to I] = \Delta_{FI}^y$ and
+$\E[\Delta \ln y_t | I\to F] = \Delta_{IF}^y$, the Wealth Gini Coefficient
+($\mDatGini$, from UBS Global Report), the income-weighted Marginal Propensity of
+Consumption (MPC)\footnote{
     Income-Weighted MPC is consistent with the estimates of \textcite{costa2025fiscal}
     and \textcite{galveasuncertain}.
-} ($\mDatMpc$), letting the Top 10\% Share of Wealth
-($\mDatTopOneZero$, from World Inequality Database) and the share of
-Hand-to-Mouth households ($\mDatHtm$) untargeted.
+} ($\mDatMpc$) and the share of Hand-to-Mouth households ($\mDatHtm$),
+letting the Top 10\% Share of Wealth ($\mDatTopOneZero$, from World Inequality
+Database), amonth other statistics untargeted.
+
+\input{moments.tex}
 
 
 
@@ -814,9 +827,17 @@ Hand-to-Mouth households ($\mDatHtm$) untargeted.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{bf_sweep.png}
-    \caption{Steady-State Sensitivity Analysis}
-    \label{fig:bf_sweep}
+    \includegraphics[width=1.0\linewidth]{bf_distribution.png}
+    \caption{Steady-State Distribution of BF Receipts}
+    \label{fig:bf_distribution}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{bf_comparison.png}
+    \caption{Steady-State Comparison: With and Without BF}
+    \label{fig:bf_comparison}
 \end{figure}
 
 
@@ -830,12 +851,12 @@ Hand-to-Mouth households ($\mDatHtm$) untargeted.
 \end{figure}
 
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=1\linewidth]{irf_financing.png}
-    \caption{Response to a Shock in $T$ by Financing Rules}
-    \label{fig:irf_financing}
-\end{figure}
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=1\linewidth]{irf_financing.png}
+%     \caption{Response to a Shock in $T$ by Financing Rules}
+%     \label{fig:irf_financing}
+% \end{figure}
 
 
 \begin{figure}[H]
@@ -846,12 +867,12 @@ Hand-to-Mouth households ($\mDatHtm$) untargeted.
 \end{figure}
 
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=1\linewidth]{irf_antecipated.png}
-    \caption{Response to a Shock in $T$: Instant vs Antecipated}
-    \label{fig:irf_antecipated}
-\end{figure}
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=1\linewidth]{irf_antecipated.png}
+%     \caption{Response to a Shock in $T$: Instant vs Antecipated}
+%     \label{fig:irf_antecipated}
+% \end{figure}
 
 \input{cumulative_response.tex}
 
@@ -861,7 +882,7 @@ Hand-to-Mouth households ($\mDatHtm$) untargeted.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{irfm_decomposition.png}
-    \caption{Response to an increase in $i$ by Channel}
+    \caption{Response to an reduction in $i$ by Channel}
     \label{fig:irfm_decomposition}
 \end{figure}
 
@@ -869,7 +890,7 @@ Hand-to-Mouth households ($\mDatHtm$) untargeted.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{irfm_bf_vs_nobf.png}
-    \caption{Response to an increase in $i$: With and Without CCT}
+    \caption{Response to an reduction in $i$: With and Without CCT}
     \label{fig:irfm_bf_vs_nobf}
 \end{figure}
 
@@ -1082,7 +1103,7 @@ We assume that the union's wage setting problem is to maximize the
 aggregate utility of its members, so
 \[
 V_t^w = \max_{\hat W_t} \int \left[
-u'(c_{i,t}) \frac{(1-\tau^\ell_t)\hat W_t}{P_t} e_{i,t} \theta_{i,t} h_{i,t}
+u'(c_{i,t}) \frac{(1-\tau_\ell)\hat W_t}{P_t} e_{i,t} \theta_{i,t} h_{i,t}
 - v(h_{i,t}) - e_{i,t} \theta_{i,t} h_t \frac{\theta_w}{2}
 \left( \frac{\hat W_t}{\hat W_{t-1}} - \bar \Pi^w \right)^2
 \right] d\Lambda_t + \bar \beta_F V_{t+1}^w.
@@ -1094,7 +1115,7 @@ $\int_F d\Lambda_t = F_t$, the size of the formal sector,
 \[
 \theta_w (\pi_t^w - \bar \Pi^w) \pi_t^w
 = \varepsilon_w \left[ v'(h_t)
-- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau^\ell_t) w_t \Lambda_t^F \right]
+- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) w_t \Lambda_t^F \right]
 + \bar \beta \theta_w (\pi_{t+1}^w - \bar \Pi^w) \pi_{t+1}^w \frac{h_{t+1}}{h_t},
 \]
 where $\Lambda_t^F = \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t / F_t$.
@@ -1103,7 +1124,7 @@ $h_{t+1} = h_t$, since there is no population nor technological growth. Thus,
 \[
 \ln (1+\pi_t^w)
 = \frac{\varepsilon_w}{\theta_w}
-\left[ v'(h_t) - (1-\tau^\ell_t) w_t \Lambda_t^F
+\left[ v'(h_t) - (1-\tau_\ell) w_t \Lambda_t^F
 \frac{\varepsilon_w-1}{\varepsilon_w} \right] + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 
@@ -1112,7 +1133,7 @@ and $\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips curve is
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi}
-- \frac{(1-\tau^\ell_t) w_t}{\mu_w F_t} \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
+- \frac{(1-\tau_\ell) w_t}{\mu_w F_t} \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
 + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 
@@ -1190,6 +1211,8 @@ informal wage is
 % the model's only route to a cross-sectional gap larger than the within-worker gap is negative
 % sorting of permanent ability into informality, and a rejection is evidence that this channel alone
 % is not strong enough. That is a finding, not a failure.
+
+\input{smm_se.tex}
 
 
 \end{document}

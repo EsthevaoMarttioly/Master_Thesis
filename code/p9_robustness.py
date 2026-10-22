@@ -1,8 +1,8 @@
 #=
 # ---------------------------------------------------------------------------
 # DESCRIPTION
-# Robustness: re-solve the Steady State at alternative external parameters.
-# Every variant re-calibrates, so each one still matches the data targets.
+# Counterfactual policies and robustness: re-solve the Steady State under another
+# Bolsa Familia rule, or at alternative external parameters.
 # ---------------------------------------------------------------------------
 #=
 
@@ -11,18 +11,21 @@ import os
 import pickle
 import numpy as np
 
-from code.p5_calibration import calibration
-from code.p7_results import _ss_stats, _cev, _tex_table
+from code.p5_calibration import calibration, update
+from code.p8_results import _ss_stats, _cev, _tex_table
 
 
 # ---- Config ---------------------------------------------------------------
 rob_path = 'output/smm/robustness.pkl'     # cache a variant
 
+cf_grid  = {r"No Bolsa Fam\'ilia"  : {'lambda_BF': 0.0, 'BF_w': 0.0},
+            'Perfect Means Test'  : {'lambda_BF': 1.0, 'rho_F': 1.0, 'rho_I': 1.0}}
+cf_keep  = [*update, 'h_F', 'w_I', 'tau_c', 'Pi', 'Qb']   # counterfactual=True moves these
+
 rob_grid = {'eis'     : (0.30, 0.70),      # EIS: log and 2.0 are run on their own
             'varphi'  : (0.25, 1.00),      # Frisch elasticity
             'alpha_I' : (0.75, 0.95),      # Informal returns to scale
             'sig'     : (0.30, 0.55),      # Taste dispersion
-            'omega_I' : (0.25, 0.75),      # Share of impatient households
             'y_u'     : (0.00, 0.04)}      # Unemployment income
 
 rob_cols = ['Informal Share', 'Unemployed Share', 'HtM', 'Wealth Gini',
@@ -36,19 +39,36 @@ rob_pct = {'Informal Share', 'Unemployed Share', 'HtM', 'Top 10%',
            'Wealth Gini', 'BF Spending / GDP'}
 
 rob_sym = {'eis': r'\sigma^{-1}', 'varphi': r'\varphi', 'alpha_I': r'\alpha_I',
-           'sig': r'\sigma_S', 'omega_I': r'\omega_I', 'y_u': 'y^U',
+           'sig': r'\sigma_S', 'y_u': 'y^U',
            'BF_w': r'\mathcal{T}/wN'}
 
 
 # ---------------------------------------------------------------------------
-# 1. Solve the Variants
+# 1. Counterfactual Policies
+# ---------------------------------------------------------------------------
+def counterfactuals(solve_fn, calib=None, grid=cf_grid):
+    # One steady state per rule in `grid`, each with the calibration it converged to.
+    # solve_fn(cal, **kw) -> ss.  BF_w is held, so Tr rebalances: same budget, new rule.
+    calib, out = dict(calib or calibration), {}
+    for name, rule in grid.items():
+        cal = {**calib, **rule}
+        ss  = solve_fn(cal, counterfactual=True)
+        cal.update({k: ss[k] for k in cf_keep})
+        out[name] = (ss, cal)
+        print(f"  {name:22s} done", flush=True)
+    return out
+
+
+
+# ---------------------------------------------------------------------------
+# 2. Robustness Tests
 # ---------------------------------------------------------------------------
 def _stats(solve_fn, calib, nobf):
     # Statistics of one economy, plus the CEV of removing Bolsa Familia.
     s1 = _ss_stats(solve_fn(calib))
     if not nobf: return s1
     s0 = _ss_stats(solve_fn({**calib, 'lambda_BF': 0.0, 'BF_w': 0.0}, counterfactual=True))
-    s1['CEV'] = _cev(s1['Welfare E[V]'], s0['Welfare E[V]'], float(calib['eis']), s1['_Vc'])
+    s1['CEV'] = _cev(s0['Welfare E[V]'], s1['Welfare E[V]'], float(calib['eis']), s0['_Vc'])
     return s1
 
 
@@ -91,14 +111,14 @@ def bf_sizes(solve_fn, calib=None, mult=(0, 0.5, 1, 1.5, 2), path=rob_path):
     v0 = out.get(f'BF_w={0.0:.4f}')                        # CEV against no transfer
     for m in mult:
         s = out.get(f'BF_w={m * base:.4f}')
-        if s and v0: s['CEV'] = _cev(s['Welfare E[V]'], v0['Welfare E[V]'],
-                                     float(calib['eis']), s['_Vc'])
+        if s and v0: s['CEV'] = _cev(v0['Welfare E[V]'], s['Welfare E[V]'],
+                                     float(calib['eis']), v0['_Vc'])
     with open(path, 'wb') as fobj: pickle.dump(out, fobj)
     return out
 
 
 # ---------------------------------------------------------------------------
-# 2. Tables
+# 3. Tables
 # ---------------------------------------------------------------------------
 def _cell(k, x):
     if x is None or not np.isfinite(x): return '--'
@@ -131,7 +151,7 @@ def robustness_table(rob, grid=rob_grid, cols=rob_cols, cev=True,
 
 
 def bf_size_table(rob, calib=None, mult=(0, 0.5, 1, 1.5, 2), cols=rob_cols,
-                  savepath=None, label='tab:bf_size'):
+                  savepath=None, label='tab:robust_bf'):
     # The size of the program, in place of the sweep figure.
     base = float((calib or calibration)['BF_w'])
     rows = [(rf'${m * base:.4f}$' + (r' \,(baseline)' if m == 1 else
@@ -146,7 +166,7 @@ def bf_size_table(rob, calib=None, mult=(0, 0.5, 1, 1.5, 2), cols=rob_cols,
 
 
 # ---------------------------------------------------------------------------
-# 3. Dynamics
+# 4. Dynamics
 # ---------------------------------------------------------------------------
 # kappa_wI, kappa_w, and phi move only Dynamics
 dyn_grid = {'kappa_wI': (0.10, 0.60),      # Informal wage rigidity

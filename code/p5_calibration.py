@@ -11,57 +11,34 @@ import pandas as pd
 
 
 # ---- Data and Helpers -----------------------------------------------------
-USE_SMM = True     # True: Use SMM estimates if available
-
+USE_SMM = True          # True: Use SMM estimates if available
 F, I, U = 0, 1, 2
-qs      = (10, 25, 50, 75, 90)      # Income Quantiles
+
 pnad, pnad_se = [r for _, r in pd.read_csv('data/final/pnad_calibration.csv').iterrows()]
 Pi_s  = pd.read_csv('data/final/pnad_transition_matrix.csv', index_col=0).iloc[:3].values
 alpha = np.array(pnad[['F', 'I', 'U']])
 
 
-# Arrival Rates and Flows Calibration
-pi_calib = {'pi_F': (I, F), 'pi_I': (F, I), 'pi_UF': (U, F), 'pi_UI': (U, I)}
-sectors  = {'FI': (F, I), 'FU': (F, U), 'IF': (I, F),
-            'IU': (I, U), 'UF': (U, F), 'UI': (U, I)}
-flows    = {n: Pi_s[i, j] for n, (i, j) in sectors.items()}
-
-
-# BF Calibration and Initial Guesses
-bf_calib = {'lambda_BF': ('BF_U_LF', 'U', 1),      # (moment, sector, sign)
-            'ybar'     : ('BF_I_LF', 'I', 1),
-            'rho_F'    : ('BF_F_LF', 'F', -1)}
-unknowns = dict(beta_high = 0.98, psi = 1.1, L = 0.6, G = 0.1,
-                Tr = 0.2, B = 4.0, h_I = 0.9, Z_I = 0.9, Phi = 0.0)
-update   = [*pi_calib, *bf_calib, *unknowns, 'tau_ss', 'B_ss']
-
-
-# External Moments for SMM
-wid = dict(gini  = 0.82,             # 2025 Global Wealth Report, UBS
-           bot50 = 0.02,             # Brazilian Wealth Shares (WID.world, 2024), untargeted
-           top10 = 0.719,
-           top1  = 0.395,
-           htm   = 0.35,             # Costa-Junior et al. (2025)
-           mpc   = 0.20,             # Income-Weighted Quarterly MPC: Auclert et al. (2025)
-)
-
-
 # ---------------------------------------------------------------------------
 # 1. External Calibration
-rstar   = 0.05 / 4            # Real Interest Rate (5% Annual)
-kappa_w = 1/6 * (1 + 0.746) * (1 + 0.80 * 0.746) / 0.746
+rstar     = 1.05 ** (1/4) - 1        # Real Interest Rate (5% Annual)
+epsilon_w = 10.1
+beta_w    = 0.80                     # avg beta = omega_I beta_L + (1 - omega_I) beta_H
+mu_w      = epsilon_w / (epsilon_w - 1)
+kappa_w   = (1 - 0.746) * (1 - beta_w * 0.746) / 0.746 / (1 + epsilon_w * 0.5)
+
 
 calibration = dict(
     # --- Household Preferences ---
     eis    = 0.5,                 # EIS = gamma = 0.5 (CRRA sigma = 2)
-    varphi = 0.5,                 # Frisch Elasticity             --- attention!
+    varphi = 0.5,                 # Frisch Elasticity
     h_F    = 1.0,                 # Normalized: Formal Worked Hours
     y_u    = 0.02,                # Subsistence Income, or Home Production
 
     # --- Discount Factor ---
     dbeta     = 0.12,       # SMM: beta_high - beta_low           -> MPC
     omega_I   = 0.50,       # SMM: Share of Impatient Agents      -> Gini
-    q         = 0.01,       # Prob of Redrawing beta Type (Generation = 25y = 100q)
+    q         = 0.01,       # Prob of Redrawing beta Type (Generation = 25y)
 
     # --- Labor market ---
     delta_F = Pi_s[F, U],   # Job Loss from Formal
@@ -70,17 +47,17 @@ calibration = dict(
     pi_I    = 0.40,         # Calibrated: Informal Offer Prob | Employed
     pi_UF   = 0.40,         # Calibrated: Formal Offer Prob   | Unemployed
     pi_UI   = 0.50,         # Calibrated: Informal Offer Prob | Unemployed
-    sig     = 0.40,         # Taste Dispersion
+    sig     = 0.70,         # Taste Dispersion
 
     # --- Sector Productivities ---
-    mu_I    = -0.4,        # SMM: Informal Productivity    -> Average Wage Gap
-    sigma_F = 0.20,        # SMM: Formal Volatility        -> Formal Wage Spread
+    mu_I    = 0.0,         # SMM: Informal Productivity    -> Average Wage Gap
+    sigma_F = 0.40,        # SMM: Formal Volatility        -> Formal Wage Spread
     sigma_I = 0.30,        # SMM: Informal Volatility      -> Informal Wage Spread
     nT      = 7,
 
     # --- Productivity and Asset Grid ---
     rho_e = 0.966,         # SMM: Persistence of Productivity     -> Persistence of Income
-    sd_e  = 0.70,          # SMM: Sd of Persistent Productivity   -> Wage Spread
+    sd_e  = 0.60,          # SMM: Sd of Persistent Productivity   -> Wage Spread
     nE    = 15,
     amin  = 0.0,
     amax  = 100.0,
@@ -94,6 +71,7 @@ calibration = dict(
     # --- Government ---
     tau_l  = 0.13,                         # Labor Tax = 13% of Wage
     tau_d  = 0.34,                         # Profit Tax: IRPJ + CSLL
+    tau_c  = 0.22,                         # Consumption Tax: 13.9% of GDP / 64% C
     BF_w   = pnad['BF_w'],                 # BF Payment / Wage Bill
     B_gdp  = 0.56,                         # Household Assets / GDP (ANBIMA)
     pe_gdp = 0.08,                         # Equity / GDP           (ANBIMA: 12.9% of A)
@@ -109,8 +87,8 @@ calibration = dict(
     # --- Firms ---
     w        = 1.0,             # Normalized
     w_I      = 1.0,             # Normalized (w_I = w)
-    mu       = 1.11,            # Price Markup
-    mu_w     = 1.11,            # Wage Markup
+    mu       = mu_w,            # Price Markup
+    mu_w     = mu_w,            # Wage Markup
     kappa    = 0.10,            # Price PC Slope
     kappa_w  = kappa_w,         # Formal Wage PC Slope
     kappa_wI = 3 * kappa_w,     # Informal Wage PC Slope
@@ -118,71 +96,96 @@ calibration = dict(
 )
 
 
+# ---------------------------------------------------------------------------
+# 2. Internal Calibration
+# Parameters                                name -> (lower, upper, transform)
+smm_space = {
+    'mu_I'    : (-1.0,  0.3,   'lin'),      # log E[exp(theta_I)] - log E[exp(theta_F)]
+    'sigma_F' : ( 0.05, 1.00,  'log'),
+    'sigma_I' : ( 0.05, 1.20,  'log'),
+    'rho_e'   : ( 0.70, 0.999, 'logit'),    # log(e_{t+1}) = rho_e log(e_t) + epsilon_t ~ N(0, sd_e^2)
+    'sd_e'    : ( 0.10, 1.20,  'log'),
+    'dbeta'   : ( 0.00, 0.40,  'logit'),    # beta spread           ->    HtM and MPC
+    'omega_I' : ( 0.05, 0.95,  'logit'),    # share of impatient    ->    Gini
+}
+
+
+# Moments
+mom_wage   = ['xi', 'sd_F', 'sd_I', 'dw_FI', 'dw_IF', 'ac4']      # Wage Distribution
+mom_wealth = ['gini', 'mpc', 'htm']                               # Wealth Distribution
+
+mom_smm    = ['FI', 'IF', *mom_wage, *mom_wealth]                 # Targeted Moments
+pre_block  = {'gap'   : ['mu_I'],                                 # dw_FI, dw_IF
+              'wage'  : ['sigma_F', 'sigma_I', 'sd_e', 'rho_e'],  # xi, sd, ac4
+              'wealth': ['dbeta', 'omega_I']}                     # gini, mpc, htm
+
+
+# Untargeted Moments
+qs        = (25, 50, 75)
+mom_quant = [f'q{q}_{s}' for s in 'FI' for q in qs]               # Wage (quantiles)
+mom_fix   = ['FU', 'IU', 'UF', 'UI', 'BF',
+             'BF_F', 'BF_I', 'BF_U', 'BF_w']                      # Matched by Construction
+mom_pnad  = ['ac1', 'h_ratio', 'BF_w', 'Tr_yF', 'BF']             # Moments from PNAD
+
+
+
+# ---- Helpers --------------------------------------------------------------
 # SMM Estimates
 smm_dir  = 'output/smm/'
 smm_path = {'s': smm_dir + 'smm_starts.csv',     # screen():     the Sobol starts
             'm': smm_dir + 'smm_multi.csv',      # collect():    best of the starts
             'f': smm_dir + 'smm_final.csv'}      # polish():     the estimate
-smm_grid = dict(nA=50, nE=11)     # SMM default
-guess    = dict(calibration)      # Hand-set Start for SMM
 
 smm_est = dict(pd.read_csv(smm_path['f'], index_col=0)['value'].items()
                if USE_SMM and os.path.exists(smm_path['f']) else [])
 calibration |= smm_est
 
 
-
-# ---------------------------------------------------------------------------
-# 2. Internal Calibration
-# Targeted Moments
-mom_risk   = ['ac4']                                             # Idiosyncratic Risk
-mom_wealth = ['gini', 'mpc', 'htm']                              # Wealth Distribution
-mom_quant  = [f'q{q}_{s}' for s in 'FI' for q in qs]             # Wage Distribution
-mom_wage   = ['xi', 'sd_F', 'sd_I', 'dw_FI', 'dw_IF']
-
-mom_flow   = ['FI', 'IF']                                        # Flows that can clip
-mom_smm    = [*mom_flow, *mom_wage, *mom_wealth, *mom_risk]      # Targeted Moments
-pre_block  = [['mu_I'],                                   # dw_FI, dw_IF
-              ['sigma_F', 'sigma_I', 'sd_e', 'rho_e'],    # sd_F, sd_I, xi, ac4
-              ['dbeta', 'omega_I']]                       # gini, mpc, htm
-mom_fix    = ['FU', 'IU', 'BF', 'BF_F', 'BF_I', 'BF_U', 'BF_w']  # Matched by Construction
+# Arrival Rates and Flows Calibration
+pi_calib = {'pi_F': (I, F), 'pi_I': (F, I), 'pi_UF': (U, F), 'pi_UI': (U, I)}
+sectors  = {'FI': (F, I), 'FU': (F, U), 'IF': (I, F),
+            'IU': (I, U), 'UF': (U, F), 'UI': (U, I)}
+flows    = {n: Pi_s[i, j] for n, (i, j) in sectors.items()}
 
 
+# BF Calibration and Initial Guesses
+bf_calib = {'lambda_BF': ('BF_U_LF', 'U', 1),      # (moment, sector, sign)
+            'ybar'     : ('BF_I_LF', 'I', 1),
+            'rho_F'    : ('BF_F_LF', 'F', -1)}
+unknowns = dict(beta_high = 0.98, psi = 1.1, L = 0.6, G = 0.1,
+                Tr = 0.2, B = 4.0, h_I = 0.9, Z_I = 0.9, Phi = 0.0)
+update   = [*pi_calib, *bf_calib, *unknowns, 'tau_css', 'B_ss']
+
+
+
+# ---- Moments: Data --------------------------------------------------------
 # Moments in Data
+wid = dict(gini  = 0.82,             # 2025 Global Wealth Report, UBS
+           bot50 = 0.02,             # Brazilian Wealth Shares (WID.world, 2024)
+           top10 = 0.719,
+           top1  = 0.395,
+           htm   = 0.35,             # Costa-Junior et al. (2025)
+           mpc   = 0.20,             # Income-Weighted Quarterly MPC: Auclert et al. (2025)
+)
+
+
 mom_data = dict(
     # --- Targeted (SMM) ---
     **flows,                                  # Sector Flows
-    **wid,                                    # Wealth Distribution (gini, htm, mpc)
-    **{k: pnad[k] for k in mom_wage},         # Wage Distribution (xi, sd_F, sd_I, E[dlog w | F->I])
-    ac4     = pnad['ac4'],                    # Corr(log w_t, log w_t+4 | F)
+    **wid,                                    # Wealth Distribution
+    **{k: pnad[k] for k in mom_wage},         # Wage Distribution
 
     # --- Untargeted ---
-    **{f'share_{s}': pnad[s] for s in 'FIU'},
-    **{k: pnad[k] for k in mom_quant},        # Wage Quantiles
-    **{f'cut_{s}': pnad[f'cut_{s}'] for s in ('FI', 'IF')},   # P(dlog w < 0)
-    ac1     = pnad['ac1'],                    # Corr(log w_t, log w_t+1 | F)
-    h_ratio = pnad['h_ratio'],                # E[h_I] / E[h_F]
-    BF_w    = pnad['BF_w'],                   # Total Spending / Wage Bill
-    Tr_yF   = pnad['Tr_yF'],                  # Average Transfer / E[y_F]
-    BF      = pnad['BF'],                     # Bolsa Familia Coverage
-    **{f'BF_{s}': pnad[f'BF_{s}'] for s in 'FIU'},   # P(BF | s)
+    **{k: pnad[k] for k in mom_quant},                        # Wage Quantiles
+    **{k: pnad[k] for k in mom_pnad},
+    **{f'BF_{s}': pnad[f'BF_{s}'] for s in 'FIU'},            # P(BF | s)
+    **{f'cut_{s}': pnad[f'cut_{s}'] for s in ('FI', 'IF')},   # P[dlog w < 0]
 )
+
 
 # Design-based SE for the weight matrix
 mom_se = {k: pnad_se[k] if k in pnad_se else 0.0 for k in mom_smm}
-mom_fl = {k: 0.25 * abs(flows[k]) for k in mom_flow}      # Flows: 25% tolerance
-
-
-# ---- Parameters -----------------------------------------------------------
-# SMM Space:      name -> (lower, upper, transform)
-smm_space = {
-    'mu_I'    : (-1.0,  0.3,   'lin'),      # log E[exp(theta_I)] - log E[exp(theta_F)]
-    'sigma_F' : ( 0.05, 1.00,  'log'),
-    'sigma_I' : ( 0.05, 1.20,  'log'),
-    'rho_e'   : ( 0.70, 0.999, 'logit'),    # log(e_{t+1}) = rho_e log(e_t) + epsilon_t
-    'sd_e'    : ( 0.10, 1.20,  'log'),      # e_t ~ N(0, sd_e^2)
-    'dbeta'   : ( 0.00, 0.40,  'logit'),    # beta spread      -> HtM and MPC
-}
+mom_fl = {k: 0.25 * abs(flows[k]) for k in ['FI', 'IF']}      # Flows: 25% tolerance
 
 
 

@@ -163,6 +163,8 @@ hours $h_{i,t}$, which we define $u(c_{i,t}, v_{i,t}) =  u(c_{i,t}) - v(h_{i,t})
 \]
 where $\gamma$ is the elasticity of intertemporal substitution
 (EIS) and $\varphi$ is the Frisch elasticity of labor supply.
+Households save into a mutual fund of liquid assets $a_{i,t}$ with ex-post
+real return $1+r_t^a$, and pays consumption taxes $\tau^c_t$.
 
 A household faces idiosyncratic labor productivity shocks $e_{i,t}$ with
 $\E[e_{i,t}] = 1$, and discount factor heterogeneity
@@ -212,8 +214,6 @@ probability $\bar Q(x,b)$, weighted by the assets distribution, given by
 \bar Q(x) = \E\left[ q(x,a) | x \right].
 \]
 
-Households save into a mutual fund of liquid assets $a_{i,t}$ with ex-post
-real return $1+r_t^a$, and pays consumption taxes $\tau^c_t$.
 Their budget constraint at time $t$ reads:
 \[
 (1-\tau^c_t) c_{i,t} + a_{i,t} = (1+r_t^a) a_{i,t-1} + y_{i,t}(s,e,\theta) + T_t b_{i,t}.
@@ -324,8 +324,7 @@ so the marginal revenue is given by
 $ \partial\left( w_t^I N_t^I \right) / \partial N_t^I = \alpha_I w_t^I $, where $\alpha_I$
 acts as a second markup for the informal market. Because the informal wage is also the most
 flexible nominal wage in the economy, the informal sector absorbs the employment adjustment
-while its wage absorbs the price adjustment, which makes informal income the most volatile
-in a recession.
+while its wage absorbs the price adjustment, which makes informal income the most volatile.
 
 %---------------------------------------------------
 %	UNIONS
@@ -540,12 +539,12 @@ students, to keep the empirical states aligned with the model's. To maintain
 the internal consistency with the model, we use hourly wage moments, which
 help to reduce the part-time informal workers who earn less.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.8\linewidth]{shares_timeseries.png}
-    \caption{Share of Formal, Informal, and Unemployed Households}
-    \label{fig:shares_timeseries}
-\end{figure}
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{shares_timeseries.png}
+%     \caption{Share of Formal, Informal, and Unemployed Households}
+%     \label{fig:shares_timeseries}
+% \end{figure}
 
 
 \begin{figure}[H]
@@ -814,7 +813,6 @@ Database), amonth other statistics untargeted.
 
 %---------------------------------------------------
 % Descriptive Statistics
-\input{ss_comparison.tex}
 
 
 \begin{figure}[H]
@@ -831,6 +829,11 @@ Database), amonth other statistics untargeted.
     \caption{Steady-State Distribution of BF Receipts}
     \label{fig:bf_distribution}
 \end{figure}
+
+
+\input{ss_comparison.tex}
+
+\input{ss_counterfactuals.tex}
 
 
 \begin{figure}[H]
@@ -851,12 +854,12 @@ Database), amonth other statistics untargeted.
 \end{figure}
 
 
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=1\linewidth]{irf_financing.png}
-%     \caption{Response to a Shock in $T$ by Financing Rules}
-%     \label{fig:irf_financing}
-% \end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irf_financing.png}
+    \caption{Response to a Shock in $T$ by Financing Rules}
+    \label{fig:irf_financing}
+\end{figure}
 
 
 \begin{figure}[H]
@@ -865,14 +868,6 @@ Database), amonth other statistics untargeted.
     \caption{Response to a Shock in $T$ by Channel}
     \label{fig:irf_decomposition}
 \end{figure}
-
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=1\linewidth]{irf_antecipated.png}
-%     \caption{Response to a Shock in $T$: Instant vs Antecipated}
-%     \label{fig:irf_antecipated}
-% \end{figure}
 
 \input{cumulative_response.tex}
 
@@ -895,6 +890,16 @@ Database), amonth other statistics untargeted.
 \end{figure}
 
 \input{monetary_cumulative.tex}
+
+
+%---------------------------------------------------
+% Antecipated Shock
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{irf_antecipated.png}
+    \caption{Response to a Shock in $T$: Instant vs Antecipated}
+    \label{fig:irf_antecipated}
+\end{figure}
 
 
 
@@ -940,10 +945,12 @@ This is a natural extension of this paper.
 
 \section*{Appendix}
 
+%---------------------------------------------------
+% Preference Shocks
 \subsubsection*{Preference Shocks}
 
 As in \textcite{caliendo2019trade}, before deciding, the households receive
-an offer $A\in\{F,I,FI\}$ and draws a vector $\{\varepsilon^j\}$ over
+an offer $A\in\{F,I,FI\}$ and drawns a vector $\{\varepsilon^j\}$ over
 the options $j\in\mathcal{S}$, with scale $\sigma_S$\footnote{
     $\sigma_S$ governs the smoothness of the decision. As $\sigma_S \to 0$
     it collapses to the deterministic $\max$.},
@@ -982,27 +989,12 @@ the worker is in sector $s$,
 \qquad \phi_U(U) = 1 - \phi_U(F) - \phi_U(I).
 \end{align*}
 
-The preference shock smoothing parameter is set to $\sigma_S = \mSig$, the least
-possible value such that the steady state converged.
+The preference shock smoothing parameter is set to $\sigma_S = \mSig$, so the
+steady state is internally consistent in offers $\pi_s$.
 
 
-% which means that the marginal value of the assets $V_a$ is
-% \[
-% V_a = \frac{\partial V_{t+1}}{\partial a'}
-% = \frac{\partial V}{\partial c} \cdot \frac{\partial c}{\partial a}
-% = (1+r_{t+1}) c^{-\frac{1}{\gamma}},
-% \]
-
-% and the Envelope Condition tells us that
-% \[
-% u'(c_t) = c_t^{-\frac{1}{\gamma}} = \beta \E_t [V_a^{t+1}]
-% = \beta \E_t \left[ (1+r_{t+1}) c_{t+1}^{-\frac{1}{\gamma}} \right].
-% \]
-
-% Thus, we can create an inverse backwards iteration function of $V_a^{t}$ with
-% respect to $V_a^{t+1}$, which is the central idea of the EGM.
-
-
+%---------------------------------------------------
+% Price NKPC
 \subsubsection*{Price Phillips Curve}
 
 Let $Y_t$ be the aggregate output of the economy, a CES of the intermediary inputs,
@@ -1076,6 +1068,8 @@ where $\kappa = \varepsilon / \theta_p$ and $mc_t = w_t / Z_t$. This environment
 is equivalent to \textcite{calvo1983staggered} in first order around zero inflation.
 
 
+%---------------------------------------------------
+% Wage NKPC
 \subsubsection*{Wage Phillips Curve}
 
 We will use the same setting as \textcite{hagedorn2019fiscal}, but considering just
@@ -1092,7 +1086,7 @@ $\int_0^1 W_{i,t} e_{i,t} \theta_{i,t} h_{i,t} \; di$, implying a demand of
 h_{i,t} = \left( \frac{W_{i,t}}{W_t} \right)^{-\varepsilon_w} h_t.
 \]
 
-The unions sets a nominal wage $\hat W_t$ for an effect unit of labor,
+The unions set a nominal wage $\hat W_t$ for an effect unit of labor,
 $W_{i,t} = \hat W_t$ to maximize profits subject to
 \textcite{rotemberg1982monopolistic}'s wage adjustment costs
 \[
@@ -1103,7 +1097,7 @@ We assume that the union's wage setting problem is to maximize the
 aggregate utility of its members, so
 \[
 V_t^w = \max_{\hat W_t} \int \left[
-u'(c_{i,t}) \frac{(1-\tau_\ell)\hat W_t}{P_t} e_{i,t} \theta_{i,t} h_{i,t}
+\frac{u'(c_{i,t})}{1-\tau^c_t} \frac{(1-\tau_\ell)\hat W_t}{P_t} e_{i,t} \theta_{i,t} h_{i,t}
 - v(h_{i,t}) - e_{i,t} \theta_{i,t} h_t \frac{\theta_w}{2}
 \left( \frac{\hat W_t}{\hat W_{t-1}} - \bar \Pi^w \right)^2
 \right] d\Lambda_t + \bar \beta_F V_{t+1}^w.
@@ -1115,7 +1109,7 @@ $\int_F d\Lambda_t = F_t$, the size of the formal sector,
 \[
 \theta_w (\pi_t^w - \bar \Pi^w) \pi_t^w
 = \varepsilon_w \left[ v'(h_t)
-- \frac{\varepsilon_w-1}{\varepsilon_w} (1-\tau_\ell) w_t \Lambda_t^F \right]
+- \frac{\varepsilon_w-1}{\varepsilon_w} \frac{(1-\tau_\ell) w_t}{1-\tau^c_t} \Lambda_t^F \right]
 + \bar \beta \theta_w (\pi_{t+1}^w - \bar \Pi^w) \pi_{t+1}^w \frac{h_{t+1}}{h_t},
 \]
 where $\Lambda_t^F = \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t / F_t$.
@@ -1124,7 +1118,7 @@ $h_{t+1} = h_t$, since there is no population nor technological growth. Thus,
 \[
 \ln (1+\pi_t^w)
 = \frac{\varepsilon_w}{\theta_w}
-\left[ v'(h_t) - (1-\tau_\ell) w_t \Lambda_t^F
+\left[ v'(h_t) - \frac{(1-\tau_\ell) w_t}{1-\tau^c_t} \Lambda_t^F
 \frac{\varepsilon_w-1}{\varepsilon_w} \right] + \bar \beta \ln (1+\pi_{t+1}^w).
 \]
 
@@ -1133,8 +1127,9 @@ and $\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips curve is
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi}
-- \frac{(1-\tau_\ell) w_t}{\mu_w F_t} \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
-+ \bar \beta \ln (1+\pi_{t+1}^w).
+- \frac{(1-\tau_\ell) w_t}{(1-\tau^c_t)\mu_w F_t}
+    \int_F e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
++ \bar \beta_F \ln (1+\pi_{t+1}^w),
 \]
 
 At the same time, the informal union's problem is exactly the same, but
@@ -1144,12 +1139,42 @@ informal wage is
 \[
 \ln (1+\pi_t^{w_I})
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
-- \frac{\alpha_I w_t^I}{\mu_w I_t} \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
-+ \bar \beta_I \ln (1+\pi_{t+1}^{w_I}).
+- \frac{\alpha_I w_t^I}{(1-\tau^c_t) \mu_w I_t}
+    \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
++ \bar \beta_I \ln (1+\pi_{t+1}^{w_I}),
 \]
 
 
+%---------------------------------------------------
+% Computational Appendix
 \subsubsection*{Computational Appendix}
+
+We solve the model by Sequence-Space Jacobian \parencite{auclert2021using}.
+The steady state iterates on the full transition matrix $\Pi$: (i) guess $\Pi$,
+(ii) solve the household problem, (iii) read $V$ and $V_a$, (iv) rebuild $\Pi$ from
+the choice probabilities derived from the preference shocks, then (v) repeat. Inside
+each iteration, the market-clearing conditions are inverted in closed form, $\beta_H$
+calibrated to the asset market by a secant step, and the arrival rates and BF rules
+calibrated.
+
+Regarding the Simulated Method of Moments (SMM), we use a Nelder–Mead algorithm with
+multiple starts, each one scored on a Sobol grid of $n_A=50$ and $n_E=11$ points.
+The best start is then polished with a block-wise Nelder-Mead, and finally a joint
+Nelder-Mead over all seven parameters. The resulting estimates resolve
+\[
+\hat\vartheta = \arg\min\ g(\vartheta)' W g(\vartheta),
+\qquad \text{with } W = S^{-1}, S = \mathrm{diag}(\hat{\sigma}^2_m + \underline{\sigma}^2),
+\]
+where $\underline{\sigma} = 0.05$ is a specification floor.
+
+The cross-sectional moments are uninformative about $mu_I$, so we use the panel to
+identify it. Both $\Delta_{FI}^y = \E[\Delta \ln y_t | F\to I]$ and
+$\Delta_{IF}^y = \E[\Delta \ln y_t | I\to F]$ jointly identify $\mu_I$, because a
+switcher keep the same $e$, while drawning a new $\theta$.
+
+The estimated $\mu_I$ is indistinct from $0$, which means the wage gap $\xi=\mDatXi$
+is composition, not technology. That is also the standard finding in the Brazilian
+fixed-effects literature \parencite{bargain2011earnings}.
 
 % ## 4. Data appendix
 
@@ -1157,48 +1182,6 @@ informal wage is
 %   cluster bootstrap with 200 replicates, resampling PSUs within strata, for everything built on the
 %   panel ($ac_1$, $ac_4$, $dw_{FI}$, $dw_{IF}$, $cut_{FI}$, $cut_{IF}$).
 
-% ---
-
-% ## 5. Computational appendix
-
-% ### 5.1 Solution
-% Sequence-space Jacobian (Auclert et al. 2021). The steady state iterates on the full transition
-% matrix $\Pi$: guess $\Pi$ → solve the household problem → read $V$ and $V_a$ → rebuild $\Pi$ from
-% the Gumbel choice probabilities → repeat. Inside each iteration the market-clearing unknowns are
-% inverted in closed form, $\beta^{high}$ is calibrated to the asset market by a secant step, and the
-% arrival rates and the BF rule are recalibrated. Convergence: $|\Delta\Pi| < 10^{-6}$,
-% $|A - B| < 10^{-5}\,|B|$.
-
-% ### 5.2 SMM
-% $\hat\vartheta = \arg\min\ g(\vartheta)' W g(\vartheta)$ with $W = S^{-1}$ and
-% $S = \mathrm{diag}(\hat{\sigma}^2_m + \underline{\sigma}^2)$, where $\underline{\sigma} = 0.05$ is a
-% specification floor: without it the design-based standard errors (all below 0.01) would make the
-% criterion numerically singular and would assert a precision the model does not have.
-
-% Pipeline, each stage with its grid:
-
-% | Stage | Grid | What it does |
-% |---|---|---|
-% | `screen` | $n_A=50$, $n_e=11$ | Score 16 Sobol draws, keep the 4 best, drop any that cannot match the flows |
-% | `multistart` | $n_A=50$, $n_e=11$ | One Nelder–Mead per start, in parallel |
-% | `collect` | full | Re-score every start on the full grid: the coarse ranking can put a phantom first |
-% | `pre_smm` | $n_A=50$, $n_e=11$ | Block-wise warm-up, each block scored on the full moment set |
-% | `polish` | full | Joint Nelder–Mead over all six parameters |
-% | `inference` | full | $G$ by central differences, sandwich s.e., Hansen $J$ |
-
-% ### 5.3 Numerical notes worth one paragraph each
-% - **Simplex.** scipy's default Nelder–Mead simplex is multiplicative ($x_j \cdot 1.05$), which is
-%   0.1–1.5% of the box for a log or logit coordinate and zero for $x = 0$ — parameters freeze. The
-%   initial simplex is built instead as 10% of each parameter's box, mapped back through the
-%   transform.
-% - **Finite differences.** $G$ is differenced in parameter units, not transformed units.
-% - **Grid convergence.** $sd_F$ is 0.662 at $n_e = 11$ against 0.761 at $n_e = 15$ and 0.763 at
-%   $n_e = 19$: the estimate is reported at $n_e = 15$, and $n_A = 50$ against $n_A = 100$ moves the
-%   wealth moments by less than 0.011.
-% - **Summary statistics over quantiles.** Quantiles of the model wage distribution locate specific
-%   atoms of the discrete $\theta \otimes e$ grid and move with $n_e$; standard deviations integrate
-%   over the whole distribution and do not. The criterion moved 444 → 553 → 473 across grids with
-%   quantile moments and 68.0 → 59.9 → 60.2 without.
 
 % ### 5.4 Identification and sensitivity
 % Report the singular values of $G$, the condition number, the weakest direction, and the
@@ -1211,6 +1194,13 @@ informal wage is
 % the model's only route to a cross-sectional gap larger than the within-worker gap is negative
 % sorting of permanent ability into informality, and a rejection is evidence that this channel alone
 % is not strong enough. That is a finding, not a failure.
+
+% Because the model is barely over-identified — nine moments net of the four flows, which the arrival
+% rates match by construction, against seven estimated parameters — the Hansen statistic has two degrees
+% of freedom and we do not read it as a test. We report $J$ and its decomposition across moments as a
+% specification diagnostic: it locates where the model fails rather than whether it fails, and the
+% standard errors are scaled by $\sqrt{J/\mathrm{df}}$ so that the reported precision already absorbs
+% that misspecification.
 
 \input{smm_se.tex}
 

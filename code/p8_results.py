@@ -48,34 +48,34 @@ LABELS = {
     'C'    : 'Consumption $C$',
     'N_F'  : 'Formal Labor Offer $N_F$',
     'N_I'  : 'Informal Labor Offer $N_I$',
-    'F'    : 'Formal share $\\alpha_F$',
-    'I'    : 'Informal share $\\alpha_I$',
+    'F'    : 'Formal Share $\\alpha_F$',
+    'I'    : 'Informal Share $\\alpha_I$',
     'U'    : 'Unemployment $\\alpha_U$',
-    'BF'   : 'BF recipients $BF$',
-    'w'    : 'Real wage $w$',
-    'w_I'  : 'Informal wage $w_I$',
+    'BF'   : 'BF Recipients $BF$',
+    'w'    : 'Real Wage $w$',
+    'w_I'  : 'Informal Wage $w_I$',
     'pi'   : 'Inflation $\\pi$',
     'pi_w' : 'Wage Inflation $\\pi^w$',
     'pi_wI': 'Informal Wage Inflation $\\pi^{w,I}$',
-    'r'    : 'Real rate $r$',
-    'i'    : 'Nominal rate $i$',
+    'r'    : 'Real Rate $r$',
+    'i'    : 'Nominal Rate $i$',
     'B'    : 'Real Debt $B$',
     'A'    : 'Assets $A$',
-    'G'    : 'Gov. spending $G$',
-    'tau_c': 'Consumption tax $\\tau_c$',
+    'G'    : 'Gov. Spending $G$',
+    'tau_c': 'Consumption Tax $\\tau_c$',
     'Formal Share'     : r'Formal Share $\alpha_F$',
     'Informal Share'   : r'Informal Share $\alpha_I$',
     'Unemployed Share' : r'Unemployment $\alpha_U$',
     'HtM'              : r'Hand-to-Mouth',
     'Wealth Gini'      : r'Wealth Gini',
-    'Bottom 50%'       : r'Wealth Share, Bottom 50\%',
-    'Top 10%'          : r'Wealth Share, Top 10\%',
+    'Bottom 50%'       : r'Bottom 50\%',
+    'Top 10%'          : r'Top 10\%',
     'Aggregate C'      : r'Consumption $C$',
     'BF Spending / GDP': r'BF Spending / GDP',
     'Welfare E[V]'     : r'Welfare, CEV',
 }
 
-cov_path = 'data/final/pnad_bf_coverage.csv'      # P(BF | wage, status), from p4
+cov_path = 'data/final/pnad_bf_coverage.csv'
 trs_path = 'data/final/pnad_transition_matrix.csv'
 cal_path = 'data/final/pnad_calibration.csv'
 inc_path = 'data/final/pnad_income_dist.csv'
@@ -109,8 +109,8 @@ def _cev(v1, v0, eis, vc1):
     return ((v0 + vc1 - v1) / vc1) ** (1 / (1 - 1 / eis)) - 1
 
 
-def _panels(n):         # Flattened axes grid: 1 row to 2 panels, 2 rows to 6, then 3.
-    nrows = 1 if n <= 2 else (2 if n <= 6 else 3)
+def _panels(n):         # Flattened axes grid: 1 row to 2 panels, 2 rows to 8, then 3.
+    nrows = 1 if n <= 2 else (2 if n <= 8 else 3)
     ncols = -(-n // nrows)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
     return fig, np.array(axes).flatten()
@@ -459,12 +459,14 @@ def plot_descriptives(ss, n_q=5, savepath=None):
 
     # The same cut, split by patience: who sorts into informality
     D5 = _reshape_hh(D, ss)                       # (3, nF x nT, 2, nE, nA)
-    for b, (lab, ls) in enumerate([('Impatient', '--'), ('Patient', '-')]):
+    for b, (lab, ls, mk) in enumerate([('Impatient', (0, (4, 2)), 's'),
+                                       ('Patient', '-', 'o')]):
         Db = D5[:, :, b].sum((1, 2))              # (3, nA): one row per sector
         sh, _ = _by_wealth(Db, qidx, n_q, 1)
         for i, key in enumerate(('F', 'I')):
-            axes[1, 1].plot(x, sh[i], color=COLORS[key], ls=ls, lw=2.0, marker='o',
-                            ms=4, label=f'{STATES[key]}, {lab}')
+            axes[1, 1].plot(x, sh[i], color=COLORS[key], ls=ls, lw=2.0, marker=mk,
+                            ms=6, mfc='white' if b == 0 else COLORS[key],
+                            label=f'{STATES[key]}, {lab}')      # hollow square = impatient
     _axis(axes[1, 1], ylabel='Share', title='Formality by Wealth and Patience',
           legend=True, fontsize=8)
 
@@ -592,7 +594,7 @@ def plot_impc(G_hh, h_ant=4, T_plot=20, key='C', savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_irf(irf_dict, variables=('C', 'Y', 'Y_I', 'I', 'U', 'BF', 'pi', 'w', 'w_I'),
+def plot_irf(irf_dict, variables=('C', 'Y', 'Y_I', 'I', 'BF', 'pi', 'w', 'w_I'),
              title='CCT Shock (T)', T_plot=30, savepath=None):
     # One line per economy in `irf_dict`, one panel per variable.
     def draw(ax, v):
@@ -604,7 +606,7 @@ def plot_irf(irf_dict, variables=('C', 'Y', 'Y_I', 'I', 'U', 'BF', 'pi', 'w', 'w
 
 
 def plot_irf_decomposition(irf_ins, irf_full, irf_pe=None,
-                           variables=('C', 'Y', 'Y_I', 'I', 'U', 'BF', 'pi', 'w', 'w_I'),
+                           variables=('C', 'Y', 'Y_I', 'I', 'BF', 'pi', 'w', 'w_I'),
                            T_plot=30, savepath=None):
     # Insurance (Pi frozen) vs Full (Pi moving); shade the composition gap.
     x = np.arange(T_plot)
@@ -620,7 +622,7 @@ def plot_irf_decomposition(irf_ins, irf_full, irf_pe=None,
     _irf_panels(variables, T_plot, draw, savepath=savepath)
 
 
-def plot_irf_financing(irf_a, irf_b, labels=('Alternative', 'Baseline'),
+def plot_irf_financing(irf_a, irf_b, labels=('Revenue-Neutral', 'Debt-Financed'),
                        variables=('C', 'Y', 'pi', 'w', 'r', 'B'),
                        T_plot=30, savepath=None):
     # Two financing paths of the same shock. `labels` names them: the caller knows which.
@@ -673,35 +675,38 @@ def _ss_cell(k, x, delta=False):
     return f'{x:+.3f}' if delta else f'{x:.3f}'
 
 
+SHORT = {'Perfect CCT': 'Pft CCT'}        # the Delta headers have to fit the page
+
 def compare_ss(economies, savepath=None, label='tab:counterfactuals'):
     # Table: one column per steady state in `economies`, the first one the reference.
-    # One Delta per counterfactual, reference - counterfactual, so BF - No BF > 0.
+    # One Delta per counterfactual, counterfactual - reference. The welfare row is the
+    # CEV of each counterfactual over the reference.
     names = list(economies)
     stats = {n: _ss_stats(economies[n]) for n in names}
     ref, cf = stats[names[0]], names[1:]
 
-    rows = [' & '.join([LABELS.get(k, k)] + [_ss_cell(k, stats[n][k]) for n in names]
-                       + [_ss_cell(k, ref[k] - stats[n][k], delta=True) for n in cf])
-            for k in ref if not k.startswith(('Welfare', '_'))]
+    rows = [' & '.join([LABELS.get(q, q)] + [_ss_cell(q, stats[n][q]) for n in names]
+                       + [_ss_cell(q, stats[n][q] - ref[q], delta=True) for n in cf])
+            for q in ref if not q.startswith(('Welfare', '_'))]
 
-    # CEV: the consumption gain the reference delivers, in the counterfactual's units
-    cev = [_cev(stats[n]['Welfare E[V]'], ref['Welfare E[V]'],
-                float(economies[n]['eis']), stats[n]['_Vc']) for n in cf]
+    cev = [_cev(ref['Welfare E[V]'], stats[n]['Welfare E[V]'],
+                float(economies[names[0]]['eis']), ref['_Vc']) for n in cf]
     rows += [' & '.join([LABELS['Welfare E[V]']]
                         + [f"{stats[n]['Welfare E[V]']:.3f}" for n in names]
                         + [rf'{_pct(c, 2, "+")}\%' for c in cev])]
 
-    head = [' & ' + ' & '.join(names) + ''.join(rf' & $\Delta$ {n}' for n in cf)]
-    cap  = (rf"Steady State: {names[0]} vs.\ {names[1]}" if len(names) == 2 else
-            rf"Steady State: {names[0]} and Counterfactuals")
-    return _tex_table(head, rows, cap, label,
-                      'l' + 'c' * (2 * len(names) - 1), savepath=savepath)
+    cols = names + ([rf'$\Delta$ {SHORT.get(n, n)}' for n in cf] if len(cf) > 1
+                    else [r'$\Delta$'])
+    cap = (rf"Steady State: {names[1]} vs.\ {names[0]}" if len(cf) == 1 else
+           rf"Steady State: {names[0]} and Counterfactuals")
+    return _tex_table([' & ' + ' & '.join(cols)], rows, cap, label,
+                      'l' + 'c' * len(cols), savepath=savepath)
 
 
-def compare_bf_ss(ss_bf, ss_nobf, labels=('With BF', 'No BF'),
+def compare_bf_ss(ss_bf, ss_nobf, labels=('No BF', 'With BF'),
                   savepath=None, label='tab:bf_ss'):
-    # Two-economy case: Bolsa Familia is the reference, so Delta = With BF - No BF.
-    return compare_ss({labels[0]: ss_bf, labels[1]: ss_nobf},
+    # Two-economy case: the Tr = 0 counterfactual is the reference, Delta = With BF - No BF.
+    return compare_ss({labels[0]: ss_nobf, labels[1]: ss_bf},
                       savepath=savepath, label=label)
 
 

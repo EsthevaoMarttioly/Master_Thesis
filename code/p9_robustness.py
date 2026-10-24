@@ -1,8 +1,8 @@
 #=
 # ---------------------------------------------------------------------------
 # DESCRIPTION
-# Counterfactual policies and robustness: re-solve the Steady State under another
-# Bolsa Familia rule, or at alternative external parameters.
+# Counterfactual policies and robustness: re-solve the Steady State under
+# another Bolsa Familia rule, or at alternative external parameters.
 # ---------------------------------------------------------------------------
 #=
 
@@ -18,16 +18,6 @@ from code.p8_results import _ss_stats, _cev, _tex_table
 # ---- Config ---------------------------------------------------------------
 rob_path = 'output/smm/robustness.pkl'     # cache a variant
 
-cf_grid  = {r"No Bolsa Fam\'ilia"  : {'lambda_BF': 0.0, 'BF_w': 0.0},
-            'Perfect Means Test'  : {'lambda_BF': 1.0, 'rho_F': 1.0, 'rho_I': 1.0}}
-cf_keep  = [*update, 'h_F', 'w_I', 'tau_c', 'Pi', 'Qb']   # counterfactual=True moves these
-
-rob_grid = {'eis'     : (0.30, 0.70),      # EIS: log and 2.0 are run on their own
-            'varphi'  : (0.25, 1.00),      # Frisch elasticity
-            'alpha_I' : (0.75, 0.95),      # Informal returns to scale
-            'sig'     : (0.30, 0.55),      # Taste dispersion
-            'y_u'     : (0.00, 0.04)}      # Unemployment income
-
 rob_cols = ['Informal Share', 'Unemployed Share', 'HtM', 'Wealth Gini',
             'Top 10%', 'Aggregate C', 'BF Spending / GDP']
 
@@ -38,17 +28,21 @@ rob_head = {'Informal Share': r'$\alpha_I$', 'Unemployed Share': r'$\alpha_U$',
 rob_pct = {'Informal Share', 'Unemployed Share', 'HtM', 'Top 10%',
            'Wealth Gini', 'BF Spending / GDP'}
 
-rob_sym = {'eis': r'\sigma^{-1}', 'varphi': r'\varphi', 'alpha_I': r'\alpha_I',
-           'sig': r'\sigma_S', 'y_u': 'y^U',
-           'BF_w': r'\mathcal{T}/wN'}
+rob_sym = {'eis': r'\gamma', 'varphi': r'\varphi', 'alpha_I': r'\alpha_I',
+           'sig': r'\sigma_S', 'y_u': 'y^U', 'BF_w': r'T/wN'}
 
 
 # ---------------------------------------------------------------------------
 # 1. Counterfactual Policies
 # ---------------------------------------------------------------------------
+cf_grid  = {'No BF'      : {'lambda_BF': 0.0, 'BF_w': 0.0},
+            'Perfect CCT': {'lambda_BF': 1.0, 'rho_F': 1.0, 'rho_I': 1.0}}
+
+cf_keep  = [*update, 'h_F', 'w_I', 'tau_c', 'Pi', 'Qb']   # counterfactual=True moves
+
+
 def counterfactuals(solve_fn, calib=None, grid=cf_grid):
-    # One steady state per rule in `grid`, each with the calibration it converged to.
-    # solve_fn(cal, **kw) -> ss.  BF_w is held, so Tr rebalances: same budget, new rule.
+    # One steady state per `grid`, the calibration it converged to.
     calib, out = dict(calib or calibration), {}
     for name, rule in grid.items():
         cal = {**calib, **rule}
@@ -63,6 +57,13 @@ def counterfactuals(solve_fn, calib=None, grid=cf_grid):
 # ---------------------------------------------------------------------------
 # 2. Robustness Tests
 # ---------------------------------------------------------------------------
+rob_grid = {'eis'     : (0.30, 0.70),           # EIS: log and 2.0
+            'varphi'  : (0.25, 1.00),           # Frisch Elasticity
+            'alpha_I' : (0.75, 0.95),           # Informal Returns to Scale
+            'sig'     : (0.40, 0.90),           # Taste Dispersion
+            'y_u'     : (0.00, 0.04)}           # Unemployment Income
+
+
 def _stats(solve_fn, calib, nobf):
     # Statistics of one economy, plus the CEV of removing Bolsa Familia.
     s1 = _ss_stats(solve_fn(calib))
@@ -73,8 +74,7 @@ def _stats(solve_fn, calib, nobf):
 
 
 def robustness(solve_fn, calib=None, grid=rob_grid, nobf=True, path=rob_path):
-    """Solve every variant and cache it.  solve_fn(cal, **kw) -> ss.
-    Re-run to fill in only what a previous call could not solve."""
+    # Solve every variant and cache it.  solve_fn(cal, **kw) -> ss.
     calib = dict(calib or calibration)
     out   = pickle.load(open(path, 'rb')) if os.path.exists(path) else {}
     jobs  = [(None, None)] + [(k, v) for k, vs in grid.items() for v in vs]
@@ -108,7 +108,7 @@ def bf_sizes(solve_fn, calib=None, mult=(0, 0.5, 1, 1.5, 2), path=rob_path):
             print(f"  {key:16s} no steady state: {err}", flush=True)
         with open(path, 'wb') as fobj: pickle.dump(out, fobj)
 
-    v0 = out.get(f'BF_w={0.0:.4f}')                        # CEV against no transfer
+    v0 = out.get(f'BF_w={0.0:.4f}')                # CEV against no transfer
     for m in mult:
         s = out.get(f'BF_w={m * base:.4f}')
         if s and v0: s['CEV'] = _cev(v0['Welfare E[V]'], s['Welfare E[V]'],
@@ -158,8 +158,7 @@ def bf_size_table(rob, calib=None, mult=(0, 0.5, 1, 1.5, 2), cols=rob_cols,
                                      r' \,(no BF)' if m == 0 else ''),
              rob.get(f'BF_w={m * base:.4f}')) for m in mult]
 
-    head = [r'$\mathcal{T} / wN$ & ' + ' & '.join(rob_head.get(c, c) for c in cols)
-            + r' & CEV (\%)']
+    head = [r'$T/wN$ & ' + ' & '.join(rob_head.get(c, c) for c in cols) + r' & CEV (\%)']
     return _tex_table(head, _body(rows, cols, True),
                       r"Steady State over the Size of Bolsa Fam\'ilia",
                       label, 'l' + 'c' * (len(cols) + 1), savepath=savepath)
@@ -169,15 +168,15 @@ def bf_size_table(rob, calib=None, mult=(0, 0.5, 1, 1.5, 2), cols=rob_cols,
 # 4. Dynamics
 # ---------------------------------------------------------------------------
 # kappa_wI, kappa_w, and phi move only Dynamics
-dyn_grid = {'kappa_wI': (0.10, 0.60),      # Informal wage rigidity
-            'kappa_w' : (0.05, 0.20),      # Formal wage rigidity
-            'phi'     : (1.05, 2.00)}      # Taylor rule
+dyn_grid = {'kappa_wI': (0.10, 0.60),      # Informal Wage Rigidity
+            'kappa_w' : (0.05, 0.20),      # Formal Wage Rigidity
+            'phi'     : (1.05, 2.00)}      # Taylor Rule
 
 
-def dyn_robustness(build_fn, shock, dZ, grid=dyn_grid, var=('C', 'Y', 'I', 'BF'),
+def dyn_robustness(build_fn, shock, dZ, grid=dyn_grid,
+                   var=('C', 'Y', 'I', 'w', 'pi', 'BF'),
                    horizon=8, savepath=None, label='tab:dyn_robustness'):
-    """Cumulative response over `horizon` quarters under alternative parameters.
-    build_fn(calib) -> the irf_builder closure of p6_solve."""
+    # Cumulative response over `horizon` quarters under alternative parameters.
     rows, base = [], None
     for k, vs in [(None, (None,))] + list(grid.items()):
         for v in vs:
@@ -192,9 +191,6 @@ def dyn_robustness(build_fn, shock, dZ, grid=dyn_grid, var=('C', 'Y', 'I', 'BF')
                                    + [f'{100 * (c / b - 1):+.1f}' if np.isfinite(c) and b
                                       else '--' for c, b in zip(cum[:1], base[:1])]))
 
-    head = [r'Parameter & ' + ' & '.join(f'$\\sum {x}$' for x in var)
-            + r' & $\Delta C$ (\%)']
-    return _tex_table(head, rows,
-                      f'Robustness: Cumulative Response to a {shock} Shock '
-                      f'({horizon} Quarters)', label, 'l' + 'c' * (len(var) + 1),
-                      savepath=savepath)
+    head = [r'Parameter & ' + ' & '.join(f'$\\sum {x}$' for x in var) + r' & $\Delta C$ (\%)']
+    return _tex_table(head, rows, f'Robustness: Cumulative Response to a {shock} Shock '
+                      f'({horizon} Quarters)', label, 'l' + 'c' * (len(var) + 1), savepath=savepath)

@@ -23,7 +23,7 @@ alpha = np.array(pnad[['F', 'I', 'U']])
 # 1. External Calibration
 rstar     = 1.05 ** (1/4) - 1        # Real Interest Rate (5% Annual)
 epsilon_w = 10.1
-beta_w    = 0.80                     # avg beta = omega_I beta_L + (1 - omega_I) beta_H
+beta_w    = 0.794 * 0.766 + (1 - 0.794) * 0.979       # Avg beta =~ 0.81
 mu_w      = epsilon_w / (epsilon_w - 1)
 kappa_w   = (1 - 0.746) * (1 - beta_w * 0.746) / 0.746 / (1 + epsilon_w * 0.5)
 
@@ -161,22 +161,22 @@ update   = [*pi_calib, *bf_calib, *unknowns, 'tau_css', 'B_ss']
 # ---- Moments: Data --------------------------------------------------------
 # Moments in Data
 wid = dict(gini  = 0.82,             # 2025 Global Wealth Report, UBS
-           bot50 = 0.02,             # Brazilian Wealth Shares (WID.world, 2024)
-           top10 = 0.719,
-           top1  = 0.395,
            htm   = 0.35,             # Costa-Junior et al. (2025)
            mpc   = 0.20,             # Income-Weighted Quarterly MPC: Auclert et al. (2025)
+           top1  = 0.395,            # Brazilian Wealth Shares (WID.world, 2024)
+           top10 = 0.719,
+           bot50 = 0.02,
 )
 
 
 mom_data = dict(
     # --- Targeted (SMM) ---
     **flows,                                  # Sector Flows
-    **wid,                                    # Wealth Distribution
     **{k: pnad[k] for k in mom_wage},         # Wage Distribution
+    **{k: pnad[k] for k in mom_quant},        # Wage Quantiles (untargeted)
+    **wid,                                    # Wealth Distribution
 
     # --- Untargeted ---
-    **{k: pnad[k] for k in mom_quant},                        # Wage Quantiles
     **{k: pnad[k] for k in mom_pnad},
     **{f'BF_{s}': pnad[f'BF_{s}'] for s in 'FIU'},            # P(BF | s)
     **{f'cut_{s}': pnad[f'cut_{s}'] for s in ('FI', 'IF')},   # P[dlog w < 0]
@@ -280,7 +280,7 @@ def model_moments(ss, lags=(1, 4)):
     ref = np.log(dw @ np.exp(logy[:blk]) / dw.sum())   # E[y|F]
     logw = logy - np.r_[np.full(blk, np.log(g('h_F'))),
                         np.full(blk, np.log(g('h_I'))), np.zeros(d.size - 2 * blk)]
-    q_F = _wquantile(logw[:blk] - ref, dw, qs)         # h_F = 1, so ref is also E[w|F]
+    q_F = _wquantile(logw[:blk] - ref, dw, qs)
     q_I = _wquantile(logw[blk:2*blk] - ref, d[blk:2*blk], qs)
     m |= {f'q{q}_F': v for q, v in zip(qs, q_F)}
     m |= {f'q{q}_I': v for q, v in zip(qs, q_I)}
@@ -298,7 +298,7 @@ def model_moments(ss, lags=(1, 4)):
     m['Tr_yF'] = g('Tr') / np.exp(ref)
     m['T_BFF'] = 1 / g('rho_F') * 3           # Avg Time for Formals lose the Benefit (months)
 
-    # Persistence over the formal stayers, and the wage change on a switch
+    # Persistence over formal stayers, and wage change on a switch
     mF = np.asarray(hhi['f'])[:, 0] > 0.5
     mI = np.asarray(hhi['i'])[:, 0] > 0.5
     for h in lags: m[f'ac{h}'] = _lag_corr(d, ss['Pi'], logw, h, mF, mF)

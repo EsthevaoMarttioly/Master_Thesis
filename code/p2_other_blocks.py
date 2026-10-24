@@ -78,8 +78,8 @@ def finance(Div, p_e, r, B):
 def nkpc_ss(w, mu, tau_c):
     Z = mu * w
     tau_css = tau_c
-    nkpc = 0.0
-    return Z, tau_css, nkpc
+    nkpc = pi_w = pi_wI = 0.0
+    return Z, tau_css, nkpc, pi_w, pi_wI
 
 @simple
 def union_ss(w, w_I, h_F, h_I, UC_F, UC_I, F, I, tau_l, tau_c, mu_w, alpha_I, psi, varphi):

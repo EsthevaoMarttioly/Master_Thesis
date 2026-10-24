@@ -75,8 +75,13 @@ def _nm(obj, x0, maxiter, frac=0.10):
                                    initial_simplex=_simplex(x0, obj.space, frac))).x
     except KeyboardInterrupt:
         print(f"\n--- Interrupted at {obj.n} solves", flush=True)
-        x0 = _to_x(obj.best, obj.space)
-    return _to_p(x0, obj.space)
+    return obj.best              # NM can end on a vertex worse than one it already saw
+
+
+def _weights(se=mom_se, floor=0.05):
+    # Var(gap) = sampling + specification error (floor). W = S^-1, so it is efficient.
+    S = np.diag([se[k] ** 2 + mom_fl.get(k, floor) ** 2 for k in mom_smm])
+    return S, np.diag(1.0 / np.diag(S))
 
 
 def _fj(J):           # J's notation:  59.3 | 223 | 1.0e+06
@@ -108,9 +113,7 @@ class SMM:
         self.cal0  = {k: v for k, v in (calibration if calib is None else calib).items()
                       if k not in ('Pi', 'Qb')}      # a stale Pi starts every solve far away
         self.space = space
-        # Var(gap) = sampling + specification error (floor). W = S^-1, so it is efficient.
-        self.S = np.diag([se[k] ** 2 + mom_fl.get(k, floor) ** 2 for k in mom_smm])
-        self.W = np.diag(1.0 / np.diag(self.S))
+        self.S, self.W = _weights(se, floor)
         self.coarse  = coarse or {}                 # e.g. smm_grid; {} is the full grid
         self.logpath, self.every = logpath, every   # checkpoint, a run takes hours
         self.verbose, self.log, self.n = verbose, [], 0
@@ -121,7 +124,7 @@ class SMM:
         # Run the model and get moments
         cal = {**self.cal0, **self._warm, **p, **(self.coarse if coarse else {})}
         ss  = solve_ss(self.model, cal, flows=flows, strict=False, damp=0.5,
-                       maxit=150 if coarse else 400,               # the coarse grid is itself approximate
+                       maxit=300 if coarse else 400,               # damp=0.5 needs ~2.5x the its
                        tol=5e-5 if coarse else 1e-6, stol=1e-3 if coarse else 1e-4,
                        bmaxit=1000 if coarse else 5000)            # a slow point is a bad point
         cal.update({k: float(ss[k]) for k in update})
@@ -254,11 +257,13 @@ def polish(obj, p0, blocks=pre_block, coarse=None, maxiter=60, frac=0.03, pool=8
         x = _to_x(p, sub.space)
         if pool: x = min([x, *sobol_starts(pool, sub.space)], key=sub)
         p.update(_nm(sub, x, maxiter))
-        obj._warm = sub._warm                        # the converged rates start the next pass
-        print(f"--- Block [{name}]   J = {_fj(sub._best[0])}   {sub.n} solves"
+        g, *_ = sub.gaps({q: p[q] for q in b})       # re-score: the warm start is the
+        obj._warm = sub._warm                        # chosen point, not the last vertex
+        print(f"--- Block [{name}]   J = {_fj(g @ obj.W @ g)}   {sub.n} solves"
               f"   ({(time.time()-t0)/60:.0f}min)\n    "
               + "  ".join(f"{k}={p[k]:.4f}" for k in b), flush=True)
 
+    if blocks is not None: save_res(dict(params=p), 'm')
     print("\n--- Joint polish from:",
           " ".join(f"{k}={p[k]:.3f}" for k in obj.space), flush=True)
     obj.coarse = dict(coarse) if coarse else {}      # the full grid, unless asked otherwise
@@ -343,12 +348,17 @@ def jtest(g, G, W, S, n_obs=1):
     return stat, df, (1 - chi2.cdf(stat, df) if df > 0 else np.nan)
 
 
+PARAM = {'mu_I': r'$\mu_I$', 'sigma_F': r'$\sigma_F$', 'sigma_I': r'$\sigma_I$',
+         'rho_e': r'$\rho_e$', 'sd_e': r'$\sigma_e$', 'dbeta': r'$\Delta\beta$',
+         'omega_I': r'$\omega_I$', 'sig': r'$\sigma_S$'}
+
 def inference(res, obj, G=None, step=0.05, coarse=False, scale=True,
               savepath=None, label='tab:smm_se'):
     # Classical Minimum Distance: S is already Var(moment), so n_obs = 1. G on the full grid.
     from scipy.stats import norm
     from code.p8_results import _tex_table
     if G is None: G = jacobian(obj, res['params'], step=step, coarse=coarse)
+    sensitivity(G, obj.W)                         # which moment moves which parameter
     i = np.ix_(MID, MID)
     se = std_errors(G[MID], obj.W[i], obj.S[i])[0]
     stat, df, pval = jtest(res['g'][MID], G[MID], obj.W[i], obj.S[i])
@@ -363,8 +373,7 @@ def inference(res, obj, G=None, step=0.05, coarse=False, scale=True,
     print(tbl.round(4).to_string())
     print(f"Hansen J = {stat:.3f}   df = {df}   p = {pval:.3f}   SE scale = {k:.2f}")
 
-    esc  = lambda x: x.replace('_', r'\_')
-    rows = [f'{esc(n)} & {r.estimate:.3f} & {r["s.e."]:.3f} & {r.t:.2f} & {r.p:.3f}'
+    rows = [f'{PARAM.get(n, n)} & {r.estimate:.3f} & {r["s.e."]:.3f} & {r.t:.2f} & {r.p:.3f}'
             f' & {r.lower:.2f} & {r.upper:.3f}' for n, r in tbl.iterrows()]
     rows += [r'\midrule', rf'Hansen $J$ & \multicolumn{{6}}{{c}}'
              rf'{{{stat:.2f}  (df {df}, $p$ = {pval:.3f})}}']
@@ -376,12 +385,12 @@ def inference(res, obj, G=None, step=0.05, coarse=False, scale=True,
 # ---------------------------------------------------------------------------
 # Report
 MOMENT = {'xi': r'$\xi$, hourly wage gap', 'sd_F': r'sd$(\log y_F)$',
-          'sd_I': r'sd$(\log y_I)$', 'ac4': r'$\rho_4^y$',
+          'sd_I': r'sd$(\log y_I)$', 'ac4': r'$\mathrm{Corr}_4(\log y)$',
           'dw_FI': r'$\mathbb{E}[\Delta \log y \mid F \to I]$',
           'dw_IF': r'$\mathbb{E}[\Delta \log y \mid I \to F]$',
           'gini': 'Wealth Gini', 'mpc': 'Aggregate MPC', 'htm': 'Hand-to-Mouth',
           'bot50': r'Wealth, Bottom 50\%', 'top10': r'Wealth, Top 10\%',
-          'top1': r'Wealth, Top 1\%', 'ac1': r'$\rho_1(\log y)$',
+          'top1': r'Wealth, Top 1\%', 'ac1': r'$\mathrm{Corr}_1(\log y)$',
           'h_ratio': r'$h^I / h^F$', 'Tr_yF': r'$T / \mathbb{E}[y^F]$',
           'cut_FI': r'$P(\Delta \log y < 0 \mid F \to I)$',
           'cut_IF': r'$P(\Delta \log y < 0 \mid I \to F)$'}
@@ -397,15 +406,22 @@ def report(res, savepath=None, label='tab:moments'):
                   key=lambda k: k not in mom_smm)       # stable sort: targeted first
     gap  = lambda k: (mom_data[k], mod[k], mod[k] - mom_data[k])
 
+    jk = dict(zip(mom_smm, res['g'] ** 2 * np.diag(_weights()[1])))   # W is diagonal
+    jk = {k: 100 * v / sum(jk.values()) for k, v in jk.items()}       # share of J, %
+    share = lambda k: jk.get(k, np.nan)
+
     print("=== Moments (* = Untargeted) ===\n", pd.DataFrame(
-        [(k if k in mom_smm else k + '*', *gap(k)) for k in keys],
-        columns=['Moment', 'Data', 'Model', 'Gap']).set_index('Moment').round(3).to_string())
+        [(k if k in mom_smm else k + '*', *gap(k), share(k)) for k in keys],
+        columns=['Moment', 'Data', 'Model', 'Gap', '%J']).set_index('Moment')
+        .round(3).to_string(na_rep=''))
 
     n = sum(k in mom_smm for k in keys)              # the targeted block ends here
-    rows = [rf'{_mname(k)} & {d:.3f} & {m:.3f} & {g:+.3f}'
+    rows = [rf'{_mname(k)} & {d:.3f} & {m:.3f} & {g:+.3f} & '
+            + (f'{share(k):.0f}' if k in mom_smm else '')
             for k in keys for d, m, g in [gap(k)]]
-    return _tex_table([r'Moment & Data & Model & Gap'], rows[:n] + [r'\midrule'] + rows[n:],
-                      'Targeted and Untargeted Moments', label, 'lccc', savepath=savepath)
+    return _tex_table([r'Moment & Data & Model & Gap & \% $J$'],
+                      rows[:n] + [r'\midrule'] + rows[n:],
+                      'Targeted and Untargeted Moments', label, 'lcccc', savepath=savepath)
 
 
 

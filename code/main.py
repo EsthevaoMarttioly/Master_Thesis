@@ -29,7 +29,7 @@ from code.p9_robustness import *
 hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
                         equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
-ss = solve_ss(hank_ss, calibration, flows, verbose=True)
+ss = solve_ss(hank_ss, calibration, flows, damp=0.3, verbose=True)
 calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 
 
@@ -48,8 +48,6 @@ plot_descriptives(ss, savepath='output/figures/bf_descript.png')
 plot_bf_targeting(ss, savepath='output/figures/bf_distribution.png')
 
 
-
-# ---------------------------------------------------------------------------
 # Counterfactuals
 solve_cf = lambda cal, **kw: solve_ss(hank_ss, cal, verbose=True, **kw)
 cfs      = counterfactuals(solve_cf)
@@ -59,14 +57,6 @@ compare_ss({'Baseline': ss, **{n: s for n, (s, _) in cfs.items()}},
            savepath='output/tables/ss_counterfactuals.tex')
 compare_bf_ss(ss, ss_nobf, savepath='output/tables/ss_comparison.tex')
 plot_bf_comparison(ss, ss_nobf, savepath='output/figures/bf_comparison.png')
-
-
-# 2. Robustness Tests
-# solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, **kw)
-# rob   = robustness(solve, calibration)
-# rob  |= bf_sizes(solve, calibration)
-# robustness_table(rob, savepath='output/tables/robustness.tex')
-# bf_size_table(rob, savepath='output/tables/bf_size.tex')
 
 
 
@@ -90,7 +80,6 @@ print("Steady State reached in dynamics DAG.")
 T = 100
 dTr     = ar1( 0.01,  0.40, T)               # Tr: AR(1), rho = 0.4, size = 1%
 di      = hike(-0.25, 0.85, T, 1)            # i:  Copom cycle, -25bps in 1q, then AR(1)
-dTr_ant = ar1( 0.01,  0.40, T, delay=4)      # Antecipated Shock
 
 
 ## Market Clearing Targets
@@ -105,7 +94,7 @@ build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, vari
 build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unknowns_dyn, targets_dyn, variables)
 
 G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r', 'tau_c', 'w'], T=T)
-irf_tr    = build_irfs('Tr', dTr)
+irf_tr    = build_irfs('Tr', dTr, verbose=True)
 irfm_bf   = build_irfs('rstar', di)
 irfm_nobf = build_nobf('rstar', di, split=False)
 irf_pe    = irf_partial(G_hh, 'Tr', dTr, variables)
@@ -145,25 +134,50 @@ cumulative_response_table(irfm_bf['insu'], irfm_bf['full'], shock='i',
 
 # ---------------------------------------------------------------------------
 # Dynamics - Financing and Timing
-# unk_G       = [k if k != 'tau_c' else 'G' for k in unknowns_dyn]
-# irf_tr_G    = build_irfs('Tr', dTr, unk=unk_G, split=False)
-irf_tr_ant  = build_irfs('Tr', dTr_ant, split=False)
+dTr_prm = ar1( 0.01,  0.95, T)
+dTr_ant = {d: ar1(0.01, 0.40, T, delay=d) for d in (1, 4, 8)}
+
 irf_tr_tax  = build_irfs('Tr', dTr, unknowns_dyn[1:], targets_dyn[1:], variables[1:])
+irf_tr_prm  = build_irfs('Tr', dTr_prm, split=False)
+irf_tr_ant  = {d: build_irfs('Tr', dZ, split=False) for d, dZ in dTr_ant.items()}
 
 
-# plot_irf_financing(irf_tr_fast, irf_tr['full'], ('Fast Repayment', 'Baseline'),
-#                    savepath='output/figures/irf_financing.png')
+# Zero-Distortion: no debt and no tax
+unk_G    = ['G' if k == 'tau_c' else k for k in unknowns_dyn if k != 'B']
+tgt_G    = [t for t in targets_dyn if t != 'debt_rule']
+irf_tr_G = build_irfs('Tr', dTr, unk_G, tgt_G, variables[1:], split=False)
 
-# plot_irf_financing(irf_tr_G, irf_tr['full'], ('G-Financed', 'Tax-Financed'),
-#                    savepath='output/figures/irf_financing_G.png')
 
-
+# Dynamics - Financing and Timing
 plot_irf_financing(irf_tr_tax['full'], irf_tr['full'],
                    savepath='output/figures/irf_financing.png')
 
 
-plot_irf({'Instant Shock': irf_tr['full'], 'Antecipated Shock': irf_tr_ant},
+plot_irf_financing(irf_tr_G, irf_tr['full'], ('Zero-Distortion', 'Debt-Financed'),
+                   savepath='output/figures/irf_financing_G.png')
+
+
+plot_irf({'AR(1), rho = 0.40': irf_tr['full'], 'AR(1), rho = 0.95': irf_tr_prm},
+         title='Transfer Shock: Persistence', savepath='output/figures/irf_persistence.png')
+
+
+plot_irf({'Unanticipated': irf_tr['full'],
+          **{f'Announced {d}q ahead': v for d, v in irf_tr_ant.items()}},
          savepath='output/figures/irf_antecipated.png')
 
 
 rr(); from code.p8_results import *
+
+
+
+# ---------------------------------------------------------------------------
+# Robustness Tests
+# solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, damp=0.5, **kw)
+# build = lambda cal: irf_builder(hank, dyn, {**calibration, **cal},
+#                                 unknowns_dyn, targets_dyn, variables)
+
+# rob   = robustness(solve, calibration)
+# rob  |= bf_sizes(solve, calibration)
+# robustness_table(rob, savepath='output/tables/robustness.tex')
+# bf_size_table(rob, savepath='output/tables/bf_size.tex')
+# dyn_robustness(build, 'Tr', dTr, savepath='output/tables/dyn_robustness.tex')

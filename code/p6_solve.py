@@ -157,7 +157,7 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
     flows           :  dict,      {'FI': value, ...} to be matched
     counterfactual  :  bool,      True to B clears asset_market and tau_l the budget
     strict          :  bool,      False returns the last iterate instead of raising
-    damp            :  [0,1],     damp > 0 to avoid stuck, but converges slower
+    damp            :  [0,1],     damp = 0 is the full step (NOT as in solve_dyn)
     tol, stol       :  value,     tolerance for 'Pi' and for the 'BF' rule
     atol            :  value,     tolerance for 'asset_mkt / B'."""
 
@@ -307,14 +307,14 @@ def _dyn_jacobian(hank, ss, unknowns, targets, inp, T, cache):
 # ---- Solver ---------------------------------------------------------------
 
 def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
-              damp=0.5, gpi=0.75, tol=1e-6, ptol=1e-5, maxit=150, verbose=False, jac=None):
+              damp=0.5, gpi=0.3, tol=1e-6, ptol=1e-5, maxit=150, verbose=False, jac=None):
     """Solve the Dynamics by iteration the transition matrix.
 
     shock           :  string,    the exogenous variable input name ('Tr', 'rstar')
     dZ              :  list,      the shock's path, normally an AR(1)
     unknowns        :  list,      variables that moves, solving `targets`
     moving          :  bool,      allow Pi_s to move, endogeneously
-    damp, gpi       :  [0,1],     damp < 1 to avoid stuck, but converges slower
+    damp, gpi       :  [0,1],     damp < 1 to avoid damping, gpi < 1 to avoid cycling
     tol, ptol       :  value,     tolerance for the targets and for the Pi path"""
 
     start, T = time.time(), len(dZ)

@@ -416,12 +416,13 @@ def report(res, savepath=None, label='tab:moments'):
         .round(3).to_string(na_rep=''))
 
     n = sum(k in mom_smm for k in keys)              # the targeted block ends here
-    rows = [rf'{_mname(k)} & {d:.3f} & {m:.3f} & {g:+.3f} & '
+    rows = [rf'{_mname(k)} & {d:.3f} & {m:.3f} & {g:+.2f} & '
             + (f'{share(k):.0f}' if k in mom_smm else '')
             for k in keys for d, m, g in [gap(k)]]
     return _tex_table([r'Moment & Data & Model & Gap & \% $J$'],
                       rows[:n] + [r'\midrule'] + rows[n:],
-                      'Targeted and Untargeted Moments', label, 'lcccc', savepath=savepath)
+                      'Targeted and Untargeted Moments', label, 'lcccc',
+                      size=r'\footnotesize', savepath=savepath)
 
 
 

@@ -29,7 +29,7 @@ from code.p9_robustness import *
 hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
                         equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
-ss = solve_ss(hank_ss, calibration, flows, damp=0.3, verbose=True)
+ss = solve_ss(hank_ss, calibration, flows, damp=0.5, verbose=True)
 calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 
 
@@ -48,8 +48,10 @@ plot_descriptives(ss, savepath='output/figures/bf_descript.png')
 plot_bf_targeting(ss, savepath='output/figures/bf_distribution.png')
 
 
+
+# ---------------------------------------------------------------------------
 # Counterfactuals
-solve_cf = lambda cal, **kw: solve_ss(hank_ss, cal, verbose=True, **kw)
+solve_cf = lambda cal, **kw: solve_ss(hank_ss, cal, verbose=False, **kw)
 cfs      = counterfactuals(solve_cf)
 (ss_nobf, calib_nobf), (ss_perf, calib_perf) = cfs.values()
 
@@ -67,6 +69,7 @@ hank = create_model([hh.remap({'r': 'ra'}), firm_formal, firm_informal,
 
 dyn      = hank.steady_state(ss)
 dyn_nobf = hank.steady_state(ss_nobf)
+dyn_perf = hank.steady_state(ss_perf)
 
 # Verify Dyn is also a valid Steady State
 for k in dyn.keys():
@@ -74,40 +77,41 @@ for k in dyn.keys():
 print("Steady State reached in dynamics DAG.")
 
 
-
-# ---------------------------------------------------------------------------
-# Dynamics - Shocks
-T = 100
-dTr     = ar1( 0.01,  0.40, T)               # Tr: AR(1), rho = 0.4, size = 1%
-di      = hike(-0.25, 0.85, T, 1)            # i:  Copom cycle, -25bps in 1q, then AR(1)
+# Shocks
+T   = 150                               # Solve horizon
+wdw = 40                                # Convergence Window
+Td  = 80                                # Reported Horizon
+dTr = ar1( 0.10, 0.40, T)               # Tr: +10%, then AR(1) with rho = 0.4
+di  = hike(0.50, 0.50, T, 1)            # i:  Copom tightening, +50bps, then AR(1)
 
 
 ## Market Clearing Targets
 unknowns_dyn = ['B', 'L', 'h_F', 'h_I', 'pi', 'w', 'w_I', 'tau_c', 'p_e']
 targets_dyn  = ['debt_rule', 'asset_mkt', 'labor_mkt', 'informal',
                 'nkpc', 'wage_nkpc', 'wage_nkpc_I', 'gov_budget', 'equity']
-variables    = ['B', 'C', 'Y', 'Y_I', 'L', 'N_I', 'I', 'U', 'BF', 'pi', 'w', 'w_I', 'r', 'i', 'tau_c']
+variables    = ['B', 'tau_c', 'C', 'Y', 'Y_I', 'L', 'N_I', 'I', 'U', 'BF', 'pi', 'w', 'w_I', 'r', 'i']
 
 
 ## IRFs: Fiscal (Tr) and Monetary (i) Shocks
-build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, variables)
-build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unknowns_dyn, targets_dyn, variables)
+build_irfs = irf_builder(hank, dyn, calibration, unknowns_dyn, targets_dyn, variables, wdw, Td)
+build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unknowns_dyn, targets_dyn, variables, wdw, Td)
+build_perf = irf_builder(hank, dyn_perf, calib_perf, unknowns_dyn, targets_dyn, variables, wdw, Td)
 
 G_hh      = hh.jacobian(dyn, inputs=['Tr', 'r', 'tau_c', 'w'], T=T)
-irf_tr    = build_irfs('Tr', dTr, verbose=True)
+irf_tr    = build_irfs('Tr', dTr)
 irfm_bf   = build_irfs('rstar', di)
 irfm_nobf = build_nobf('rstar', di, split=False)
+irfm_perf = build_perf('rstar', di, split=False)
 irf_pe    = irf_partial(G_hh, 'Tr', dTr, variables)
 irfm_pe   = irf_partial(G_hh, 'r',  di,  variables)
 
 
 
 # ---------------------------------------------------------------------------
-# Dynamics - Partial Jacobians
+# Dynamics - Graphics
 plot_impc(G_hh, savepath='output/figures/impc.png')
 
 
-# Dynamics - Fiscal and Monetary
 plot_irf_decomposition(irf_tr['insu'], irf_tr['full'], irf_pe,
                        savepath='output/figures/irf_decomposition.png')
 
@@ -121,7 +125,7 @@ plot_irf({'With BF (Total)': irfm_bf['full'], 'Without BF': irfm_nobf,
           title='Monetary Policy Shock (i)', savepath='output/figures/irfm_bf_vs_nobf.png')
 
 
-# Dynamics - Cumulative Response
+# Dynamics - Tables (Cumulative Response)
 cumulative_response_table(irf_tr['insu'], irf_tr['full'],
                           savepath='output/tables/cumulative_response.tex')
 
@@ -133,9 +137,36 @@ cumulative_response_table(irfm_bf['insu'], irfm_bf['full'], shock='i',
 
 
 # ---------------------------------------------------------------------------
+# Robustness Tests
+solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, **kw)
+
+def build(cal):
+    c = {**calibration, **cal}
+    d = hank.steady_state(solve(c)) if set(cal) & dyn_ss else dyn
+    return irf_builder(hank, d, c, unknowns_dyn, targets_dyn, variables, Td)
+
+## Steady State
+rob  = robustness(solve, calibration)
+rob |= bf_sizes(solve, calibration)
+robustness_table(rob, savepath='output/tables/robustness.tex')
+bf_size_table(rob, savepath='output/tables/robustness_bf.tex')
+
+
+## Dynamics
+dyn  = dyn_robustness(build, 'Tr', dTr, moving=False)
+dyn_rob_table(dyn, savepath='output/tables/dyn_robustness.tex')
+plot_dyn_robustness(dyn, savepath='output/figures/dyn_robustness.png')
+plot_dyn_robustness(dyn, {'alpha_I': dyn_grid['alpha_I']},
+                    savepath='output/figures/dyn_robust_phi.png')
+
+
+
+
+
+# ---------------------------------------------------------------------------
 # Dynamics - Financing and Timing
-dTr_prm = ar1( 0.01,  0.95, T)
-dTr_ant = {d: ar1(0.01, 0.40, T, delay=d) for d in (1, 4, 8)}
+dTr_prm = ar1(0.10 * 0.05/0.60, 0.95, T)         # Persistent
+dTr_ant = {d: ar1(0.10, 0.40, T, delay=d) for d in (1, 4, 8)}
 
 irf_tr_tax  = build_irfs('Tr', dTr, unknowns_dyn[1:], targets_dyn[1:], variables[1:])
 irf_tr_prm  = build_irfs('Tr', dTr_prm, split=False)
@@ -145,11 +176,11 @@ irf_tr_ant  = {d: build_irfs('Tr', dZ, split=False) for d, dZ in dTr_ant.items()
 # Zero-Distortion: no debt and no tax
 unk_G    = ['G' if k == 'tau_c' else k for k in unknowns_dyn if k != 'B']
 tgt_G    = [t for t in targets_dyn if t != 'debt_rule']
-irf_tr_G = build_irfs('Tr', dTr, unk_G, tgt_G, variables[1:], split=False)
+irf_tr_G = build_irfs('Tr', dTr, unk_G, tgt_G, variables[2:], split=False)
 
 
 # Dynamics - Financing and Timing
-plot_irf_financing(irf_tr_tax['full'], irf_tr['full'],
+plot_irf_financing(irf_tr_tax['full'], irf_tr['full'], ('Tax-Financed', 'Debt-Financed'),
                    savepath='output/figures/irf_financing.png')
 
 
@@ -157,27 +188,27 @@ plot_irf_financing(irf_tr_G, irf_tr['full'], ('Zero-Distortion', 'Debt-Financed'
                    savepath='output/figures/irf_financing_G.png')
 
 
-plot_irf({'AR(1), rho = 0.40': irf_tr['full'], 'AR(1), rho = 0.95': irf_tr_prm},
+plot_irf({'rho = 0.40': irf_tr['full'], 'rho = 0.95 (Highly-Persistent)': irf_tr_prm},
          title='Transfer Shock: Persistence', savepath='output/figures/irf_persistence.png')
 
 
 plot_irf({'Unanticipated': irf_tr['full'],
           **{f'Announced {d}q ahead': v for d, v in irf_tr_ant.items()}},
-         savepath='output/figures/irf_antecipated.png')
-
-
-rr(); from code.p8_results import *
+         savepath='output/figures/irf_anticipated.png')
 
 
 
 # ---------------------------------------------------------------------------
-# Robustness Tests
-# solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, damp=0.5, **kw)
-# build = lambda cal: irf_builder(hank, dyn, {**calibration, **cal},
-#                                 unknowns_dyn, targets_dyn, variables)
-
-# rob   = robustness(solve, calibration)
-# rob  |= bf_sizes(solve, calibration)
-# robustness_table(rob, savepath='output/tables/robustness.tex')
-# bf_size_table(rob, savepath='output/tables/bf_size.tex')
-# dyn_robustness(build, 'Tr', dTr, savepath='output/tables/dyn_robustness.tex')
+import importlib, code.p6_solve, code.p8_results, code.p9_robustness
+importlib.reload(code.p6_solve)
+importlib.reload(code.p8_results)
+importlib.reload(code.p9_robustness)
+globals().update({k: v for k, v in vars(code.p6_solve).items()
+                    if not k.startswith('_')})
+globals().update({k: v for k, v in vars(code.p8_results).items()
+                    if not k.startswith('_')})
+globals().update({k: v for k, v in vars(code.p9_robustness).items()
+                    if not k.startswith('_')})
+from code.p6_solve import *
+from code.p8_results import *
+from code.p9_robustness import *

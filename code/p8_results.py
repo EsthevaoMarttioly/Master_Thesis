@@ -30,12 +30,12 @@ DIGITS = str.maketrans(dict(zip('0123456789', ('Zero', 'One', 'Two', 'Three', 'F
                                                'Five', 'Six', 'Seven', 'Eight', 'Nine'))))
 
 COLORS = {
-    'Tr'   : COL1,        # Conditional Transfer
-    'F'    : COL1,        # Formal Employment
-    'I'    : COL4,        # Informal Employment
-    'U'    : COL2,        # Unemployed
-    'full' : COL1,        # Full Channel
-    'ins'  : COL4,        # Insurance Channel
+    'Tr'    : COL1,        # Conditional Transfer
+    'F'     : COL1,        # Formal Employment
+    'I'     : COL4,        # Informal Employment
+    'U'     : COL2,        # Unemployed
+    'full'  : COL1,        # Full Channel
+    'benef' : COL4,        # Benefit Channel
 }
 
 LABELS = {
@@ -49,7 +49,6 @@ LABELS = {
     'U'    : 'Unemployment $\\alpha_U$',
     'BF'   : 'BF Recipients $BF$',
     'w'    : 'Real Wage $w$',
-    'w_I'  : 'Informal Wage $w_I$',
     'pi'   : 'Inflation $\\pi$',
     'pi_w' : 'Wage Inflation $\\pi^w$',
     'pi_wI': 'Informal Wage Inflation $\\pi^{w_I}$',
@@ -74,12 +73,11 @@ LABELS = {
     'Tr / y_F'         : r'$T/y^F$',
 }
 
-# The channel names, in one place: rename here and every figure and table follows.
-CHANNEL = {'ins' : 'Insurance Channel', 'full': 'Full Channel',
-           'comp': 'Composition Channel', 'pft': 'Perfect CCT'}
+CHANNEL = {'benef': 'Benefit Channel', 'full': 'Full Channel',
+           'realloc': 'Reallocation Channel', 'perf': 'Perfect CCT'}
 
 SHORT = {'Informal Share': r'$\alpha_I$', 'Unemployed Share': r'$\alpha_U$',
-         'xi': r'$\E[y_F]/\E[y_I]$', 'HtM': 'HtM', 'Wealth Gini': 'Gini'}
+         'xi': r'$w_F/w_I$', 'HtM': 'HtM', 'Wealth Gini': 'Gini'}
 
 plt.rcParams.update({'font.size'        : 10,
                      'axes.spines.top'  : False,
@@ -118,7 +116,7 @@ def _save_or_show(fig, savepath):
     else: fig.savefig(savepath, dpi=150, bbox_inches='tight'); plt.close(fig)
 
 
-def _tex_table(head, rows, caption, label, colspec, size=r'\small', savepath=None):
+def _tex_table(head, rows, caption, label, colspec, size=r'\small', savepath=None, note=None):
     # Return the LaTeX table when savepath is None; otherwise write it silently.
     line = lambda r: r if r.startswith('\\') else r + r' \\'
     tex = ("%---------------------------------------------------\n"
@@ -127,7 +125,9 @@ def _tex_table(head, rows, caption, label, colspec, size=r'\small', savepath=Non
            f"\\begin{{tabular}}{{{colspec}}}\n\\toprule\n"
            + "\n".join(map(line, head)) + "\n\\midrule\n"
            + "\n".join(map(line, rows)) + "\n"
-           "\\bottomrule\n\\end{tabular}\n\\end{table}\n"
+           "\\bottomrule\n\\end{tabular}\n"
+           + (f"\\par\\vspace{{2pt}}{{\\footnotesize \\textit{{Note:}} {note}}}\n" if note else "")
+           + "\\end{table}\n"
            "%---------------------------------------------------\n")
     if savepath is None: return tex
     with open(savepath, 'w', encoding='utf-8') as fobj:
@@ -140,7 +140,7 @@ def _tex_table(head, rows, caption, label, colspec, size=r'\small', savepath=Non
 # ---------------------------------------------------------------------------
 vars_ss = ['Y', 'Y_I', 'C', 'F', 'L', 'psi',
            'beta_high', 'A', 'B', 'p_e', 'Div', 'BF', 'asset_mkt',
-           'goods_mkt', 'labor_mkt', 'wage_nkpc', 'wage_nkpc_I', 'informal']
+           'goods_mkt', 'labor_mkt', 'wage_nkpc', 'wage_nkpc_I']
 
 def print_ss_summary(ss, var_ss=vars_ss):
     print("\n" + "=" * 55)
@@ -182,8 +182,7 @@ def transition_table(ss, savepath=None, label='tab:transitions'):
 # 2. Distributions and Policy Functions
 # ---------------------------------------------------------------------------
 def _dens(x, w, grid):
-    # Density of a discrete (value, mass) distribution: the atoms binned on `grid`,
-    # read as bin centres. Not smoothed, so the steps of the state space stay visible.
+    # Density of a discrete (value, mass) distribution.
     d = np.diff(grid)
     e = np.r_[grid[0] - d[0] / 2, grid[:-1] + d / 2, grid[-1] + d[-1] / 2]
     h = np.histogram(x, bins=e, weights=w / w.sum())[0]
@@ -225,6 +224,15 @@ def _wealth_bins(D, n_q):
     # Map each asset node to a quantile of the overall wealth distribution.
     cum = np.concatenate([[0.0], np.cumsum(D.sum(0))[:-1]])
     return np.minimum((cum * n_q).astype(int), n_q - 1)
+
+
+def _wealth_share(D, ag, n_q):
+    # Share of total wealth held by each wealth quantile of the economy itself (ties split).
+    m   = D.sum(0) / D.sum()
+    hi  = np.cumsum(m)
+    cut = np.linspace(0, 1, n_q + 1)
+    w   = np.clip(np.minimum(hi[:, None], cut[None, 1:]) - np.maximum((hi - m)[:, None], cut[None, :-1]), 0, None)
+    return (w * ag[:, None]).sum(0) / (m * ag).sum()
 
 
 def _bar_panel(ax, left, height, width, xlabel, title, vlines=(), xlim=None):
@@ -279,7 +287,7 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
+def plot_income_distribution(ss, bins=21, lim=3.0, savepath=None):
     # Model vs PNAD earnings density, by sector.
     h = _hh(ss)
     ly_s = (h['log_y_f'] + h['log_y_i'])[:, 0]              # gross, a-invariant
@@ -312,7 +320,7 @@ def plot_income_distribution(ss, bins=51, lim=3.0, savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_wealth_distribution(ss, n_bins=30, savepath=None):
+def plot_wealth_distribution(ss, asset_max=51, income_bins=41, savepath=None):
     # 2x2: Wealth and Income, each as a PDF and a Lorenz curve.
     h = _hh(ss)
     D, a_grid = h['D'], h['a_grid']
@@ -327,7 +335,7 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     yL_pop   = np.concatenate([[0], np.cumsum(ms) / ms.sum()])
     yL_share = np.concatenate([[0], np.cumsum(ms * ys) / np.sum(ms * ys)])
 
-    edges = np.linspace(y.min(), y.max(), 101)
+    edges = np.linspace(y.min(), y.max(), income_bins)
     y_hist, _ = np.histogram(y, bins=edges, weights=m)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -344,7 +352,7 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     # HtM: liquid wealth under a month of mean formal earnings
     thr = float(ss['N_F']) / float(ss['F']) / 3
     htm = float(a_dist[a_grid <= thr].sum())
-    n_b = max(int(np.searchsorted(a_grid, 2.5 * thr)) + 1, n_bins)
+    n_b = max(int(np.searchsorted(a_grid, 2.5 * thr)) + 1, asset_max)
     _bar_panel(axes[0, 0], a_grid[:n_b], a_dist[:n_b],
                np.diff(np.append(a_grid[:n_b], a_grid[n_b])),
                'Assets $a$', 'Wealth Distribution (Near Constraint)',
@@ -360,7 +368,7 @@ def plot_wealth_distribution(ss, n_bins=30, savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_bf_targeting(ss, lim=3.0, savepath=None):
+def plot_bf_targeting(ss, bins=31, lim=2.0, ymax=100, savepath=None):
     # Who the means test catches: tested income against the threshold, by sector.
     h = _hh(ss)
     D, a = h['D'], h['a_grid']
@@ -370,7 +378,7 @@ def plot_bf_targeting(ss, lim=3.0, savepath=None):
     y[2 * blk:] = 0.0                                      # y^U is out of the means test
     yt = (y[:, None] + float(ss['r']) * a[None, :]) / float(ss['ybar'])
 
-    grid = np.linspace(0, lim, 41)
+    grid = np.linspace(0, lim, bins)
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
     for ax, s_, sl, col in zip(axes, STATES, [slice(0, blk), slice(blk, 2 * blk)], [COL1, COL4]):
         x, w, b  = yt[sl].ravel(), D[sl].ravel(), h['bf'][sl].ravel()
@@ -379,11 +387,13 @@ def plot_bf_targeting(ss, lim=3.0, savepath=None):
         ax.fill_between(grid, 100 * tot, color=col, alpha=0.30, step='mid', label='All')
         ax.plot(grid, 100 * got, color=col, lw=2.0, marker='o', ms=3, label='Receives BF')
         ax.axvline(1.0, color=GRAY, ls='--', lw=1.2)
+        ax.set_ylim(0, ymax)              # the formal density is a spike at the top
         _axis(ax, xlabel=r'Tested income $(y + ra) \,/\, \bar{y}$',
               title=f'{STATES[s_]}  ({100 * share:.1f}% covered)', legend=True)
-        axes[2].plot(grid, np.where(tot > 0.01 * tot.max(), got / np.maximum(tot, 1e-12),
-                                    np.nan), color=col, lw=2.0, marker='o', ms=3,
-                     label=STATES[s_])
+        cvg = np.where(tot > 1e-3 * tot.max(), got / np.maximum(tot, 1e-12), np.nan)
+        ok  = np.isfinite(cvg)                     # plot the finite bins only, so the
+        axes[2].plot(grid[ok], cvg[ok], color=col, lw=2.0,   # line connects the dots
+                     marker='o', ms=3, label=STATES[s_])
     if os.path.exists(cov_path):                               # PNAD: P(BF | wage, s)
         cov = pd.read_csv(cov_path)
         cov['x'] = cov['wage'] / (pnad['y_F'] * pnad['yrule'])  # Same unit: 1 is the rule
@@ -458,17 +468,18 @@ def _cev(v1, v0, eis, vc1, lam=None):
     return ((v0 + vc1 - v1) / vc1) ** (1 / (1 - 1/eis)) - 1
 
 
+def _cev_pos(ss_bf, ss_nobf):
+    # CEV from BF at the same position (state x assets).
+    h, h0 = _hh(ss_bf), _hh(ss_nobf)
+    return _cev(h0['V'], h['V'], float(ss_bf['eis']), h0['Vc'], _horizon(ss_nobf)[:, None])
+
+
 def _welfare_gains(ss_bf, ss_nobf):
-    # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed].
-    # The ratio nets out the 1/(1-beta) scale: raw dE[V] is not comparable across types.
-    eis = float(ss_bf['eis'])
-    def ev(ss, key):
-        h = _hh(ss)
-        D, V = _reshape_hh(h['D'], ss), _reshape_hh(h[key], ss)
-        pat = [(D[:, :, b] * V[:, :, b]).sum() / D[:, :, b].sum() for b in (0, 1)]
-        sec = [(D[s] * V[s]).sum() / D[s].sum() for s in (0, 1, 2)]
-        return np.array(pat + sec)
-    return _cev(ev(ss_nobf, 'V'), ev(ss_bf, 'V'), eis, ev(ss_nobf, 'Vc'))
+    # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed], weighted by With BF.
+    D = _reshape_hh(_hh(ss_bf)['D'], ss_bf)
+    X = _reshape_hh(_cev_pos(ss_bf, ss_nobf), ss_nobf)
+    mean = lambda sel: (D[sel] * X[sel]).sum() / D[sel].sum()
+    return np.array([mean(np.s_[:, :, b]) for b in (0, 1)] + [mean(s) for s in (0, 1, 2)])
 
 
 def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
@@ -477,35 +488,34 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
     x = np.arange(n_q)
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
-    # Welfare gain by patience type and by sector
+    # Welfare Gain by Patience type and by Sector
     _state_bar(axes[0, 0], 100 * _welfare_gains(ss, ss_nobf),
-               'Welfare Gain (CEV, %)', 'Who gains from Bolsa Familia',
+               r'Welfare Gain (CEV, %) $\mid$ No BF', 'Who gains from Bolsa Familia',
                names=('Impatient', 'Patient'), colors=(GRAY, GRAY))
 
-    # Welfare gain by wealth: the distributional cut the table cannot show
-    eis  = float(ss['eis'])
-    qidx = _wealth_bins(_hh(ss_nobf)['D'], n_q)
-    ev = lambda ss, key, sel: ((_hh(ss)['D'][:, sel] * _hh(ss)[key][:, sel]).sum()
-                               / _hh(ss)['D'][:, sel].sum())
-    D, lam = _hh(ss_nobf)['D'], _horizon(ss_nobf)
-    lm  = lambda sel: float(D[:, sel].sum(1) @ lam) / D[:, sel].sum()
-    cev_by_wealth = [_cev(ev(ss_nobf, 'V', qidx == q), ev(ss, 'V', qidx == q), eis,
-                          ev(ss_nobf, 'Vc', qidx == q), lm(qidx == q)) for q in range(n_q)]
+    # Welfare Gain by Wealth, over the With BF distribution
+    D0, D1 = _hh(ss_nobf)['D'], _hh(ss)['D']
+    qidx = _wealth_bins(D1, n_q)
+    cev  = _cev_pos(ss, ss_nobf)
+    axes[0, 1].bar(x, [100 * (D1[:, qidx == q] * cev[:, qidx == q]).sum() / D1[:, qidx == q].sum()
+                       for q in range(n_q)], color=COL4)
+    axes[0, 1].set_xticks(x, [f'Q{i+1}' for i in range(n_q)])
+    _axis(axes[0, 1], xlabel=r'Wealth Quantile $\mid$ With BF', ylabel=r'Welfare Gain (CEV, %) $\mid$ No BF',
+          title='Welfare Gain by Wealth')
 
-    axes[0, 1].bar(x, 100 * np.array(cev_by_wealth), color=COL4)
-    _axis(axes[0, 1], ylabel='Welfare Gain (CEV, %)', title='Welfare Gain by Wealth')
-
-    # Wealth concentration, both economies
-    for lab, sx, col, ls in [('With BF', ss, COL1, '-'), ('No BF', ss_nobf, COL4, '--')]:
-        pop, share = _lorenz(sx)
-        axes[1, 0].plot(pop, share, color=col, ls=ls, lw=1.8,
-                        label=f'{lab}, Gini = {gini_from_lorenz(pop, share):.2f}')
-    axes[1, 0].plot([0, 1], [0, 1], color=COL2, ls=':', lw=1.6)
-    _axis(axes[1, 0], xlabel='Cumulative Population Share',
-          ylabel='Cumulative Wealth Share', title='Wealth Concentration', legend=True, loc='upper left')
+    # Wealth Share of each Quantile of its own economy (different households)
+    ag = _hh(ss)['a_grid']
+    s0, s1 = _wealth_share(D0, ag, n_q), _wealth_share(D1, ag, n_q)
+    axes[1, 0].bar(x, 100 * (s1 - s0), width=0.6, color=COL1)
+    for q in range(n_q):                                   # the levels: No BF -> BF
+        axes[1, 0].annotate(rf'{100 * s0[q]:.1f}$\to${100 * s1[q]:.1f}', (q, 100 * (s1[q] - s0[q])),
+                            ha='center', va='bottom' if s1[q] > s0[q] else 'top', fontsize=8)
+    axes[1, 0].set_xticks(x, [f'Q{i+1}' for i in range(n_q)])
+    _axis(axes[1, 0], xlabel='Wealth Quantile (own economy)',
+          ylabel=r'$\Delta$ Wealth Share, pp (BF $-$ No BF)', title='Who Holds the Wealth')
 
     # Consumption by state, both economies
-    for i, (lab, sx, col) in enumerate([('With BF', ss, COL1), ('No BF', ss_nobf, COL4)]):
+    for i, (lab, sx, col) in enumerate([('No BF', ss_nobf, COL4), ('With BF', ss, COL1)]):
         h = _hh(sx)
         axes[1, 1].bar(np.arange(3) + (i - 0.5) * 0.35,
                        _by_state(h['D'], h['c'], block), width=0.35, color=col, label=lab)
@@ -513,10 +523,8 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
     _axis(axes[1, 1], ylabel='Mean Consumption $c$',
           title='Consumption by Employment State', legend=True)
 
-    for ax in (axes[0, 0], axes[0, 1], axes[1, 1]):
+    for ax in (axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]):
         ax.axhline(0, color='k', lw=0.8)
-    axes[0, 1].set_xticks(np.arange(n_q), [f'Q{i+1}' for i in range(n_q)])
-    axes[0, 1].set_xlabel('Wealth Quantile')
 
     _save_or_show(fig, savepath)
 
@@ -525,7 +533,10 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
 # ---------------------------------------------------------------------------
 # 4. PE iMPC and GE IRFs
 # ---------------------------------------------------------------------------
-def _irf_panels(variables, T_plot, draw, legend_ax=0,
+irf_vars = ('C', 'Y', 'Y_I', 'BF', 'r', 'pi', 'w', 'I')
+tax_vars = ('C', 'Y', 'Y_I', 'BF', 'r', 'pi', 'w', 'B')
+
+def _irf_panels(variables, T_plot, draw, legend_ax=0, fig_legend=None,
                 suptitle=None, xtick=None, titles=None, savepath=None):
     # Shared IRF grid: `draw(ax, var)` plots the lines; the rest is scaffolding.
     variables = list(variables)
@@ -547,7 +558,8 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0,
             ax.xaxis.set_major_locator(mticker.MultipleLocator(xtick))
     for ax in axes[n:]:
         ax.set_visible(False)
-    axes[legend_ax].legend(frameon=False)
+    if legend_ax is not None: axes[legend_ax].legend(frameon=False)
+    if fig_legend: fig_legend(fig, axes)
     if suptitle:
         fig.suptitle(suptitle, fontsize=11)
     _save_or_show(fig, savepath)
@@ -574,45 +586,43 @@ def plot_impc(G_hh, h_ant=4, T_plot=20, key='C', savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_irf(irf_dict, variables=('C', 'Y', 'Y_I', 'I', 'BF', 'pi', 'w', 'w_I'),
-             title='CCT Shock', shock=None, T_plot=40, savepath=None):
-    # One line per economy in `irf_dict`, one panel per variable.
+def plot_irf(irf_dict, variables=irf_vars, title='CCT Shock', shock=None,
+             T_plot=40, savepath=None, style=None, fig_legend=None):
+    # One line per economy in `irf_dict`, one panel per variable. `style`: {label: (color, ls)}.
     if shock is not None:
         dZ = shock[0]; pk = float(np.asarray(dZ)[np.argmax(np.abs(dZ))])
         msg = f'{pk * 40000:+.0f} bps' if shock[1] == 'rstar' else f'{pk:+.0%}'
         title = f'{title} ({msg})'
     def draw(ax, v):
         for i, (label, irf) in enumerate(irf_dict.items()):
-            ax.plot(irf[v][:T_plot] * 100, color=CYCLE[i % len(CYCLE)],
-                    ls=LS[i % 4], lw=2.2, label=label)
-    _irf_panels(variables, T_plot, draw, legend_ax=0,
+            col, ls = style[label] if style else (CYCLE[i % len(CYCLE)], LS[i % 4])
+            ax.plot(irf[v][:T_plot] * 100, color=col, ls=ls, lw=2.2, label=label)
+    _irf_panels(variables, T_plot, draw, legend_ax=None if fig_legend else 0, fig_legend=fig_legend,
                 suptitle=f'GE IRFs: {title}', xtick=5, savepath=savepath)
 
 
-def plot_irf_decomposition(irf_ins, irf_full, irf_pe=None, irf_pft=None,
-                           variables=('C', 'Y', 'Y_I', 'I', 'BF', 'pi', 'w', 'w_I'),
-                           T_plot=40, savepath=None):
-    # Insurance (Pi frozen) vs Full (Pi moving); shade the composition gap.
+def plot_irf_decomposition(irf_benef, irf_full, irf_perf=None, variables=irf_vars,
+                           title='CCT Shock', T_plot=40, savepath=None):
+    # Benefit (Pi frozen) vs Full (Pi moving); shade the reallocation gap.
     x = np.arange(T_plot)
     def draw(ax, v):
-        ins, full = irf_ins[v][:T_plot] * 100, irf_full[v][:T_plot] * 100
-        if irf_pe is not None and v in irf_pe:
-            ax.plot(x, irf_pe[v][:T_plot] * 100, color=GRAY, lw=1.6, ls='--',
-                    label='Partial Eq. (Prices Fixed)')
-        ax.plot(x, ins,  color=COLORS['ins'],  lw=2.2, label=CHANNEL['ins'])
-        ax.plot(x, full, color=COLORS['full'], lw=2.2, label=CHANNEL['full'])
-        ax.fill_between(x, ins, full, color=COLORS['full'], alpha=0.15, label=CHANNEL['comp'])
-        if irf_pft is not None and v in irf_pft:          # the frictionless means test
-            ax.plot(x, irf_pft[v][:T_plot] * 100, color=COL5, lw=2.0, ls=':',
-                    label=CHANNEL['pft'])
-    _irf_panels(variables, T_plot, draw, savepath=savepath)
+        ben, full = irf_benef[v][:T_plot] * 100, irf_full[v][:T_plot] * 100
+        ax.plot(x, ben,  color=COLORS['benef'], lw=2.2, label=CHANNEL['benef'])
+        ax.plot(x, full, color=COLORS['full'],  lw=2.2, label=CHANNEL['full'])
+        ax.fill_between(x, ben, full, color=COLORS['full'], alpha=0.15,
+                        label=CHANNEL['realloc'])
+        if irf_perf is not None and v in irf_perf:        # the frictionless means test
+            ax.plot(x, irf_perf[v][:T_plot] * 100, color=COL5, lw=2.0, ls=':',
+                    label=CHANNEL['perf'])
+    _irf_panels(variables, T_plot, draw, suptitle=f'GE IRFs: {title}', savepath=savepath)
 
 
-def plot_irf_financing(irf_a, irf_b, labels=('Revenue-Neutral', 'Debt-Financed'),
-                       variables=('C', 'Y', 'pi', 'w', 'r', 'B'), T_plot=40, savepath=None):
-    # Two financing paths of the same shock. `labels` names them: the caller knows which.
+def plot_irf_financing(irfs, variables=tax_vars, title='Monetary Policy Shock (i)',
+                       T_plot=40, savepath=None):
+    # The same shock under alternative fiscal rules.
     x    = np.arange(T_plot)
-    both = [(irf_a, labels[0], COLORS['ins'], '-'), (irf_b, labels[1], COLORS['full'], '--')]
+    both = [(irf, lab, CYCLE[i % len(CYCLE)], LS[i % 4])
+            for i, (lab, irf) in enumerate(irfs.items())]
     def draw(ax, v):
         for irf, lab, col, ls in both:
             if v in irf:
@@ -624,7 +634,8 @@ def plot_irf_financing(irf_a, irf_b, labels=('Revenue-Neutral', 'Debt-Financed')
                             lw=2.2, label=rf'$\tau_c$ ({lab})')
             ax.legend(frameon=False)
     _irf_panels(variables, T_plot, draw,
-                titles={'B': r'Debt $B$ x Consumption Tax $\tau_c$'}, savepath=savepath)
+                suptitle=f'GE IRFs: {title}', titles={'B': r'Debt $B$ x Consumption Tax $\tau_c$'},
+                savepath=savepath)
 
 
 
@@ -654,7 +665,7 @@ def _ss_stats(ss):
             'Welfare E[V]'       : float(np.sum(D * h['V'])),
             '_Vc'                : float(np.sum(D * h['Vc'])),
             '_Lam'               : float(D.sum(1) @ _horizon(ss)),
-            **{f'_{k}': float(ss[k]) for k in pi_calib}}
+            '_cal'               : {k: float(ss[k]) for k in cf_keep}}   # what a counterfactual holds
 
 
 def compare_ss(economies, savepath=None, label='tab:counterfactuals'):
@@ -666,7 +677,7 @@ def compare_ss(economies, savepath=None, label='tab:counterfactuals'):
 
     rows = [' & '.join([LABELS.get(q, q)] + [_cell(stats[n][q]) for n in names]
                        + [_cell(stats[n][q] - ref[q], delta=True) for n in cf])
-            for q in ref if not q.startswith(('Welfare', '_'))]
+            for q in ref if not q.startswith(('Welfare', '_')) and q != 'Tr / y_F']
 
     cev = [_cev(ref['Welfare E[V]'], stats[n]['Welfare E[V]'],
                 float(economies[names[0]]['eis']), ref['_Vc'], ref['_Lam']) for n in cf]
@@ -685,7 +696,7 @@ def compare_bf_ss(ss_bf, ss_nobf, labels=('No BF', 'With BF'), savepath=None, la
     return compare_ss({labels[0]: ss_nobf, labels[1]: ss_bf}, savepath=savepath, label=label)
 
 
-def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w'),
+def cumulative_response_table(irf_benef, irf_full, variables=('C', 'U', 'pi', 'w'),
                               horizons=(1, 4, 20, 100), shock='T', savepath=None,
                               label='tab:cumulative_response'):
     # Cumulative Response (sum of dX_t up to horizon, %)
@@ -694,7 +705,7 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
 
     rows = []
     for var in variables:
-        cins  = (np.asarray(irf_ins[var])  * 100).cumsum()
+        cins  = (np.asarray(irf_benef[var]) * 100).cumsum()
         cfull = (np.asarray(irf_full[var]) * 100).cumsum()
         blocks = []
         for h in horizons:
@@ -706,8 +717,8 @@ def cumulative_response_table(irf_ins, irf_full, variables=('C', 'U', 'pi', 'w')
         rows += [f' {lab if j == 0 else ""} & {h} & {si:.3f} & {sf:.3f} & {sc:.3f}'
                  for j, (h, si, sf, sc) in enumerate(blocks)]
 
-    return _tex_table([f"Variable & Horizon & {CHANNEL['ins'].split()[0]}"
-                       f" & {CHANNEL['full'].split()[0]} & {CHANNEL['comp'].split()[0]}"], rows,
+    return _tex_table([f"Variable & Horizon & {CHANNEL['benef'].split()[0]}"
+                       f" & {CHANNEL['full'].split()[0]} & {CHANNEL['realloc'].split()[0]}"], rows,
                       f'Cumulative Response (\\%), Shock in ${shock}$', label, 'lccccc',
                       savepath=savepath)
 
@@ -724,7 +735,7 @@ ZERO    = ['amin', 'amax', 'nT', 'nE', 'nA', 'T_BFF', 'y_F', 'y_I']  # Zero deci
 ONE     = ['h_F', 'h_I', 'w', 'Y', 'phi', 'eis', 'varphi', 'sig']    # One decimal
 TWO     = ['lambda_BF', 'ybar', 'sig_BF', 'rho_F', 'rho_I',          # Two Decimals
            'kappa', 'kappa_w', 'kappa_wI', 'mu', 'mu_w', 'gini',
-           'q', 'mpc', 'htm', 'alpha_I']
+           'q', 'mpc', 'htm']
 
 MACRO_FMT  = ({k: '.0%' for k in PCTZERO} | {k: '.1%' for k in PCT}
               | {k: '.0f' for k in ZERO} | {k: '.1f' for k in ONE} | {k: '.2f' for k in TWO})

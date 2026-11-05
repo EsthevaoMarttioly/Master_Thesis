@@ -124,17 +124,16 @@ Overall, in economies where almost half of the workforce is informal, Conditiona
 Transfers improve safeguards to the poorest, but increase the total informality, and
 informal income is precisely what a downturn hits hardest. This paper asks then whether
 a CCT program stabilizes an economy with a large informal sector. The program does two
-things at once: while the \textit{insurance channel} protects individuals with low
-liquid wealth, the \textit{composition channel} reallocates other households to
+things at once: while the \textit{benefit channel} protects individuals with low
+liquid wealth, the \textit{reallocation channel} reallocates other households to
 informality, where they are more susceptible to downturns.
 
 In Brazil, \textit{Bolsa Família} (BF) had been used to ensure basic needs such as food
 and health, until the 2020 recession, when its mean value increased from
-R\$ 187 to R\$ 600, changing its name to \textit{Auxílio Brasil} (Brazilian Aid), and it
-became a clear stabilization instrument against crises, yet they were designed, and
-almost always evaluated, as redistribution. Until then, the developed world had focused
-on taxes, transfers, and unemployed insurance as stabilizers, but their distributional
-effects may be overcome by targeted policies.
+R\$ 187 to R\$ 600, and it became a clear stabilization instrument against crises, yet
+they were designed, and almost always evaluated, as redistribution. Until then, the
+developed world had focused on taxes, transfers, and unemployed insurance as stabilizers,
+but their distributional effects may be overcome by targeted policies.
 
 The evidence speaks to each force on its own. At the micro level, \textcite{uchiyama2019conditional}
 shows that \textit{Progresa} helps consumption-smoothing and \textcite{de2006can}
@@ -184,7 +183,7 @@ the HtM households, which HANK models identify as central to aggregate demand.
 % test taxes formality in the model as it does in practice. I solve the model with the
 % sequence-space Jacobian, extended so that the matrix of sector transitions responds to
 % continuation values along the transition path. Freezing that matrix at its steady state
-% shuts the sector margin and isolates the insurance effect; letting it move adds the reallocation.
+% shuts the sector margin and isolates the transfer effect; letting it move adds the reallocation.
 
 % What I find. The two channels are of comparable size, and the second one wins over time.
 % In steady state the program raises the informal share by 6.5 points and lowers the formal
@@ -269,8 +268,8 @@ in the economy: households, firms, labor unions, and the government.
 
 Households are heterogeneous \parencite{aiyagari1994uninsured}, workers and firms join
 in a formal-informal setup, and the rest of the economy follows the textbook New
-Keynesian model \parencite{gali2015monetary}. There is no aggregate uncertainty and the
-economy starts in the deterministic steady-state.
+Keynesian model \parencite{gali2015monetary}. The economy starts in the deterministic
+steady-state.
 
 %---------------------------------------------------
 %	HOUSEHOLDS
@@ -430,22 +429,13 @@ for price inflation is given by
 \]
 
 Additionally, there is a representative informal sector operating with flexible prices
-and decreasing returns to scale, $Y_t^I = Z_t^I \left( N_t^I \right)^{\alpha_I}$, with
-$\alpha_I < 1$. The informal good is a perfect substitute for the formal one, so it
-sells at the same price $P_t$. Informal units are self-employed or revenue-sharing
-producers, so the entire product is distributed among their workers. The informal labor
-demand is
-\[
-w_t^I = \frac{Y^I_t}{N^I_t} = Z_t^I \left( L_t^I \right)^{\alpha_I-1}.
-\]
+and constant returns to scale, $Y_t^I = Z_t^I N_t^I$. The informal good is a perfect
+substitute for the formal one, so it sells at the same price $P_t$. We assume that they
+have zero profit, so $Z_t^I = w_t^I$.
 
-Also, due to decreasing returns to scale, an extra worker congests the average product,
-so the marginal revenue is given by
-$ \partial\left( w_t^I N_t^I \right) / \partial N_t^I = \alpha_I w_t^I $, where
-$\alpha_I$ acts as a second markup for the informal market. Because the informal wage is
-also the most flexible nominal wage in the economy, the informal sector absorbs the
-employment adjustment while its wage absorbs the price adjustment, which makes informal
-income the most volatile.
+Because the informal wage is also the most flexible nominal wage in the economy, the
+informal sector absorbs the employment adjustment while its wage absorbs the price
+adjustment, which makes informal income the most volatile.
 
 %---------------------------------------------------
 %	UNIONS
@@ -472,7 +462,7 @@ and
 \[
 \ln (1+\pi_t^{w_I})
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
-- \frac{\alpha_I w_t^I}{(1+\tau^c_t) \mu_w I_t}
+- \frac{w_t^I}{(1+\tau^c_t) \mu_w I_t}
     \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
 + \bar \beta_I \ln (1+\pi_{t+1}^{w_I}),
 \]
@@ -525,7 +515,7 @@ is defined by
 dB_t = (1+r_t) dB_{t-1} - C_t d\tau^c_t = (1 + r - \phi_B) dB_{t-1} = \rho_B dB_{t-1},
 \]
 where $\rho_B$ is the debt persistency, which we calibrate so that debt has a half-life
-of 10 years, so $\rho_B = {0.5}^{1/40} \approx 0.983$ and $\phi_B = \mPhiB$.
+of 5 years, so $\rho_B = {0.5}^{1/40} \approx 0.983$ and $\phi_B = \mPhiB$.
 
 This situation leads to larger multipliers and great inequality
 \parencite{auclert2023trickling}. In the presence of nominal rigidity and non-Ricardian
@@ -666,7 +656,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{transition_timeseries.png}
+    \includegraphics[width=1.0\linewidth]{data/transition_timeseries.png}
     \caption{Sector Transitions over time}
     \label{fig:transition_timeseries}
 \end{figure}
@@ -674,7 +664,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\linewidth]{calibration_timeseries.png}
+    \includegraphics[width=0.9\linewidth]{data/calibration_timeseries.png}
     \caption{Wage and Worked Hours for each Sector}
     \label{fig:calibration_timeseries}
 \end{figure}
@@ -682,7 +672,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\linewidth]{hours_wage.png}
+    \includegraphics[width=0.9\linewidth]{data/hours_wage.png}
     \caption{Average Worked Hours by Wage for each Sector}
     \label{fig:hours_wage}
 \end{figure}
@@ -690,7 +680,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{wage_distribution.png}
+    \includegraphics[width=1.0\linewidth]{data/wage_distribution.png}
     \caption{Wage Distribution for each Sector}
     \label{fig:wage_distribution}
 \end{figure}
@@ -698,7 +688,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\linewidth]{bf_coverage_by_wage.png}
+    \includegraphics[width=0.8\linewidth]{data/bf_coverage_by_wage.png}
     \caption{Share of Households Receiving Benefit by Wage Level}
     \label{fig:bf_coverage_by_wage}
 \end{figure}
@@ -706,7 +696,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\linewidth]{bf_wage.png}
+    \includegraphics[width=0.9\linewidth]{data/bf_wage.png}
     \caption{Wage Distribution by Benefit Status}
     \label{fig:bf_wage}
 \end{figure}
@@ -714,7 +704,7 @@ hourly wage moments, which help to reduce the part-time informal workers who ear
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\linewidth]{bf_eligibility.png}
+    \includegraphics[width=0.9\linewidth]{data/bf_eligibility.png}
     \caption{Familiar Wage Distribution by Sector, for Beneficiaries}
     \label{fig:bf_eligibility}
 \end{figure}
@@ -756,13 +746,12 @@ between the response in the economy with the program and in the $T=0$ counterfac
 \]
 read either as an impulse response or as the induced change in the volatility of
 consumption $\Delta \!\Var(C_t)$, a program that smooths fluctuations delivers
-$\Delta \!\Var(C_t) < 0$. This effect can be decomposed in an insurance and a composition
-channel,
+$\Delta \!\Var(C_t) < 0$. This effect can be decomposed in an \textit{benefit} and
+a \textit{reallocation channel},
 \[
-d\textbf{X} = d\textbf{X}^\text{ins}
-+ \left( d\textbf{X} - d\textbf{X}^\text{ins} \right)
-= \textbf{G}^\text{ins} \, d\textbf{Z}
-+ \left( \textbf{G} - \textbf{G}^\text{ins} \right) d\textbf{Z}.
+d\textbf{X} = d\textbf{X}^\text{benef}
++ \left( d\textbf{X} - d\textbf{X}^\text{benef} \right)
+= \textbf{G}^\text{benef} \, d\textbf{Z} + \textbf{G}^\text{realloc} \, d\textbf{Z}.
 \]
 
 The sectoral block of the transition matrix $\Pi_t$ is endogenous and depends on the
@@ -773,15 +762,15 @@ $\Lambda_{t+1} = \mathcal{T} \!\left( \Pi_t, a_t(s,\theta,\beta,e) \right)$. To 
 the steady-state distribution, we iterate until $\Pi_t$ converges to its fixed point,
 analogue to \textcite{aguirregabiria2007sequential}.
 
-The insurance channel is captured by the frozen-$\Pi$. Holding sectoral sorting fixed,
-the transfer relaxes the budget of unemployed and low-income informal households, and,
-since these are high-MPC, it dampens the aggregate response
+The \textit{benefit channel} is captured by the frozen-$\Pi$. Holding sectoral sorting
+fixed, the transfer relaxes the budget of unemployed and low-income informal households,
+and, since these are high-MPC, it dampens the aggregate response
 \parencite{auclert2024intertemporal}.
 
-The composition channel is captured by the moving-$\Pi$ Jacobian, because the CCT raises
-the value of informality relative to formal work, so workers are tilted toward the
-informal sector, which is riskier. The insurance term is stabilizing, while the
-composition is potentially destabilizing. The sign and magnitude of the net effect are
+The \textit{reallocation channel} is captured by the moving-$\Pi$ Jacobian, because the
+CCT raises the value of informality relative to formal work, so workers are tilted toward
+the informal sector, which is riskier. The benefit term is stabilizing, while the
+reallocation is potentially destabilizing. The sign and magnitude of the net effect are
 the quantitative answer to our question.
 
 Letting the transition respond, $d\Pi_t = \Pi_{\textbf{V}} \, d\textbf{V}_t$, yields the
@@ -834,11 +823,10 @@ probabilities $(\pi_F, \pi_F^U, \pi_I, \pi_I^U) = (\mPiF, \mPiUF, \mPiI, \mPiUI)
 \input{transition_table.tex}
 
 The average wage is normalized $w=w^I=\mW$, so that we can reference the model as a
-percentage of the Wage Bill. We defined $\alpha_I = \mAlphaI$ and $\mu = \mMu$, which is
-standard in the HANK literature
-\parencite{kaplan2018monetary,auclert2025fiscal}\footnote{ Markup $\mu=\mMu$ is also
-consistent with the estimates of \textcite{basu1997returns} for US.
-\textcite{de2021quantifying} show that the Brazilian markup is similar to the US.},
+percentage of the Wage Bill. We defined $\mu = \mMu$, which is standard in the HANK
+literature \parencite{kaplan2018monetary,auclert2025fiscal}\footnote{
+    Markup $\mu=\mMu$ is also consistent with the estimates of \textcite{basu1997returns}
+    for US. \textcite{de2021quantifying} show that the Brazilian markup is similar to the US.},
 $\kappa = \mKappa$, similar to \textcite{kaplan2018monetary}, and $\kappa_w = \mKappaW$,
 consistent with Caccioli (2026) estimations\footnote{ We calculate $\kappa_w$ following
 the standard Calvo formula
@@ -849,7 +837,7 @@ $\beta_H$ so that $A/Y = B/Y + p^e/Y = \mModAGdp$, from ANBIMA data.
 
 Taylor Rule is pretty standard, with $\phi=\mPhiTaylor$ and $r^* = \mRstar$, consistent
 with a $5\%$ annual real interest rate for Brazilian economy \parencite{dos2024natural}.
-Also, we set $\phi_B = \mPhiB$ so that the half-life of the debt is 10 years, slower
+Also, we set $\phi_B = \mPhiB$ so that the half-life of the debt is 5 years, slower
 than \textcite{auclert2025fiscal} and consistent with \textcite{campos2019alert}. Wage
 tax is based on the average formal worker contribution, $\tau_\ell = \mTauL$, profit's
 tax is based on the statutory rates for Brazil, IRPJ and CSLL, which are 25\% and 9\%
@@ -899,7 +887,7 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{consump_policy.png}
+    \includegraphics[width=1\linewidth]{model/consump_policy.png}
     \caption{Steady-State Consumption Policy Function}
     \label{fig:consump_policy}
 \end{figure}
@@ -907,7 +895,7 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{wealth_distribution.png}
+    \includegraphics[width=1\linewidth]{model/wealth_distribution.png}
     \caption{Wealth Distribution}
     \label{fig:wealth_distribution}
 \end{figure}
@@ -915,7 +903,7 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{income_distribution.png}
+    \includegraphics[width=1\linewidth]{model/income_distribution.png}
     \caption{Income Distribution}
     \label{fig:income_distribution}
 \end{figure}
@@ -925,7 +913,7 @@ We let some moments untargeted, in order to validate our estimation.
 % Descriptive Statistics
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{bf_descript.png}
+    \includegraphics[width=1.0\linewidth]{model/bf_descript.png}
     \caption{Steady-State Descriptive Statistics}
     \label{fig:bf_descript}
 \end{figure}
@@ -933,7 +921,7 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{bf_distribution.png}
+    \includegraphics[width=1.0\linewidth]{model/bf_distribution.png}
     \caption{Steady-State Distribution of BF Receipts}
     \label{fig:bf_distribution}
 \end{figure}
@@ -945,23 +933,15 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\linewidth]{impc.png}
+    \includegraphics[width=0.9\linewidth]{model/impc.png}
     \caption{iMPC: Partial Equilibrium Profile}
     \label{fig:impc}
 \end{figure}
 
 
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=1\linewidth]{irf_financing.png}
-%     \caption{Response to a Shock in $T$ by Financing Rules}
-%     \label{fig:irf_financing}
-% \end{figure}
-
-
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{irf_decomposition.png}
+    \includegraphics[width=1\linewidth]{model/irf_decomposition.png}
     \caption{Response to a Shock in $T$ by Channel}
     \label{fig:irf_decomposition}
 \end{figure}
@@ -973,45 +953,43 @@ We let some moments untargeted, in order to validate our estimation.
 % Monetary Shock
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{irfm_decomposition.png}
-    \caption{Response to an increase in $i$ by Channel}
+    \includegraphics[width=1\linewidth]{model/irfm_decomposition.png}
+    \caption{Response to a $+0.5\ p.p$ increase in $i$ by Channel}
     \label{fig:irfm_decomposition}
 \end{figure}
 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{irfm_bf_vs_nobf.png}
-    \caption{Response to an increase in $i$: With and Without CCT}
+    \includegraphics[width=1\linewidth]{model/irfm_financing.png}
+    \caption{Response to a $+0.5\ p.p$ increase in $i$ by Financing}
+    \label{fig:irfm_financing}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{model/irfm_bf_vs_nobf.png}
+    \caption{Response to a $+0.5\ p.p$ increase in $i$: With and Without CCT}
     \label{fig:irfm_bf_vs_nobf}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{model/irfm_perfect_cct.png}
+    \caption{Response to a $+0.5\ p.p$ increase in $i$: CCT vs "Perfect CCT"}
+    \label{fig:irfm_perfect_cct}
 \end{figure}
 
 \input{monetary_cumulative.tex}
 
 
-%---------------------------------------------------
-% Anticipated Shock
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=1\linewidth]{irf_anticipated.png}
-%     \caption{Response to a Shock in $T$: Instant vs Anticipated}
-%     \label{fig:irf_anticipated}
-% \end{figure}
-
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=1\linewidth]{irf_persistence.png}
-%     \caption{Response to a Shock in $T$: Fast vs Persistent}
-%     \label{fig:irf_persistence}
-% \end{figure}
-
-
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{irf_financing_G.png}
-    \caption{Response to a Shock in $T$: Without Distortion}
-    \label{fig:irf_financing_G}
+    \includegraphics[width=1\linewidth]{model/irfm_anticipated.png}
+    \caption{Response to a $+0.5\ p.p$ increase in $i$: Instant vs Anticipated}
+    \label{fig:irfm_anticipated}
 \end{figure}
 
 
@@ -1030,7 +1008,7 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{bf_comparison.png}
+    \includegraphics[width=1.0\linewidth]{model/bf_comparison.png}
     \caption{Steady-State Comparison: With and Without BF}
     \label{fig:bf_comparison}
 \end{figure}
@@ -1046,6 +1024,15 @@ We let some moments untargeted, in order to validate our estimation.
 
 \input{dyn_robustness.tex}
 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{model/dyn_robustness.png}
+    \caption{Robustness: Dynamics}
+    \label{fig:dyn_robustness}
+\end{figure}
+
+
 Another test would be removing self-employed and unpaid family (Conta Própria and
 Familiar Auxiliar) from informal households in PNAD.
 
@@ -1056,7 +1043,7 @@ Familiar Auxiliar) from informal households in PNAD.
 
 Formality in Brazil also buys Unemployment Insurance and FGTS, which are extra insurance
 advantages for formal workers. This model does not add this feature, so it understates
-the value of formality and therefore overstates the composition channel. This is a
+the value of formality and therefore overstates the reallocation channel. This is a
 natural extension of this paper.
 
 
@@ -1272,12 +1259,12 @@ $\mu_w = \varepsilon_w/(\varepsilon_w-1)$, the wage Phillips curve is
 \]
 
 At the same time, the informal union's problem is exactly the same, but without a wage
-tax and with a different marginal revenue given by $\alpha_I w_t^I$. Assuming a
-different adjustment cost $\theta_w^I$, the wage Phillips curve for informal wage is
+tax. Assuming a different adjustment cost $\theta_w^I$, the wage Phillips curve for
+informal wage is
 \[
 \ln (1+\pi_t^{w_I})
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
-- \frac{\alpha_I w_t^I}{(1+\tau^c_t) \mu_w I_t}
+- \frac{w_t^I}{(1+\tau^c_t) \mu_w I_t}
     \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
 + \bar \beta_I \ln (1+\pi_{t+1}^{w_I}),
 \]

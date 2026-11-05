@@ -6,7 +6,7 @@
 #=
 
 # ---- Packages -------------------------------------------------------------
-import time
+import os, time, pickle
 import numpy as np
 from sequence_jacobian.classes import SteadyStateDict
 from sequence_jacobian.classes.impulse_dict import ImpulseDict
@@ -154,8 +154,9 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
     3) Asset Market:          calibrates beta_high to A = B + p_e, secant method;
     4) Pi_s and BF:           internally calibrate Pi_s and BF.
 
-    flows           :  dict,      {'FI': value, ...} to be matched
-    counterfactual  :  bool,      True to B clears asset_market and tau_l the budget
+    flows           :  dict,      {'FI': value, ...} to be matched; ignored in a counterfactual
+    counterfactual  :  bool,      True holds the calibrated parameters (offer rates, BF rule, psi, beta,
+                                  w_I); hours, B and tau_c adjust, and sector choice reallocates
     strict          :  bool,      False returns the last iterate instead of raising
     damp            :  [0,1],     damp > 0 to avoid cycling (but converges slower)
     tol, stol       :  value,     tolerance for 'Pi' and for the 'BF' rule
@@ -166,6 +167,8 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
     # Import Grids
     c = {**unknowns, **calib}
     c['tau_css'], c['B_ss'] = c['tau_c'], c['B']
+    if counterfactual: flows = None                    # only choices adjust, the offer rates stay
+    else: c['w_I'] = c['w']                            # w_I = w in the SS; a counterfactual keeps it
     nE, nA, nT = c['nE'], c['nA'], c['nT']
 
     e_grid, Pi_e, a_grid, thetaF, probF, thetaI, probI =\
@@ -200,15 +203,13 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
             c['h_I'] = np.sqrt(c['h_I'] * float(ss['h_I_hat']))  # half-step to avoid stuck
             dA = abs(float(ss['asset_mkt']))
             if counterfactual:
-                # psi, beta and Z_I structural; hours, w_I, B and tau_c adjust
-                half = lambda x, y: float(np.sqrt(x * y))        # half-step, or it cycles
-                c['h_F'], c['w_I'] = half(c['h_F'], ss['h_F_hat']), half(c['w_I'], ss['w_I_hat'])
+                # psi, beta and w_I structural; hours, B and tau_c adjust
+                c['h_F'] = float(np.sqrt(c['h_F'] * ss['h_F_hat']))   # half-step, or it cycles
                 c['B'] = c['B_ss'] = 0.5 * c['B'] + 0.5 * float(ss['A'] - ss['p_e'])
                 c['tau_c'] = c['tau_css'] = float(np.clip(       # G fixed, tax residual
                     0.5 * (c['tau_c'] + float(ss['tau_c_hat'])), 0.0, 0.9))
             else:
                 c['G'] = float(ss['G_hat'])                      # G residual at the calibration
-                c['Z_I'] = float(ss['Z_I_hat'])                  # w_I = w in the SS
                 c['Phi'] = float(ss['Phi_hat'])                  # p_e pinned to A / GDP
                 c['psi'] = float(ss['psi_hat'])                  # hours normalized: psi backed out
                 c['B'] = c['B_ss'] = float(ss['B_hat'])          # debt pinned to B / GDP
@@ -235,14 +236,17 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
             dbf = 0.0
 
         Pi_new, P_s = _assemble(C, A, hhi['D'], c, qb, *grid)
-        dPi = np.max(np.abs(Pi_new - Pi)); Pi = damp * Pi + (1-damp) * Pi_new    # damp to avoid stucking
+        gap = np.abs(Pi_new - Pi).max(1)                 # by origin state
+        mass = hhi['D'].sum(1)
+        dPi = gap[mass > 1e-10].max()                    # states without mass cannot matter
+        Pi = damp * Pi + (1-damp) * Pi_new           # damp to avoid stucking
 
         # Iterate until converges
         if verbose:
             print(f"[Pi loop] it {it:3d}     |dPi|={dPi:.1e}" + (
-                  f"  tau_c={c['tau_c']:.4f}  B={c['B']:.3f}  w_I={c['w_I']:.4f}"
+                  f"  tau_c={c['tau_c']:.4f}  B={c['B']:.3f}"
                   f"  h_F={c['h_F']:.4f}  I={float(ss['I']):.4f}" if counterfactual else ""))
-        if warm and np.isfinite(hhi['Va']).all():   # robustness reads the baseline's guess, and must not replace it
+        if warm and np.isfinite(hhi['Va']).all():
             _HH_WARM[(hhi['Va'].shape[0], hhi['Va'].shape[1])] = \
                 (hhi['Va'].copy(), hhi['V'].copy(), hhi['Vc'].copy())
         
@@ -274,24 +278,11 @@ def solve_ss(hank_block, calib, flows=None, counterfactual=False, verbose=False,
 # ---------------------------------------------------------------------------
 
 # ---- Helpers --------------------------------------------------------------
-PRC = ('w', 'w_I', 'h_F', 'h_I')      # Prices the BF means test is evaluated at
-
-def irf_partial(G, inp, dZ, var):
-    # Partial Equilibrium: the Household Jacobian against the shock path.
-    return {v: G[v][inp] @ dZ for v in var if v in G.outputs}
-
+PRC = ('w', 'h_F', 'h_I')             # Prices the BF means test is evaluated at
 
 def ar1(size, rho, T, delay=0):
     # AR(1) shock path, announced `delay` quarters in advance.
     dZ = size * rho ** np.arange(T)
-    return np.r_[np.zeros(delay), dZ[:T-delay]]
-
-
-def hike(pps, rho, T, n, delay=0):
-    # Copom cycle: `pps` a year each quarter for n quarters, then AR(1) decay.
-    dZ = np.zeros(T)
-    dZ[:n] = pps / 400 * np.arange(1, n + 1)      # annual pp -> quarterly rate
-    for t in range(n, T): dZ[t] = rho * dZ[t-1]
     return np.r_[np.zeros(delay), dZ[:T-delay]]
 
 
@@ -305,24 +296,39 @@ def _dyn_jacobian(hank, ss, unknowns, targets, inp, T, cache):
 
 
 # ---- Solver ---------------------------------------------------------------
+def _anderson(X, F, m):
+    # Anderson solver: next point of x -> x + f(x) from the last m differences.
+    if len(F) < 2: return X[-1] + F[-1]
+    dF, dX = np.diff(F[-m-1:], axis=0).T, np.diff(X[-m-1:], axis=0).T
+    g = np.linalg.lstsq(dF, F[-1], rcond=None)[0]
+    return X[-1] + F[-1] - (dX + dF) @ g
 
-def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
-              damp=1.0, gpi=0.15, kpi=40, wdw=None, maxit=400, tol=1e-5,
-              ptol=1e-4, utol=1e-2, strict=True, verbose=False, jac=None):
-    """Solve the Dynamics by iterating the transition matrix.
+
+def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True, jac=None,
+              strict=True, gpi=0.15, kpi=40, mU=5, damp=1.0, wdw=None, tol=1e-4, ptol=1e-3,
+              utol=1e-3, max_pi=None, maxit=300, verbose=False, adapt=True, patience=None):
+    """Solve the Dynamics by iterating the transition matrix Pi.
+    Pi stops once it has settled, then we polish the targets U.
 
     shock           :  string,    the exogenous variable input name ('Tr', 'rstar')
     dZ              :  list,      the shock's path, normally an AR(1)
     unknowns        :  list,      variables that moves, solving `targets`
     moving          :  bool,      allow Pi_s to move, endogeneously
     damp            :  [0,1],     damp < 1 makes jacobian lower. damp = 1 is full Newton
-    gpi             :  [0,1],     damps the Pi path (the damp from ss)
-    kpi             :  int,       MAX Newton steps per Pi step
+    gpi             :  [0,1],     Pi step size at the first step; `adapt` then moves it
+    adapt           :  bool,      False keeps `gpi` fixed; True grows it 10% while dU falls
+    patience        :  int,       Pi steps without a 2% fall of dU before it stops
+    kpi             :  int,       MAX steps of U per Pi step (Pi waits for err < tol until then)
+    mU              :  int,       Anderson depth on U (0 = plain Newton)
+    max_pi          :  int,       stop after this many Pi steps, None runs until converged
     wdw             :  int,       quarters that must converge, None is all of T
-    tol, ptol, utol :  value,     target residuals
+    tol, ptol, utol :  value,     target residuals; tol and ptol scale with the shock; dU is the path
+                                  move of U per unit of Pi step (what a full step would move)
     strict          :  bool,      False hands back the last iterate instead of raising"""
 
-    start, T = time.time(), len(dZ)
+    t0, T = time.time(), len(dZ)
+    sh = float(np.max(np.abs(dZ)))
+    tol, ptol = tol * sh, ptol * sh
     win = T if wdw is None else wdw
     prc = [k for k in PRC if k in unknowns]
     inp = {shock: dZ}
@@ -339,87 +345,111 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True,
                              calib['q'], calib['nE'], calib['nT'])
         hhi = ss.internals['household']
         V_ss, Va_ss, D_ss = hhi['V'], hhi['Va'], hhi['D']
-        tgrid = (e_grid, thetaF, thetaI, a_grid)
-        mass  = D_ss.sum(1)         # Pi enters only through D @ Pi
+        tgrid, mass = (e_grid, thetaF, thetaI, a_grid), D_ss.sum(1)
 
-    U, worst, tag, sc = ImpulseDict({k: np.zeros(T) for k in unknowns}), '', '', None
+    flat = lambda d: np.concatenate([np.asarray(d[k]) for k in unknowns])
+    U   = ImpulseDict({k: np.zeros(T) for k in unknowns})
     U_p = {k: np.zeros(T) for k in unknowns}
-    err, nt, tpi = np.inf, 0, 0
-    dpi, dU = 0.0, (np.inf if moving else 0.0)
+    X, Fh = [], []
+    best, bstep, pstep, bvar = np.inf, 0, 0, None
+    err, nt, npi, dpi, dU = np.inf, 0, 0, 0.0, (np.inf if moving else 0.0)
+    
     for it in range(maxit):
-        # Pi waits for a settled U. `err` is void right after a Pi step
-        upd = moving and (err < tol or nt >= kpi)
+        settled = dpi < ptol and dU < utol
+        upd = moving and not settled and (err < tol or nt >= kpi)
         td  = hank.impulse_nonlinear(ss, ImpulseDict({**inp, **U}), [*var, *targets],
-                                     internals={'household': ['V', 'Va', 'D']}
-                                     if upd else {}, Js=Js)
+                                     internals={'household': ['V', 'Va', 'D']} if upd else {}, Js=Js)
         res = np.array([np.max(np.abs(td[k])) for k in targets])
         err, worst = float(res.max()), list(targets)[int(res.argmax())]
-        if not np.isfinite(err):
-            raise RuntimeError(f"\n     Dynamics blew up at it {it} on `{worst}`")
+        if not np.isfinite(err): raise RuntimeError(f"blew up at it {it} on `{worst}`")
+        tag = ''
 
         # MOVING: Pi_t is chosen at the end of t over the t+1 values, at the t prices.
         if upd:
-            h, sc = td.internals['household'], np.zeros((T, 4))
-            dr  = np.asarray(td['r']) if 'r' in td else np.zeros(T)
+            h, sc = td.internals['household'], np.zeros(T)
+            dPs = np.zeros((win,) + ss['Pi'].shape)         # the gaps in the window
+            d = np.array([np.abs(U[k][:win] - U_p[k][:win]) / max(float(np.max(np.abs(U[k][:win]))), 1e-12)
+                          for k in unknowns])               # U moved by the last Pi step
+            dn = float(d.max()) / gpi if npi else float(d.max())    # per unit of Pi step: a small gain cannot hide it
+            if adapt and npi > 1: gpi = float(np.clip(gpi * (0.5 if dn > 1.05 * dU else 1.1), 0.01, 0.5))
+            dr = np.asarray(td['r']) if 'r' in td else np.zeros(T)
             for t in range(T):
                 ct = {**calib, 'r': calib['rstar'] + float(dr[t]),
                       **{k: calib[k] + float(U[k][t]) for k in prc}}
                 D  = D_ss + h['D'][t]
-                s  = min(t + 1, T - 1)          # the choice at t is over the t+1 values
-                C, A = _choice(V_ss + h['V'][s], Va_ss + h['Va'][s], calib['sig'],
-                               calib['nT'], calib['nE'], probF, probI)
+                s1 = min(t + 1, T - 1)          # the choice at t is over the t+1 values
+                C, A = _choice(V_ss + h['V'][s1], Va_ss + h['Va'][s1], calib['sig'],
+                                 calib['nT'], calib['nE'], probF, probI)
                 dP = _assemble(C, A, D, calib, _test(ct, D, *tgrid), calib['nT'],
-                               calib['nE'], Pi_b, Pi_e)[0] - ss['Pi'] - inp['Pi'][t]
-                inp['Pi'][t] += gpi * dP
-
-                # A residual on a state nobody occupies cannot move any aggregate
-                a    = np.abs(dP)
-                i, j = np.unravel_index(int(np.argmax(a * mass[:, None])), a.shape)
-                sc[t] = a[i, j] * mass[i], a[i, j], i, j
-            dpi, tpi = float(sc[:win, 0].max()), int(sc[:win, 0].argmax())
-
-            d = np.array([np.abs(U[k][:win] - U_p[k][:win])
-                          / max(float(np.max(np.abs(U[k][:win]))), 1e-12)
-                          for k in unknowns])
-            iu, tu  = np.unravel_index(int(d.argmax()), d.shape)
-            dU, U_p = float(d.max()), {k: np.array(U[k]) for k in unknowns}
-            tag = (f"  |dPi|={dpi:.1e} @t{tpi:<3d}  |dU|={dU:.1e} on `{unknowns[iu]}` @t{tu}")
-
-        el = time.time() - start
+                                 calib['nE'], Pi_b, Pi_e)[0] - ss['Pi'] - inp['Pi'][t]
+                if t < win: dPs[t] = dP
+                else: inp['Pi'][t] += gpi * dP
+                sc[t] = (np.abs(dP) * mass[:, None]).max()
+            inp['Pi'][:win] += gpi * dPs
+            dpi, dU, U_p = float(sc[:win].max()), dn, {k: np.array(U[k]) for k in unknowns}
+            ku, tu = np.unravel_index(d.argmax(), d.shape)
+            npi += 1
+            tag = (f"  Pi step {npi}: |dPi|={dpi:.1e} @t{int(sc[:win].argmax())}"
+                   f"  |dU/g|={dU:.1e} on `{list(unknowns)[ku]}` @t{tu}  gain={gpi:.2f}")
         if verbose:
-            print(f"[Dyn loop] it {it:3d}  |err|={err:.1e} on `{worst}`"
-                  f"{tag}  ({el:.0f}s, {el/60:.1f}min)", flush=True)
-        if err < tol and dpi < ptol and dU < utol:
-            print(f"Dynamics solved in {el:.1f}s ({el/60:.1f}min), {it+1} it.")
-            return {v: td[v] for v in var}
-        if upd: err, nt = np.inf, 0
-        else: U += damp * HU.apply(td); nt += 1
+            print(f"  it {it:3d}  |err|={err:.1e} on `{worst}`{tag}  ({(time.time()-t0)/60:.1f}min)", flush=True)
 
+        if upd:                              # keep the best iterate; stop once dU stops falling
+            if dU < best:
+                if dU < 0.98 * best: pstep = npi             # a fall of 2% or more resets the patience
+                best, bstep, bvar = dU, npi, {v: np.array(td[v]) for v in var}
+            if patience and npi - pstep >= patience:
+                print(f"Dynamics stagnated: lowest dU={best:.1e} at Pi step {bstep} ({(time.time()-t0)/60:.1f}min).")
+                return bvar
+        ok = err < tol and dpi < ptol and dU < utol
+        if ok or (upd and max_pi and npi >= max_pi):
+            t_total = time.time() - t0
+            print(f"Dynamics {'solved' if ok else 'stopped at max_pi'} in {t_total:.1f}s "
+                  f"({t_total/60:.1f}min), {it+1} it." + (f" Lowest dU={min(best, dU):.1e}." if moving else ""))
+            return {v: td[v] for v in var} if ok or bvar is None else bvar
+        if upd: err, nt, X, Fh = np.inf, 0, [], []
+        else:
+            step = HU.apply(td)
+            if mU:
+                X, Fh = X[-mU-1:] + [flat(U)], Fh[-mU-1:] + [damp * flat(step)]
+                x = _anderson(X, Fh, mU)
+                U = ImpulseDict({k: x[i*T:(i+1)*T] for i, k in enumerate(unknowns)})
+            else: U += damp * step
+            nt += 1
+
+    if bvar is not None:                     # unconverged: the lowest dU is the result
+        print(f"Dynamics stopped at {maxit} it: lowest dU={best:.1e} at Pi step {bstep}, returned ({(time.time()-t0)/60:.1f}min).")
+        return bvar
     bad = [f"|err|={err:.1e}>{tol:.1e}"] * (err >= tol) + \
           [f"|dPi|={dpi:.1e}>{ptol:.1e}"] * (dpi >= ptol) + \
           [f"|dU|={dU:.1e}>{utol:.1e}"] * (dU >= utol)
     msg = f"\n     Dynamics stalled in {maxit} it on `{worst}`: " + ", ".join(bad)
-    if verbose and sc is not None:
-        # Where the Pi residual lives: the worst quarters, and the mass behind the cell
-        print(f"   {'t':>4} {'from':>6} {'to':>6} {'mass':>10} {'raw':>10} {'wgt':>10}")
-        for t in np.argsort(sc[:, 0])[-5:][::-1]:
-            i = int(sc[t, 2])
-            print(f"   {t:4d} {i:6d}   {int(sc[t, 3]):6d}   {mass[i]:10.2e}"
-                  f"   {sc[t, 1]:10.2e}   {sc[t, 0]:10.2e}", flush=True)
     if strict: raise RuntimeError(msg)
     print(msg, flush=True)
     return {v: td[v] for v in var}
 
 
-def irf_builder(hank, ss, calib, unknowns, targets, var, wdw=None, Td=None):
-    # IRF after a shock: `insu`, `full` and `comp` effects. `Td` keeps the first quarters.
+def irf_builder(hank, ss, calib, unknowns, targets, var, wdw=None):
+    # IRF after a shock: `benef`, `full` and `realloc`. `Td` keeps the first quarters.
     jac = {}
     def build(shock, dZ, unk=unknowns, targ=targets, v=var,
               split=True, moving=True, verbose=False, **kw):
-        run = lambda mv: {x: p[:Td] for x, p in
+        run = lambda mv: {x: p for x, p in
                           solve_dyn(hank, ss, shock, dZ, unk, targ, calib, v, moving=mv,
                                     wdw=wdw, verbose=verbose, jac=jac, **kw).items()}
         if not split: return run(moving)
-        insu, full = run(False), run(True)
-        return dict(insu=insu, full=full, comp={x: full[x] - insu[x] for x in v})
+        benef, full = run(False), run(True)
+        return dict(benef=benef, full=full, realloc={x: full[x] - benef[x] for x in v})
     return build
+
+
+def solve_cases(cases, path=None, **kw):
+    # Every IRF in one call. cases = {name: (build, shock, dZ, options)}.
+    out = pickle.load(open(path, 'rb')) if path and os.path.exists(path) else {}
+    for name, (build, shock, dZ, opt) in cases.items():
+        if name in out: continue
+        print(f"== {name}", flush=True)
+        out[name] = build(shock, dZ, **opt, **kw)
+        if path:
+            with open(path, 'wb') as fobj: pickle.dump(out, fobj)
+    return out

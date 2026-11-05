@@ -468,7 +468,7 @@ mytheme = theme(legend.position = "bottom",
                 strip.background = element_rect(fill = pal[6], colour = "black"),
                 strip.text = element_text(colour = "black", size = 9))
 
-save_fig = function(g, name, h = 5) ggsave(paste0("output/figures/", name, ".png"),
+save_fig = function(g, name, h = 5) ggsave(paste0("output/figures/data/", name, ".png"),
                                            g, width = 8, height = h, dpi = 150)
 
 # Table for Latex.

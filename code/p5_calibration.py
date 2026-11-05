@@ -75,7 +75,7 @@ calibration = dict(
     BF_w   = pnad['BF_w'],                 # BF Payment / Wage Bill
     B_gdp  = 0.56,                         # Household Assets / GDP (ANBIMA)
     pe_gdp = 0.08,                         # Equity / GDP           (ANBIMA: 12.9% of A)
-    phi_B  = 1 + rstar - 0.5 ** (1/40),    # Response to Pay off Debt: 50% Repaid in 10y
+    phi_B  = 1 + rstar - 0.5 ** (1/20),    # Response to pay off Debt: 50% Repaid in 5y
 
     # --- Bolsa Familia Rule ---
     lambda_BF = 0.20,          # Calibrated: Entry Prob, if Eligible              -> BF_U
@@ -86,13 +86,11 @@ calibration = dict(
 
     # --- Firms ---
     w        = 1.0,             # Normalized
-    w_I      = 1.0,             # Normalized (w_I = w)
     mu       = mu_w,            # Price Markup
     mu_w     = mu_w,            # Wage Markup
     kappa    = 0.10,            # Price PC Slope
     kappa_w  = kappa_w,         # Formal Wage PC Slope
     kappa_wI = 3 * kappa_w,     # Informal Wage PC Slope
-    alpha_I  = 0.85,            # Informal Returns to Scale
 )
 
 
@@ -153,8 +151,9 @@ bf_calib = {'lambda_BF': ('BF_U_LF', 'U', 1),      # (moment, sector, sign)
             'ybar'     : ('BF_I_LF', 'I', 1),
             'rho_F'    : ('BF_F_LF', 'F', -1)}
 unknowns = dict(beta_high = 0.98, psi = 1.1, L = 0.6, G = 0.1,
-                Tr = 0.2, B = 4.0, h_I = 0.9, Z_I = 0.9, Phi = 0.0)
-update   = [*pi_calib, *bf_calib, *unknowns, 'tau_css', 'B_ss']
+                Tr = 0.2, B = 4.0, h_I = 0.9, Phi = 0.0)
+update   = [*pi_calib, *bf_calib, *unknowns, 'w_I', 'tau_css', 'B_ss']      # w_I = w, calibrated in the SS
+cf_keep  = [*update, 'h_F', 'tau_c']                                       # a counterfactual holds these
 
 
 

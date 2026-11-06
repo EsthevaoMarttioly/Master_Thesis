@@ -430,12 +430,10 @@ for price inflation is given by
 
 Additionally, there is a representative informal sector operating with flexible prices
 and constant returns to scale, $Y_t^I = Z_t^I N_t^I$. The informal good is a perfect
-substitute for the formal one, so it sells at the same price $P_t$. We assume that they
-have zero profit, so $Z_t^I = w_t^I$.
-
-Because the informal wage is also the most flexible nominal wage in the economy, the
-informal sector absorbs the employment adjustment while its wage absorbs the price
-adjustment, which makes informal income the most volatile.
+substitute for the formal one, so it sells at the same price $P_t$. We assume that
+informal labor demand is perfectly elastic $w_t^I = Z_t^I$. Because the real wage
+does not move, the informal sector absorbs aggregate shocks through quantities rather
+than prices: $N_t^I$ and $h_t^I$ adjust, which makes formal income more volatile.
 
 %---------------------------------------------------
 %	UNIONS
@@ -449,8 +447,7 @@ $ h_{i,t} = h_t $ \parencite{auclert2025fiscal}.
 Also, as in \textcite{hagedorn2019fiscal}, union's objective is to maximize the utility
 of an agent with average consumption $\bar C_t = \int_0^1 c_{it} \: di$, discounted by
 the average discount factor $\bar \beta$ \parencite{auclert2021exchange}. This results
-in two Phillips curves for wage inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ and
-$\pi_t^{w_I} = (1+\pi_t) w_t^I / w_{t-1}^I $ given by
+in two Phillips curves for wage inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ given by
 \[
 \ln (1+\pi_t^w)
 = \kappa_w \left[ \psi \cdot h_t^{1/\varphi}
@@ -460,11 +457,11 @@ $\pi_t^{w_I} = (1+\pi_t) w_t^I / w_{t-1}^I $ given by
 \]
 and
 \[
-\ln (1+\pi_t^{w_I})
+\ln (1+\pi_t)
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
 - \frac{w_t^I}{(1+\tau^c_t) \mu_w I_t}
     \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
-+ \bar \beta_I \ln (1+\pi_{t+1}^{w_I}),
++ \bar \beta_I \ln (1+\pi_{t+1}),
 \]
 where the informal adjustment cost is lower than the formal one, so
 $\kappa_w^I > \kappa_w$. The informal sector is the most flexible in this economy, which
@@ -571,7 +568,7 @@ households,
 
 \textit{Equilibrium.} Given initial conditions $(B_{-1}, p_{-1}^e, \Lambda_0)$ and
 exogenous paths $\{T_t, r^*_t\}_{t\geq0}$, an equilibrium is a sequence of prices
-$\{w_t, w_t^I, \pi_t, \pi^w_t, \pi_t^{w_I}, i_t, r_t, r^a_t, p^e_t\}$, macroeconomic
+$\{w_t, \pi_t, \pi^w_t, \pi_t^{w_I}, i_t, r_t, r^a_t, p^e_t\}$, macroeconomic
 aggregates
 $\{Y_t, Y^I_t, L_t, L^I_t, h_t, h_t^I, d_t, B_t, C_t, A_t, G_t, \text{BF}_t\}$,
 transition matrices $\{\Pi_t\}$, household policies $\{c_t, a_t\}$ over the state
@@ -942,7 +939,7 @@ We let some moments untargeted, in order to validate our estimation.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{model/irf_decomposition.png}
-    \caption{Response to a Shock in $T$ by Channel}
+    \caption{Response to a $+1\%$ Shock in $T$ by Channel}
     \label{fig:irf_decomposition}
 \end{figure}
 

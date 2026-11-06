@@ -306,7 +306,7 @@ def _anderson(X, F, m):
 
 def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True, jac=None,
               strict=True, gpi=0.15, kpi=40, mU=5, damp=1.0, wdw=None, tol=1e-4, ptol=1e-3,
-              utol=1e-3, max_pi=None, maxit=300, verbose=False, adapt=True, patience=None):
+              utol=1e-3, max_pi=None, maxit=300, verbose=False, adapt=True, patience=8):
     """Solve the Dynamics by iterating the transition matrix Pi.
     Pi stops once it has settled, then we polish the targets U.
 
@@ -434,9 +434,10 @@ def irf_builder(hank, ss, calib, unknowns, targets, var, wdw=None):
     jac = {}
     def build(shock, dZ, unk=unknowns, targ=targets, v=var,
               split=True, moving=True, verbose=False, **kw):
-        run = lambda mv: {x: p for x, p in
-                          solve_dyn(hank, ss, shock, dZ, unk, targ, calib, v, moving=mv,
-                                    wdw=wdw, verbose=verbose, jac=jac, **kw).items()}
+        def run(mv):                       # % deviation from SS; pi has SS = 0, so it stays in pp
+            irf = solve_dyn(hank, ss, shock, dZ, unk, targ, calib, v, moving=mv,
+                            wdw=wdw, verbose=verbose, jac=jac, **kw)
+            return {x: p / float(ss[x]) if abs(float(ss[x])) > 1e-12 else p for x, p in irf.items()}
         if not split: return run(moving)
         benef, full = run(False), run(True)
         return dict(benef=benef, full=full, realloc={x: full[x] - benef[x] for x in v})

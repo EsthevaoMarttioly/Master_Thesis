@@ -193,7 +193,7 @@ def dyn_robustness(build_fn, shock, dZ, grid=dyn_grid, moving=True, path=None, s
 
     for k, v in [(None, None)] + [(k, v) for k, vs in grid.items() for v in vs]:
         key = 'base' if k is None else f'{k}={v:g}'
-        if out.get(key) is not None: continue                  # a failed variant (None) is kept, and retried
+        if out.get(key) is not None: continue      # a failed variant (None) is kept, and retried
         try:
             out[key] = build_fn({} if k is None else {k: v})(shock, dZ, split=False, moving=moving, **kw)
             print(f"  {key:16s} done", flush=True)
@@ -231,5 +231,5 @@ def plot_dyn_robustness(dyn, grid=dyn_grid, title='Monetary Policy Shock (i): Dy
         fig.legend(hs[:-1], [h.get_label() for h in hs[:-1]], ncol=max(len(grid), 2),
                    bbox_to_anchor=(0.5, -0.04), **kw)
 
-    return plot_irf(lines, variables=('C', 'Y', 'Y_I', 'N_I', 'pi', 'r', 'w', 'B'),
+    return plot_irf(lines, variables=('C', 'Y', 'Y_I', 'N_I', 'pi', 'r', 'w', 'tau_c'),
                     title=title, savepath=savepath, style=style, fig_legend=fig_legend, **kw)

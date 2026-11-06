@@ -49,7 +49,7 @@ LABELS = {
     'U'    : 'Unemployment $\\alpha_U$',
     'BF'   : 'BF Recipients $BF$',
     'w'    : 'Real Wage $w$',
-    'pi'   : 'Inflation $\\pi$',
+    'pi'   : 'Inflation $\\pi$ (pp)',
     'pi_w' : 'Wage Inflation $\\pi^w$',
     'pi_wI': 'Informal Wage Inflation $\\pi^{w_I}$',
     'r'    : 'Real Rate $r$',
@@ -282,7 +282,7 @@ def plot_consumption_policy(ss, calibration, T_plot_a=10, savepath=None):
         _axis(axes[bi], xlabel='Assets $a$',
               ylabel='Consumption $c(s, \\bar{\\theta}, \\bar{e}, a)$',
               title=f'Policy Functions, Non-Recipients - {beta_name}',
-              xlim=T_plot_a, ylim=4, legend=True)
+              xlim=T_plot_a, ylim=3, legend=True)
 
     _save_or_show(fig, savepath)
 
@@ -368,7 +368,7 @@ def plot_wealth_distribution(ss, asset_max=51, income_bins=41, savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_bf_targeting(ss, bins=31, lim=2.0, ymax=100, savepath=None):
+def plot_bf_targeting(ss, bins=31, lim=2.5, ymax=100, savepath=None):
     # Who the means test catches: tested income against the threshold, by sector.
     h = _hh(ss)
     D, a = h['D'], h['a_grid']
@@ -475,8 +475,8 @@ def _cev_pos(ss_bf, ss_nobf):
 
 
 def _welfare_gains(ss_bf, ss_nobf):
-    # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed], weighted by With BF.
-    D = _reshape_hh(_hh(ss_bf)['D'], ss_bf)
+    # CEV from BF for [Impatient, Patient, Formal, Informal, Unemployed] | No BF.
+    D = _reshape_hh(_hh(ss_nobf)['D'], ss_nobf)
     X = _reshape_hh(_cev_pos(ss_bf, ss_nobf), ss_nobf)
     mean = lambda sel: (D[sel] * X[sel]).sum() / D[sel].sum()
     return np.array([mean(np.s_[:, :, b]) for b in (0, 1)] + [mean(s) for s in (0, 1, 2)])
@@ -493,19 +493,19 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
                r'Welfare Gain (CEV, %) $\mid$ No BF', 'Who gains from Bolsa Familia',
                names=('Impatient', 'Patient'), colors=(GRAY, GRAY))
 
-    # Welfare Gain by Wealth, over the With BF distribution
-    D0, D1 = _hh(ss_nobf)['D'], _hh(ss)['D']
-    qidx = _wealth_bins(D1, n_q)
+    # Welfare Gain by Wealth
+    D0   = _hh(ss_nobf)['D']
+    qidx = _wealth_bins(D0, n_q)
     cev  = _cev_pos(ss, ss_nobf)
-    axes[0, 1].bar(x, [100 * (D1[:, qidx == q] * cev[:, qidx == q]).sum() / D1[:, qidx == q].sum()
+    axes[0, 1].bar(x, [100 * (D0[:, qidx == q] * cev[:, qidx == q]).sum() / D0[:, qidx == q].sum()
                        for q in range(n_q)], color=COL4)
     axes[0, 1].set_xticks(x, [f'Q{i+1}' for i in range(n_q)])
-    _axis(axes[0, 1], xlabel=r'Wealth Quantile $\mid$ With BF', ylabel=r'Welfare Gain (CEV, %) $\mid$ No BF',
+    _axis(axes[0, 1], xlabel=r'Wealth Quantile $\mid$ No BF', ylabel=r'Welfare Gain (CEV, %) $\mid$ No BF',
           title='Welfare Gain by Wealth')
 
     # Wealth Share of each Quantile of its own economy (different households)
     ag = _hh(ss)['a_grid']
-    s0, s1 = _wealth_share(D0, ag, n_q), _wealth_share(D1, ag, n_q)
+    s0, s1 = _wealth_share(D0, ag, n_q), _wealth_share(_hh(ss)['D'], ag, n_q)
     axes[1, 0].bar(x, 100 * (s1 - s0), width=0.6, color=COL1)
     for q in range(n_q):                                   # the levels: No BF -> BF
         axes[1, 0].annotate(rf'{100 * s0[q]:.1f}$\to${100 * s1[q]:.1f}', (q, 100 * (s1[q] - s0[q])),
@@ -533,6 +533,7 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
 # ---------------------------------------------------------------------------
 # 4. PE iMPC and GE IRFs
 # ---------------------------------------------------------------------------
+T_plot = 20
 irf_vars = ('C', 'Y', 'Y_I', 'BF', 'r', 'pi', 'w', 'I')
 tax_vars = ('C', 'Y', 'Y_I', 'BF', 'r', 'pi', 'w', 'B')
 
@@ -586,8 +587,8 @@ def plot_impc(G_hh, h_ant=4, T_plot=20, key='C', savepath=None):
     _save_or_show(fig, savepath)
 
 
-def plot_irf(irf_dict, variables=irf_vars, title='CCT Shock', shock=None,
-             T_plot=40, savepath=None, style=None, fig_legend=None):
+def plot_irf(irf_dict, variables=irf_vars, title='Monetary Shock (+0.5 p.p)',
+             shock=None, T_plot=T_plot, savepath=None, style=None, fig_legend=None):
     # One line per economy in `irf_dict`, one panel per variable. `style`: {label: (color, ls)}.
     if shock is not None:
         dZ = shock[0]; pk = float(np.asarray(dZ)[np.argmax(np.abs(dZ))])
@@ -602,7 +603,7 @@ def plot_irf(irf_dict, variables=irf_vars, title='CCT Shock', shock=None,
 
 
 def plot_irf_decomposition(irf_benef, irf_full, irf_perf=None, variables=irf_vars,
-                           title='CCT Shock', T_plot=40, savepath=None):
+                           title='Monetary Shock (+0.5 p.p)', T_plot=T_plot, savepath=None):
     # Benefit (Pi frozen) vs Full (Pi moving); shade the reallocation gap.
     x = np.arange(T_plot)
     def draw(ax, v):
@@ -617,8 +618,8 @@ def plot_irf_decomposition(irf_benef, irf_full, irf_perf=None, variables=irf_var
     _irf_panels(variables, T_plot, draw, suptitle=f'GE IRFs: {title}', savepath=savepath)
 
 
-def plot_irf_financing(irfs, variables=tax_vars, title='Monetary Policy Shock (i)',
-                       T_plot=40, savepath=None):
+def plot_irf_financing(irfs, variables=tax_vars,
+                       title='Transfer Shock (+1%)', T_plot=T_plot, savepath=None):
     # The same shock under alternative fiscal rules.
     x    = np.arange(T_plot)
     both = [(irf, lab, CYCLE[i % len(CYCLE)], LS[i % 4])
@@ -633,9 +634,8 @@ def plot_irf_financing(irfs, variables=tax_vars, title='Monetary Policy Shock (i
                     ax.plot(x, irf['tau_c'][:T_plot] * 100, color=COL5, ls=ls,
                             lw=2.2, label=rf'$\tau_c$ ({lab})')
             ax.legend(frameon=False)
-    _irf_panels(variables, T_plot, draw,
-                suptitle=f'GE IRFs: {title}', titles={'B': r'Debt $B$ x Consumption Tax $\tau_c$'},
-                savepath=savepath)
+    _irf_panels(variables, T_plot, draw, suptitle=f'GE IRFs: {title}',
+                titles={'B': r'Debt $B$ x Consumption Tax $\tau_c$'}, savepath=savepath)
 
 
 

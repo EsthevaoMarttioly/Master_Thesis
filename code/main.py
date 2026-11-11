@@ -32,14 +32,14 @@ tables  = 'output/tables/'
 hank_ss = create_model([hh_ss, firm_formal, firm_informal, nkpc_ss, union_ss,
                         equity_ss, monetary, fiscal, mkt_clearing, calibrate_ss])
 
-ss = solve_ss(hank_ss, calibration, flows, damp=0.5, verbose=True)
+ss = solve_ss(hank_ss, calibration, flows, damp=0.0, verbose=True)
 calibration.update({k: ss[k] for k in update + ['Pi', 'Qb']})
 
 
 # Steady State Diagnostics
 print_ss_summary(ss)
 tex_macros(ss, calibration, savepath=f'{tables}macros.tex')
-transition_table(ss, savepath=f'{tables}transition_table.tex')
+transition_table(savepath=f'{tables}transition_table.tex')
 report(load_res(), savepath=f'{tables}moments.tex')
 
 
@@ -56,7 +56,7 @@ plot_bf_targeting(ss, savepath=f'{figures}bf_distribution.png')
 # Counterfactuals
 solve_cf = lambda cal, **kw: solve_ss(hank_ss, cal, verbose=False, **kw)
 cfs      = counterfactuals(solve_cf)
-(ss_nobf, calib_nobf), (ss_perf, calib_perf) = cfs.values()
+(ss_nobf, calib_nobf), (ss_compl, calib_compl) = cfs.values()
 
 compare_ss({'Baseline': ss, **{n: s for n, (s, _) in cfs.items()}},
            savepath=f'{tables}ss_counterfactuals.tex')
@@ -70,9 +70,9 @@ plot_bf_comparison(ss, ss_nobf, savepath=f'{figures}bf_comparison.png')
 hank = create_model([hh.remap({'r': 'ra'}), firm_formal, firm_informal,
                      phillips_curve, arbitrage, finance, monetary, fiscal, mkt_clearing])
 
-dyn      = hank.steady_state(ss)
-dyn_nobf = hank.steady_state(ss_nobf)
-dyn_perf = hank.steady_state(ss_perf)
+dyn       = hank.steady_state(ss)
+dyn_nobf  = hank.steady_state(ss_nobf)
+dyn_compl = hank.steady_state(ss_compl)
 
 # Verify Dyn is also a valid Steady State
 for k in dyn.keys():
@@ -91,7 +91,7 @@ di_ant = {d: ar1(0.50 / 400, 0.50, T, delay=d) for d in (1, 4, 8)}     # Anticip
 ## Market Clearing Targets
 unk_dyn  = ['B', 'tau_c', 'pi', 'w', 'h_F', 'h_I', 'L', 'p_e']
 tgt_dyn  = ['gov_budget', 'debt_rule', 'nkpc', 'wage_nkpc', 'labor_mkt',  'wage_nkpc_I', 'asset_mkt',  'equity']
-var      = ['B', 'tau_c', 'C', 'Y', 'Y_I', 'L', 'N_I', 'I', 'U', 'BF', 'pi', 'w', 'r', 'i']
+var      = ['B', 'tau_c', 'C', 'Y', 'Y_I', 'h_I', 'I', 'U', 'BF', 'pi', 'w', 'r']
 
 unk_tax = [k for k in unk_dyn  if k != 'B']
 tgt_tax = [k for k in tgt_dyn   if k != 'debt_rule']
@@ -102,7 +102,7 @@ var_tax = [k for k in var if k != 'B']
 G_hh = hh.jacobian(dyn, inputs=['Tr', 'r', 'tau_c', 'w'], T=T)
 build_irfs = irf_builder(hank, dyn, calibration, unk_tax, tgt_tax, var_tax, wdw)
 build_nobf = irf_builder(hank, dyn_nobf, calib_nobf, unk_tax, tgt_tax, var_tax, wdw)
-build_perf = irf_builder(hank, dyn_perf, calib_perf, unk_tax, tgt_tax, var_tax, wdw)
+build_compl = irf_builder(hank, dyn_compl, calib_compl, unk_tax, tgt_tax, var_tax, wdw)
 
 
 unk_G    = ['G' if k == 'tau_c' else k for k in unk_tax]
@@ -110,17 +110,19 @@ var_G    = [k for k in var if k not in ['tau_c', 'B']]
 debt_fin = dict(unk=unk_dyn, targ=tgt_dyn, v=var)
 debt_G   = dict(unk=unk_G, targ=tgt_tax, v=var_G)
 
-cases = {'irf_tr'    : (build_irfs, 'Tr',    dTr, dict(debt_fin)),
-         'irf_tax'   : (build_irfs, 'Tr',    dTr, dict(split=False)),
-         'irf_G'     : (build_irfs, 'Tr',    dTr, dict(debt_G, split=False)),
-         'irfm_bf'   : (build_irfs, 'rstar', di,  dict()),
-         'irfm_nobf' : (build_nobf, 'rstar', di,  dict(split=False)),
-         'irfm_perf' : (build_perf, 'rstar', di,  dict(split=False)),
+cases = {'irfm_bf'    : (build_irfs,  'rstar', di,  dict()),
+         'irfm_nobf'  : (build_nobf,  'rstar', di,  dict(split=False)),
+         'irfm_compl' : (build_compl, 'rstar', di,  dict(split=False)),
+         'irf_tr'     : (build_irfs,  'Tr',    dTr, dict(debt_fin, gpi=0.6, adapt=False)),
+         'irf_tax'    : (build_irfs,  'Tr',    dTr, dict(split=False)),
+         'irf_G'      : (build_irfs,  'Tr',    dTr, dict(debt_G, split=False)),
+         'irfm_G'     : (build_irfs,  'rstar', di,  dict(debt_G, split=False)),
+         'irfm_G_nobf': (build_nobf,  'rstar', di,  dict(debt_G, split=False)),
          **{f'irfm_ant{d}': (build_irfs, 'rstar', dZ, dict(split=False)) for d, dZ in di_ant.items()}}
 
-irfs = solve_cases(cases, path='output/smm/irfs.pkl')
+irfs = solve_cases(cases, path='output/smm/irfs.pkl', verbose=True)
 
-irf_tr, irf_tax, irf_G, irfm_bf, irfm_nobf, irfm_perf = (irfs[k] for k in list(cases)[:6])
+irfm_bf, irfm_nobf, irfm_compl, irf_tr, irf_tax, irf_G, irfm_G, irfm_G_nobf = (irfs[k] for k in list(cases)[:8])
 irfm_ant = {d: irfs[f'irfm_ant{d}'] for d in di_ant}
 
 
@@ -130,27 +132,34 @@ irfm_ant = {d: irfs[f'irfm_ant{d}'] for d in di_ant}
 plot_impc(G_hh, savepath=f'{figures}impc.png')
 
 
-plot_irf_decomposition(irf_tr['benef'], irf_tr['full'], variables=tax_vars, T_plot=40,
+# Fiscal
+plot_irf_decomposition(irf_tr['benef'], irf_tr['full'], T_plot=40,
                        title='Transfer Shock (+1%)', savepath=f'{figures}irf_decomposition.png')
 
 
 plot_irf_financing({'Debt-Financed': irf_tr['full'], 'Tax-Financed': irf_tax,
-                    'Zero-Distortion': irf_G}, T_plot=40, savepath=f'{figures}irf_financing.png')
+                    'Zero-Distortion': irf_G}, savepath=f'{figures}irf_financing.png')
 
 
+# Monetary
 plot_irf_decomposition(irfm_bf['benef'], irfm_bf['full'], savepath=f'{figures}irfm_decomposition.png')
 
 
-plot_irf({'With BF (Total)': irfm_bf['full'], 'Without BF': irfm_nobf,
-          'With BF (Benefit)': irfm_bf['benef']}, savepath=f'{figures}irfm_bf_vs_nobf.png')
+plot_irf({'With BF (Total)': irfm_bf['full'], 'With BF (Benefit)': irfm_bf['benef'],
+          'Without BF': irfm_nobf}, savepath=f'{figures}irfm_bf_vs_nobf.png')
 
 
-plot_irf({'With BF (Total)': irfm_bf['full'], 'Perfect CCT': irfm_perf,
-          'With BF (Benefit)': irfm_bf['benef']}, savepath=f'{figures}irfm_perfect_cct.png')
+plot_irf({'With BF': irfm_bf['full'], 'Total Compliance': irfm_compl,
+          'Without BF': irfm_nobf,}, savepath=f'{figures}irfm_compliance.png')
+
+
+plot_irf_financing({'Tax-Financed': irfm_bf['full'], 'Zero-Distortion': irfm_G,
+                    'Without BF': irfm_G_nobf}, savepath=f'{figures}irfm_G.png')
 
 
 plot_irf({'Unanticipated': irfm_bf['full'],
-          **{f'Announced {d}q ahead': v for d, v in irfm_ant.items()}}, savepath=f'{figures}irfm_anticipated.png')
+          **{f'{d}q ahead': v for d, v in irfm_ant.items()}},
+          savepath=f'{figures}irfm_anticipated.png')
 
 
 # Dynamics - Tables (Cumulative Response)
@@ -164,7 +173,7 @@ cumulative_response_table(irfm_bf['benef'], irfm_bf['full'], shock='i',
 
 # ---------------------------------------------------------------------------
 # Robustness Tests
-solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, verbose=True, **kw)
+solve = lambda cal, **kw: solve_ss(hank_ss, cal, flows=flows, **kw)
 build = lambda cal: irf_builder(hank, SteadyStateDict({**dyn, **cal}, internals=dyn.internals),
                                 {**calibration, **cal}, unk_tax, tgt_tax, var_tax, wdw)
 

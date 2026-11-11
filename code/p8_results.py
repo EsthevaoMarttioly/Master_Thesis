@@ -24,7 +24,7 @@ inc_path = 'data/final/pnad_income_dist.csv'
 PAL    = ('#1b325f', '#9cc4e4', '#e9f2f9', '#3a89c9', '#f26c4f', '#a8a3af')
 STATES = {'F': 'Formal', 'I': 'Informal', 'U': 'Unemployed'}
 LS     = {0: '-', 1: '--', 2: ':', 3: '-.'}
-CYCLE  = [PAL[i] for i in (0, 3, 1, 4, 2)]
+CYCLE  = [PAL[i] for i in (0, 3, 4, 1, 2)]
 COL1, COL2, COL3, COL4, COL5, GRAY = PAL
 DIGITS = str.maketrans(dict(zip('0123456789', ('Zero', 'One', 'Two', 'Three', 'Four',
                                                'Five', 'Six', 'Seven', 'Eight', 'Nine'))))
@@ -39,7 +39,7 @@ COLORS = {
 }
 
 LABELS = {
-    'Y'    : 'Output $Y$',
+    'Y'    : 'Formal Output $Y$',
     'Y_I'  : 'Informal Output $Y_I$',
     'C'    : 'Consumption $C$',
     'N_F'  : 'Formal Labor Offer $N_F$',
@@ -61,7 +61,7 @@ LABELS = {
     'Formal Share'     : r'Formal Share $\alpha_F$',
     'Informal Share'   : r'Informal Share $\alpha_I$',
     'Unemployed Share' : r'Unemployment $\alpha_U$',
-    'xi'               : r'$\xi, \E[y_F]/\E[y_I]$',
+    'xi'               : r'$\xi, \E[y_I]/\E[y_F]$',
     'C / Y'            : r'$C/Y$',
     'A / Y'            : r'$A/Y$',
     'HtM'              : r'Hand-to-Mouth',
@@ -74,10 +74,10 @@ LABELS = {
 }
 
 CHANNEL = {'benef': 'Benefit Channel', 'full': 'Full Channel',
-           'realloc': 'Reallocation Channel', 'perf': 'Perfect CCT'}
+           'realloc': 'Reallocation Channel', 'compl': 'Total Compliance'}
 
 SHORT = {'Informal Share': r'$\alpha_I$', 'Unemployed Share': r'$\alpha_U$',
-         'xi': r'$w_F/w_I$', 'HtM': 'HtM', 'Wealth Gini': 'Gini'}
+         'xi': r'$w_I/w_F$', 'HtM': 'HtM', 'Wealth Gini': 'Gini'}
 
 plt.rcParams.update({'font.size'        : 10,
                      'axes.spines.top'  : False,
@@ -121,7 +121,7 @@ def _tex_table(head, rows, caption, label, colspec, size=r'\small', savepath=Non
     line = lambda r: r if r.startswith('\\') else r + r' \\'
     tex = ("%---------------------------------------------------\n"
            "\\begin{table}[htbp]\n\\centering\n"
-           f"\\caption{{{caption}}}\n\\label{{{label}}}\n{size}\n"
+           + (f"\\caption{{{caption}}}\n" if caption else "") + f"\\label{{{label}}}\n{size}\n"
            f"\\begin{{tabular}}{{{colspec}}}\n\\toprule\n"
            + "\n".join(map(line, head)) + "\n\\midrule\n"
            + "\n".join(map(line, rows)) + "\n"
@@ -157,24 +157,16 @@ def print_ss_summary(ss, var_ss=vars_ss):
     print("=" * 55)
 
 
-def transition_table(ss, savepath=None, label='tab:transitions'):
-    # Model vs PNAD quarterly transition matrix
-    P    = _hh(ss)['P']
+def transition_table(savepath=None, label='tab:transitions'):
+    # PNAD-C quarterly transition matrix and stationary shares (the model is calibrated to them)
     d    = pd.read_csv(trs_path, index_col=0)
     d_ss = pd.read_csv(cal_path).loc[0]
     Pd, shd = d.loc[list(STATES), list(STATES)].to_numpy(), d_ss[list(STATES)].to_numpy()
-    sh = np.array([ss[s] for s in STATES])
 
-    head = [r' & \multicolumn{3}{c}{\textbf{Model}} & \multicolumn{3}{c}{\textbf{PNAD-C}}',
-            r'\cmidrule(lr){2-4}\cmidrule(lr){5-7}',
-            r'Origin & $F$ & $I$ & $U$ & $F$ & $I$ & $U$']
-    rows = [f'{n} & ' + " & ".join(_pct(x, 2) for x in np.r_[P[i], Pd[i]])
-            for i, n in enumerate(STATES.values())]
-    rows += ['\\midrule', 'Stationary Share & '
-             + " & ".join(_pct(x, 2) for x in np.r_[sh, shd])]
-
-    return _tex_table(head, rows, r'Quarterly Labor-Market Transitions (\%)',
-                      label, 'lcccccc', savepath=savepath)
+    head = [r' & $F$ & $I$ & $U$']
+    rows = [f'{n} & ' + " & ".join(_pct(x, 2) for x in Pd[i]) for i, n in enumerate(STATES.values())]
+    rows += ['\\midrule', 'Stationary Share & ' + " & ".join(_pct(x, 2) for x in shd)]
+    return _tex_table(head, rows, None, label, 'lccc', savepath=savepath)
 
 
 
@@ -514,13 +506,12 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
     _axis(axes[1, 0], xlabel='Wealth Quantile (own economy)',
           ylabel=r'$\Delta$ Wealth Share, pp (BF $-$ No BF)', title='Who Holds the Wealth')
 
-    # Consumption by state, both economies
+    # Consumption by state, both economies, on the No-BF distribution
     for i, (lab, sx, col) in enumerate([('No BF', ss_nobf, COL4), ('With BF', ss, COL1)]):
-        h = _hh(sx)
         axes[1, 1].bar(np.arange(3) + (i - 0.5) * 0.35,
-                       _by_state(h['D'], h['c'], block), width=0.35, color=col, label=lab)
+                       _by_state(D0, _hh(sx)['c'], block), width=0.35, color=col, label=lab)
     axes[1, 1].set_xticks(np.arange(3), list(STATES.values()))
-    _axis(axes[1, 1], ylabel='Mean Consumption $c$',
+    _axis(axes[1, 1], ylabel=r'Mean Consumption $c$ $\mid$ No BF',
           title='Consumption by Employment State', legend=True)
 
     for ax in (axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]):
@@ -534,8 +525,9 @@ def plot_bf_comparison(ss, ss_nobf, n_q=5, savepath=None):
 # 4. PE iMPC and GE IRFs
 # ---------------------------------------------------------------------------
 T_plot = 20
-irf_vars = ('C', 'Y', 'Y_I', 'BF', 'r', 'pi', 'w', 'I')
-tax_vars = ('C', 'Y', 'Y_I', 'BF', 'r', 'pi', 'w', 'B')
+irf_vars = ('C', 'Y', 'Y_I', 'I', 'BF', 'r', 'pi', 'w')
+tax_vars = ('C', 'Y', 'Y_I', 'r', 'BF', 'pi', 'w', 'B')
+SAME_Y   = ('C', 'Y', 'Y_I')
 
 def _irf_panels(variables, T_plot, draw, legend_ax=0, fig_legend=None,
                 suptitle=None, xtick=None, titles=None, savepath=None):
@@ -557,6 +549,10 @@ def _irf_panels(variables, T_plot, draw, legend_ax=0, fig_legend=None,
               title=titles.get(v, LABELS.get(v, v)), xlim=T_plot)
         if xtick:
             ax.xaxis.set_major_locator(mticker.MultipleLocator(xtick))
+    share = [ax for ax, v in zip(axes, variables) if v in SAME_Y]    # same y-range, to compare them
+    if len(share) > 1:
+        lo, hi = min(a.get_ylim()[0] for a in share), max(a.get_ylim()[1] for a in share)
+        for a in share: a.set_ylim(lo, hi)
     for ax in axes[n:]:
         ax.set_visible(False)
     if legend_ax is not None: axes[legend_ax].legend(frameon=False)
@@ -602,7 +598,7 @@ def plot_irf(irf_dict, variables=irf_vars, title='Monetary Shock (+0.5 p.p)',
                 suptitle=f'GE IRFs: {title}', xtick=5, savepath=savepath)
 
 
-def plot_irf_decomposition(irf_benef, irf_full, irf_perf=None, variables=irf_vars,
+def plot_irf_decomposition(irf_benef, irf_full, irf_compl=None, variables=irf_vars,
                            title='Monetary Shock (+0.5 p.p)', T_plot=T_plot, savepath=None):
     # Benefit (Pi frozen) vs Full (Pi moving); shade the reallocation gap.
     x = np.arange(T_plot)
@@ -612,9 +608,9 @@ def plot_irf_decomposition(irf_benef, irf_full, irf_perf=None, variables=irf_var
         ax.plot(x, full, color=COLORS['full'],  lw=2.2, label=CHANNEL['full'])
         ax.fill_between(x, ben, full, color=COLORS['full'], alpha=0.15,
                         label=CHANNEL['realloc'])
-        if irf_perf is not None and v in irf_perf:        # the frictionless means test
-            ax.plot(x, irf_perf[v][:T_plot] * 100, color=COL5, lw=2.0, ls=':',
-                    label=CHANNEL['perf'])
+        if irf_compl is not None and v in irf_compl:        # the frictionless means test
+            ax.plot(x, irf_compl[v][:T_plot] * 100, color=COL5, lw=2.0, ls=':',
+                    label=CHANNEL['compl'])
     _irf_panels(variables, T_plot, draw, suptitle=f'GE IRFs: {title}', savepath=savepath)
 
 
@@ -670,7 +666,7 @@ def _ss_stats(ss):
 
 def compare_ss(economies, savepath=None, label='tab:counterfactuals'):
     # Table: one column per steady state in `economies`.
-    SHORT = {'Perfect CCT': 'Pft CCT'}        # Delta header
+    SHORT = {'Total Compliance': 'Compliance'}        # Delta header
     names = list(economies)
     stats = {n: _ss_stats(economies[n]) for n in names}
     ref, cf = stats[names[0]], names[1:]
@@ -696,7 +692,7 @@ def compare_bf_ss(ss_bf, ss_nobf, labels=('No BF', 'With BF'), savepath=None, la
     return compare_ss({labels[0]: ss_nobf, labels[1]: ss_bf}, savepath=savepath, label=label)
 
 
-def cumulative_response_table(irf_benef, irf_full, variables=('C', 'U', 'pi', 'w'),
+def cumulative_response_table(irf_benef, irf_full, variables=('C', 'Y', 'Y_I'),
                               horizons=(1, 4, 20, 100), shock='T', savepath=None,
                               label='tab:cumulative_response'):
     # Cumulative Response (sum of dX_t up to horizon, %)

@@ -362,7 +362,7 @@ def inference(res, obj, G=None, step=0.05, coarse=False, scale=True,
     i = np.ix_(MID, MID)
     se = std_errors(G[MID], obj.W[i], obj.S[i])[0]
     stat, df, pval = jtest(res['g'][MID], G[MID], obj.W[i], obj.S[i])
-    k  = np.sqrt(stat / df) if scale else 1.0     # inflate the SE by the misspecification
+    k  = max(1.0, np.sqrt(stat / df)) if scale else 1.0     # inflate the SE if misspecified
 
     tbl = pd.DataFrame({'estimate': res['params'], 's.e.': dict(zip(obj.space, k * se)),
                         'lower': {k_: v[0] for k_, v in obj.space.items()},

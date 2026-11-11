@@ -13,7 +13,7 @@ import pickle
 import numpy as np
 
 from code.p5_calibration import calibration, cf_keep
-from code.p8_results import _ss_stats, _cev, _cell, _tex_table, plot_irf, LABELS, SHORT, COL1, COL2, COL5, GRAY
+from code.p8_results import _ss_stats, _cev, _cell, _tex_table, plot_irf, LABELS, SHORT, PAL
 
 
 # ---- Config ---------------------------------------------------------------
@@ -29,8 +29,8 @@ rob_sym = {'eis': r'\gamma', 'varphi': r'\varphi',
 # ---------------------------------------------------------------------------
 # 1. Counterfactual Policies
 # ---------------------------------------------------------------------------
-cf_grid  = {'No BF'      : {'lambda_BF': 0.0, 'BF_w': 0.0},
-            'Perfect CCT': {'lambda_BF': 1.0, 'rho_F': 1.0, 'rho_I': 1.0}}
+cf_grid  = {'No BF'           : {'lambda_BF': 0.0, 'BF_w': 0.0},
+            'Total Compliance': {'lambda_BF': 1.0, 'rho_F': 1.0, 'rho_I': 1.0}}
 
 def counterfactuals(solve_fn, calib=None, grid=cf_grid):
     # One steady state per `grid`, the calibration it converged to.
@@ -135,7 +135,7 @@ def _grid_table(data, rows, grid, caption, label, d=1, cev=True, rlab=None, note
     rlab = rlab or (lambda q: LABELS.get(q, q))
     keys = ['base'] + [f'{k}={v:g}' for k, vs in grid.items() for v in vs]
     get  = lambda j, q: _cell(data.get(j, {}).get(q), delta=(q == 'CEV'), d=d)
-    _val = lambda k, v: rob_lab.get(k, lambda x: f'${float(x)}$')(v)
+    _val = lambda k, v: rob_lab.get(k, lambda x: f'${float(x):.2f}$')(v)
 
     size_ = [len(vs) for vs in grid.values()]
     ends  = np.cumsum([3, *size_])                  # the label and Baseline come first
@@ -182,7 +182,7 @@ def bf_size_table(rob, calib=None, mult=(0, 0.5, 1, 1.5, 2),
 dyn_grid = {'kappa_wI': (calibration['kappa_wI'] / 2, 2 * calibration['kappa_wI']),
             'kappa_w' : (calibration['kappa_w'] / 2, 2 * calibration['kappa_w']),
             'phi'     : (1.05, 2.00)}      # Taylor Rule
-dyn_col  = {'kappa_wI': COL5, 'kappa_w': COL2, 'phi': GRAY}
+dyn_col  = {'kappa_wI': PAL[4], 'kappa_w': PAL[1], 'phi': PAL[3]}
 
 
 def dyn_robustness(build_fn, shock, dZ, grid=dyn_grid, moving=True, path=None, solve=True, **kw):
@@ -209,7 +209,7 @@ def dyn_rob_table(dyn, grid=dyn_grid, rows=('C', 'Y', 'I', 'w', 'pi', 'BF'),
     # Cumulative response over `horizon` quarters, in % of the ss.
     cum = {j: ({x: float(np.sum(d[x][:horizon])) for x in rows} if d is not None else {}) for j, d in dyn.items()}
     return _grid_table(cum, rows, grid, f'Cumulative Response to a {shock} Shock '
-                       rf'({horizon} Quarters, \% of SS)', label, d=3, cev=False,
+                       rf'({horizon} Quarters, \% of SS)', label, d=1, cev=False,
                        rlab=lambda q: rf'$\sum {rob_sym.get(q, q)}$', savepath=savepath)
 
 
@@ -220,9 +220,9 @@ def plot_dyn_robustness(dyn, grid=dyn_grid, title='Monetary Policy Shock (i): Dy
     for k, vs in grid.items():
         for v, ls in zip(vs, ('-', '--')):
             if dyn.get(f'{k}={v:g}') is not None:
-                lab = rf'${rob_sym.get(k, k)} = {v:g}$'
+                lab = rf'${rob_sym.get(k, k)} = {v:.2f}$'
                 lines[lab], style[lab] = dyn[f'{k}={v:g}'], (dyn_col[k], ls)
-    lines['Baseline'], style['Baseline'] = dyn['base'], (COL1, '-')      # last, so it overlaps
+    lines['Baseline'], style['Baseline'] = dyn['base'], (PAL[0], '-')      # last, so it overlaps
 
     def fig_legend(fig, axes):      # baseline on top, then one column per parameter
         hs = [h for h in axes[0].get_lines() if not h.get_label().startswith('_')]

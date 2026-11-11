@@ -112,9 +112,19 @@ por Hijo} (Argentina), \textit{Progresa/Oportunidades} (Mexico), and \textit{Fam
 en Acción} (Colombia). Although each program has its specificities, they all share the
 same purpose: income redistribution.
 
-Nevertheless, these programs can also be used as an insurance against unemployment or
-crises, as they can help to mitigate the negative effects of economic shocks. The
-impact of automatic stabilizers is well-known, and policies of this type have been
+Nevertheless, these programs have been used as insurance against recessions or crises,
+as they can help to mitigate the negative effects of economic shocks. For example, in
+Brazil, \textit{Bolsa Família} was used as a stabilization tool during the 2020 recession,
+when its mean value increased from R\$ 187 to R\$ 600. Even though the program was designed,
+and almost always evaluated, as redistribution, it became a clear stabilization instrument.
+
+In addition, these programs offer an automatic stabilization mechanism, as their coverage
+increases when the economy is in a downturn, since unemployment raises and income falls.
+And since the program is targeted to the bottom of the income distribution, it is targeted
+to households whose Marginal Propensity to Consume (MPC) is higher, who are called
+Hand-to-Mouth (HtM) households. 
+
+The impact of automatic stabilizers is well-known, and policies of this type have been
 studied \parencite{mckay2016role}. However, CCTs have different properties from the
 usual tax-and-transfer systems. For example, they may encourage households to go to
 informality, where they do not have access to unemployment insurance and severances
@@ -128,10 +138,7 @@ things at once: while the \textit{benefit channel} protects individuals with low
 liquid wealth, the \textit{reallocation channel} reallocates other households to
 informality, where they are more susceptible to downturns.
 
-In Brazil, \textit{Bolsa Família} (BF) had been used to ensure basic needs such as food
-and health, until the 2020 recession, when its mean value increased from
-R\$ 187 to R\$ 600, and it became a clear stabilization instrument against crises, yet
-they were designed, and almost always evaluated, as redistribution. Until then, the
+ Until then, the
 developed world had focused on taxes, transfers, and unemployed insurance as stabilizers,
 but their distributional effects may be overcome by targeted policies.
 
@@ -355,18 +362,18 @@ idiosyncratic preference shocks explained in the Appendix.
 
 The Bellman Equation for each individual $i$ in sector $s\in\{F,I\}$ is
 \begin{align*}
-    V_t^s(a,e,\beta,\theta) = &\max_{c,a'} \Bigg\{
+    V_t^s(a,e,\beta,\theta) &= \max_{c,a'} \Bigg\{
     \frac{c^{1-\frac{1}{\gamma}}}{1-\frac{1}{\gamma}}
     - \psi \frac{h^{1+\frac{1}{\varphi}}}{1+\frac{1}{\varphi}}
-    + \beta \E_t \!\bigg[ \delta_s V_{t+1}^U(.)
-    + (1-\delta_s) \bigg( \\
-    &\quad\qquad \pi_F (1-\pi_I) \max\!\left\{V_{t+1}^s(.,\theta), 
+    + \beta \E_t \!\bigg[ \delta_s V_{t+1}^U(.) \\
+    &+ (1-\delta_s) \bigg(
+    \pi_F (1-\pi_I) \max\!\left\{V_{t+1}^s(.,\theta), 
             V_{t+1}^F(.,\theta')\right\} \\
-    &\quad\qquad + (1-\pi_F)\pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
+    &\qquad\qquad + (1-\pi_F)\pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
             V_{t+1}^I(.,\theta')\right\} \\
-    &\quad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
+    &\qquad\qquad + \pi_F \pi_I \max\!\left\{V_{t+1}^s(.,\theta), 
             V_{t+1}^I(.,\theta'), V_{t+1}^F(.,\theta')\right\} \\
-    &\quad\qquad + (1-\pi_F)(1-\pi_I) V_{t+1}^s(.,\theta)
+    &\qquad\qquad + (1-\pi_F)(1-\pi_I) V_{t+1}^s(.,\theta)
     \bigg) \bigg] \Bigg\} \\
     \text{s.t.} \qquad &(1+\tau^c_t)c+a'
         = (1+r_t^a) a + y_t(s,e,\theta) + T_t b \\
@@ -457,11 +464,11 @@ in two Phillips curves for wage inflation $\pi_t^w = (1+\pi_t) w_t / w_{t-1} $ g
 \]
 and
 \[
-\ln (1+\pi_t)
+\ln (1+\pi_t^w)
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
 - \frac{w_t^I}{(1+\tau^c_t) \mu_w I_t}
     \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
-+ \bar \beta_I \ln (1+\pi_{t+1}),
++ \bar \beta_I \ln (1+\pi_{t+1}^w),
 \]
 where the informal adjustment cost is lower than the formal one, so
 $\kappa_w^I > \kappa_w$. The informal sector is the most flexible in this economy, which
@@ -512,7 +519,7 @@ is defined by
 dB_t = (1+r_t) dB_{t-1} - C_t d\tau^c_t = (1 + r - \phi_B) dB_{t-1} = \rho_B dB_{t-1},
 \]
 where $\rho_B$ is the debt persistency, which we calibrate so that debt has a half-life
-of 5 years, so $\rho_B = {0.5}^{1/40} \approx 0.983$ and $\phi_B = \mPhiB$.
+of 5 years, so $\rho_B = {0.5}^{1/20} \approx 0.961$ and $\phi_B = \mPhiB$.
 
 This situation leads to larger multipliers and great inequality
 \parencite{auclert2023trickling}. In the presence of nominal rigidity and non-Ricardian
@@ -943,6 +950,15 @@ We let some moments untargeted, in order to validate our estimation.
     \label{fig:irf_decomposition}
 \end{figure}
 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{model/irf_financing.png}
+    \caption{Response to a $+1\%$ Shock in $T$ by Financing}
+    \label{fig:irf_financing}
+\end{figure}
+
+
 \input{cumulative_response.tex}
 
 
@@ -958,14 +974,6 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{model/irfm_financing.png}
-    \caption{Response to a $+0.5\ p.p$ increase in $i$ by Financing}
-    \label{fig:irfm_financing}
-\end{figure}
-
-
-\begin{figure}[H]
-    \centering
     \includegraphics[width=1\linewidth]{model/irfm_bf_vs_nobf.png}
     \caption{Response to a $+0.5\ p.p$ increase in $i$: With and Without CCT}
     \label{fig:irfm_bf_vs_nobf}
@@ -974,9 +982,9 @@ We let some moments untargeted, in order to validate our estimation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{model/irfm_perfect_cct.png}
-    \caption{Response to a $+0.5\ p.p$ increase in $i$: CCT vs "Perfect CCT"}
-    \label{fig:irfm_perfect_cct}
+    \includegraphics[width=1.0\linewidth]{model/irfm_compliance.png}
+    \caption{Response to a $+0.5\ p.p$ increase in $i$: CCT vs ``Total Compliance''}
+    \label{fig:irfm_compliance}
 \end{figure}
 
 \input{monetary_cumulative.tex}
@@ -1142,7 +1150,7 @@ by
 \[
 \frac{\theta_p}{2} \left( \frac{p_{j,t}}{p_{j,t-1}} - \bar \Pi \right)^2 Y_t,
 \]
-where $\theta_p = (\varepsilon-1) / \kappa$ is the adjustment cost multiplier and
+where $\theta_p = \varepsilon / \kappa$ is the adjustment cost multiplier and
 $\bar \Pi$ the steady-state inflation.
 
 Let $\Xi(y)$ be the intermediary firm's cost. Given last period's price $p_{j,t-1}$, the
@@ -1259,11 +1267,11 @@ At the same time, the informal union's problem is exactly the same, but without 
 tax. Assuming a different adjustment cost $\theta_w^I$, the wage Phillips curve for
 informal wage is
 \[
-\ln (1+\pi_t^{w_I})
+\ln (1+\pi_t^w)
 = \kappa_w^I \left[ \psi \cdot \left( h_t^I \right)^{1/\varphi}
 - \frac{w_t^I}{(1+\tau^c_t) \mu_w I_t}
     \int_I e_{i,t} \theta_{i,t} u'(c_{i,t}) d\Lambda_t \right]
-+ \bar \beta_I \ln (1+\pi_{t+1}^{w_I}),
++ \bar \beta_I \ln (1+\pi_{t+1}^w),
 \]
 
 

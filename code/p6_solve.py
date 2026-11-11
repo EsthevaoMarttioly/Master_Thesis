@@ -370,12 +370,13 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True, j
             dPs = np.zeros((win,) + ss['Pi'].shape)         # the gaps in the window
             d = np.array([np.abs(U[k][:win] - U_p[k][:win]) / max(float(np.max(np.abs(U[k][:win]))), 1e-12)
                           for k in unknowns])               # U moved by the last Pi step
-            dn = float(d.max()) / gpi if npi else float(d.max())    # per unit of Pi step: a small gain cannot hide it
+            dn = float(d.max()) / gpi if npi else float(d.max())    # per unit of Pi step
             if adapt and npi > 1: gpi = float(np.clip(gpi * (0.5 if dn > 1.05 * dU else 1.1), 0.01, 0.5))
             dr = np.asarray(td['r']) if 'r' in td else np.zeros(T)
             for t in range(T):
                 ct = {**calib, 'r': calib['rstar'] + float(dr[t]),
                       **{k: calib[k] + float(U[k][t]) for k in prc}}
+                ct['ybar'] = calib['ybar'] * calib['w'] * calib['h_F'] / (ct['w'] * ct['h_F'])
                 D  = D_ss + h['D'][t]
                 s1 = min(t + 1, T - 1)          # the choice at t is over the t+1 values
                 C, A = _choice(V_ss + h['V'][s1], Va_ss + h['Va'][s1], calib['sig'],
@@ -418,7 +419,8 @@ def solve_dyn(hank, ss, shock, dZ, unknowns, targets, calib, var, moving=True, j
             nt += 1
 
     if bvar is not None:                     # unconverged: the lowest dU is the result
-        print(f"Dynamics stopped at {maxit} it: lowest dU={best:.1e} at Pi step {bstep}, returned ({(time.time()-t0)/60:.1f}min).")
+        print(f"Dynamics stopped at {maxit} it: lowest dU={best:.1e} at Pi step {bstep}"
+              f", returned ({(time.time()-t0)/60:.1f}min).")
         return bvar
     bad = [f"|err|={err:.1e}>{tol:.1e}"] * (err >= tol) + \
           [f"|dPi|={dpi:.1e}>{ptol:.1e}"] * (dpi >= ptol) + \
